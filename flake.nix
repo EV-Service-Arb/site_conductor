@@ -190,8 +190,8 @@
           auditable = false; # cargo-auditable doesn't support edition 2024
           meta.description = "the panel binary";
         };
-        # The guard (crates/guard): a Cloud Run job, out of the cluster, every 15 minutes. Its image carries
-        # nix/google.nix as of the commit it is built from, which is what it holds the accounts to.
+        # The guard (crates/guard): a Cloud Run job, out of the cluster, every 15 minutes. Its image carries the accounts'
+        # exports as of the commit it is built from; what it holds each to is the definition the conductor publishes beside it.
         guardProject = "gen-lang-client-0759123990"; # where the guard runs, and evinvest's export lives
         guardRegion = "europe-west1";
         guardSa = "sa-guard@${guardProject}.iam.gserviceaccount.com"; # an account id is 6 to 30 characters
@@ -209,11 +209,12 @@
           name = "guard";
           config.Entrypoint = [ "${guard}/bin/guard" "tick" ];
           config.Env = [
-            "GUARD_CONFIG=${builtins.toJSON (import ./nix/google.nix)}"
+            "GUARD_EXPORTS=${guardExports (import ./nix/google.nix)}"
             "GUARD_PROJECT=${guardProject}"
             "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
           ];
         };
+        guardExports = google: builtins.toJSON (map (a: a.export.table) (builtins.filter (a: a.export != null) google.accounts));
         # The checkout's nix/google.nix, so an edit counts on save.
         googleNix = ''"$(git rev-parse --show-toplevel)/nix/google.nix"'';
 
@@ -515,17 +516,17 @@
               name = "guard";
               runtimeInputs = [ pkgs.google-cloud-sdk pkgs.gitMinimal pkgs.nix ];
               text = ''
-                GUARD_CONFIG=$(nix eval --json --file ${googleNix})
+                GUARD_EXPORTS=$(nix eval --json --file ${googleNix} --apply 'g: map (a: a.export.table) (builtins.filter (a: a.export != null) g.accounts)')
                 GUARD_PROJECT=${guardProject}
                 GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --impersonate-service-account=${guardSa})
-                export GUARD_CONFIG GUARD_PROJECT GOOGLE_OAUTH_ACCESS_TOKEN
+                export GUARD_EXPORTS GUARD_PROJECT GOOGLE_OAUTH_ACCESS_TOKEN
                 [ $# -gt 0 ] || set -- tick --dry-run
                 exec ${guard}/bin/guard "$@"
               '';
             });
             meta.description = "what the guard's tick would set now, setting nothing; args go to `guard` (tick, read, plan <read.json>)";
           };
-          # Idempotent: rerun after any change to crates/guard or nix/google.nix, with every account's billing owner among gcloud's logins.
+          # Idempotent: rerun after a change to crates/guard or an account added, with every account's billing owner among gcloud's logins.
           guard-deploy = {
             type = "app";
             program = lib.getExe (pkgs.writeShellApplication {
@@ -533,18 +534,22 @@
               runtimeInputs = [ pkgs.google-cloud-sdk pkgs.skopeo pkgs.jq pkgs.gnused ];
               text = ''
                 P=${guardProject} R=${guardRegion} SA=${guardSa}
-                config='${builtins.toJSON (import ./nix/google.nix)}'
+                exports='${guardExports (import ./nix/google.nix)}'
+                readers='${builtins.toJSON (map (a: a.export.reader.file) (builtins.filter (a: a.export != null) (import ./nix/google.nix).accounts))}'
                 gcloud services enable --project "$P" run.googleapis.com cloudscheduler.googleapis.com artifactregistry.googleapis.com \
                   billingbudgets.googleapis.com cloudbilling.googleapis.com cloudquotas.googleapis.com monitoring.googleapis.com \
                   serviceusage.googleapis.com cloudresourcemanager.googleapis.com bigquery.googleapis.com iamcredentials.googleapis.com
                 gcloud iam service-accounts describe "$SA" --project "$P" >/dev/null 2>&1 ||
-                  gcloud iam service-accounts create sa-guard --project "$P" --display-name "holds real money to nix/google.nix's allow"
+                  gcloud iam service-accounts create sa-guard --project "$P" --display-name "holds each Google account to its published hold"
                 me=$(gcloud config get account)
                 gcloud iam service-accounts add-iam-policy-binding "$SA" --project "$P" --member "user:$me" --role roles/iam.serviceAccountTokenCreator >/dev/null # `nix run .#guard`
                 gcloud projects add-iam-policy-binding "$P" --member "serviceAccount:$SA" --role roles/run.invoker --condition None >/dev/null # Scheduler starts the job as the guard
 
                 # Per account: the billing account's budgets, caps and links; each billed project's quotas, usage and billing link; the export's dataset.
-                for t in $(jq -r '.accounts[].export.table' <<<"$config"); do
+                i=0
+                for t in $(jq -r '.[]' <<<"$exports"); do
+                  reader=$(jq -r --argjson i "$i" '.[$i]' <<<"$readers") i=$((i + 1))
+                  reader=$(jq -r .client_email "''${reader/#\~/$HOME}") # the conductor publishes the account's definition as it
                   ds=''${t%.*} project=''${t%%.*} billing=$(sed -E 's/.*_v1_(\w{6})_(\w{6})_(\w{6})$/\1-\2-\3/' <<<"$t")
                   owner=$(for a in $(gcloud auth list --format 'value(account)'); do
                     if [ "$(CLOUDSDK_CORE_ACCOUNT=$a gcloud billing accounts describe "$billing" --format 'value(open)' 2>/dev/null)" = True ]; then echo "$a"; break; fi
@@ -560,6 +565,9 @@
                   gcloud projects add-iam-policy-binding "$project" --member "serviceAccount:$SA" --role roles/bigquery.jobUser --condition None >/dev/null
                   bq show "''${ds/./:}.guard" >/dev/null 2>&1 ||
                     bq mk --table "''${ds/./:}.guard" tick:INTEGER,account:STRING,category:STRING,project:STRING,lever:STRING,allow_day:FLOAT,allow_month:FLOAT,real_day:FLOAT,real_month:FLOAT,setting:FLOAT,state:STRING,today:INTEGER,action:STRING,list:STRING
+                  bq show "''${ds/./:}.definition" >/dev/null 2>&1 ||
+                    bq mk --table "''${ds/./:}.definition" at:INTEGER,digest:STRING,definition:STRING
+                  bq add-iam-policy-binding --member "serviceAccount:$reader" --role roles/bigquery.dataEditor "''${ds/./:}.definition" >/dev/null
                   acl=$(mktemp) # the dataset's access list: its IAM policy "requires allowlisting"
                   bq show --format=json "''${ds/./:}" | jq --arg sa "$SA" '{access: ((.access // []) + [{role: "WRITER", userByEmail: $sa}] | unique)}' >"$acl"
                   bq update --source "$acl" "''${ds/./:}" >/dev/null
@@ -572,7 +580,7 @@
                 image="$R-docker.pkg.dev/$P/guard/guard:$(basename ${guardImage} | cut -c1-32)"
                 skopeo copy --dest-creds "oauth2accesstoken:$(gcloud auth print-access-token)" docker-archive:${guardImage} "docker://$image"
                 gcloud run jobs deploy guard --project "$P" --region "$R" --image "$image" --service-account "$SA" --max-retries 0 --task-timeout 300s
-                GUARD_CONFIG=$config GUARD_PROJECT=$P GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --impersonate-service-account="$SA") ${guard}/bin/guard tick --dry-run
+                GUARD_EXPORTS=$exports GUARD_PROJECT=$P GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --impersonate-service-account="$SA") ${guard}/bin/guard tick --dry-run
                 read -rp "guard-deploy: the tick above is what goes live, now and every 15 minutes. Go? [y/N] " go
                 [ "$go" = y ] || { echo "guard-deploy: the job is deployed, nothing runs it" >&2; exit 1; }
                 run="https://run.googleapis.com/v2/projects/$P/locations/$R/jobs/guard:run"
@@ -582,7 +590,7 @@
                 gcloud run jobs execute guard --project "$P" --region "$R" --wait
               '';
             });
-            meta.description = "(re)deploy the guard to Cloud Run from this commit's nix/google.nix, as the billing owner";
+            meta.description = "(re)deploy the guard to Cloud Run from this commit, its accounts nix/google.nix's, as each one's billing owner: after a change to crates/guard or an account added";
           };
           local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and the landings, wired together on this machine (docs/LOCAL.md)"; };
         };

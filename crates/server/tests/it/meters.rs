@@ -10,7 +10,10 @@ use axum::{
 	http::{Method, StatusCode},
 };
 use jiff::{SignedDuration, Timestamp};
-use sa_core::prices::{Item, MapLoad, PlacesRequest, StreetViewLoad};
+use sa_core::{
+	google::{Allow, Hold},
+	prices::{Item, MapLoad, PlacesRequest, StreetViewLoad},
+};
 use sa_panel::{
 	Panel,
 	import::Export,
@@ -42,7 +45,10 @@ impl World {
 	}
 
 	/// As [`Self::new`], on `accounts`.
-	async fn on(accounts: Vec<Account>) -> Self {
+	/// As [`Self::new`], on `accounts`, each held to its meters' slice's allowance a day and a month, where given.
+	async fn on(accounts: Vec<(Account, Option<f64>)>) -> Self {
+		let holds: Vec<(String, f64)> = accounts.iter().filter_map(|(a, allow)| Some((a.name.clone(), (*allow)?))).collect();
+		let accounts = accounts.into_iter().map(|(a, _)| a).collect();
 		let db = TestDb::create().await;
 		let store = db.store().await;
 		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(InOrder), Arc::new(store.clone())).unwrap();
@@ -53,6 +59,9 @@ impl World {
 			sku: None,
 		};
 		let panel = panel_on(store, key, keyless, Accounts::new(accounts, vec![maps]));
+		for (name, allow) in holds {
+			panel.set_hold(&name, &hold(allow), "test", Timestamp::now()).await.unwrap().unwrap();
+		}
 		let empty = Export {
 			people: vec![],
 			gmails: vec![],
@@ -100,7 +109,21 @@ impl World {
 			tiers: vec![],
 			guard: None,
 		};
-		self.panel.sync_meters(&Told { account, units, net, through, bill }, now).await.unwrap();
+		let published = Default::default();
+		self.panel
+			.sync_meters(
+				&Told {
+					account,
+					units,
+					net,
+					through,
+					bill,
+					published,
+				},
+				now,
+			)
+			.await
+			.unwrap();
 	}
 
 	async fn price(&self, tokens: i64) {
@@ -162,11 +185,16 @@ impl World {
 	}
 }
 
-/// An account with both keys, `allow` a day and a month past its free units.
-fn both(name: &str, allow: f64) -> Account {
-	Account {
-		allow: [("maps".to_owned(), sa_core::google::Allow { day: allow, month: allow })].into(),
-		..account(name, Some(&format!("places-{name}")), Some(&format!("browser-{name}")))
+/// An account with both keys, to be held to `allow` a day and a month past its free units.
+fn both(name: &str, allow: f64) -> (Account, Option<f64>) {
+	(account(name, Some(&format!("places-{name}")), Some(&format!("browser-{name}"))), Some(allow))
+}
+
+/// The meters' slice's `allow` a day and a month, nothing unguarded.
+fn hold(allow: f64) -> Hold {
+	Hold {
+		allow: [(sa_core::meters::SLICE.to_owned(), Allow { day: allow, month: allow })].into(),
+		unguarded: vec![],
 	}
 }
 
@@ -371,13 +399,17 @@ async fn an_accounts_bill_is_read_whole_by_slice_with_its_credits_and_the_guards
 		left: 100.0,
 		ends: jiff::civil::date(2099, 1, 1),
 	};
-	let mut w = World::on(vec![Account {
-		credits: vec![credit],
-		..both("a", 0.0)
-	}])
+	let mut w = World::on(vec![(
+		Account {
+			credits: vec![credit],
+			..both("a", 0.0).0
+		},
+		Some(0.0),
+	)])
 	.await;
 	let now = Timestamp::now();
-	let digest = w.panel.accounts().digest();
+	let a = w.panel.accounts().get("a").unwrap().clone();
+	let digest = w.panel.definition(&a).await.unwrap().unwrap().digest();
 	let sync = async |w: &World, bill: Bill| {
 		w.panel
 			.sync_meters(
@@ -387,6 +419,7 @@ async fn an_accounts_bill_is_read_whole_by_slice_with_its_credits_and_the_guards
 					net: 0,
 					through: now,
 					bill,
+					published: Default::default(),
 				},
 				now,
 			)
@@ -446,4 +479,68 @@ async fn an_accounts_bill_is_read_whole_by_slice_with_its_credits_and_the_guards
 	let (_, b) = w.call(Method::GET, &window, None).await;
 	assert_eq!(b["days"][0]["day"], "2026-11-11T00:00:00Z", "the read before is replaced whole: {b}");
 	assert_eq!(read(&mut w).await["guard"]["holds_this_list"], false, "a guard deployed from another definition is told apart");
+}
+
+// r[verify google.guarded]
+#[tokio::test]
+async fn an_account_is_used_once_held_and_its_hold_is_published_beside_its_export_when_it_changes() {
+	let unheld = account("u", Some("places-u"), Some("browser-u"));
+	let unexported = sa_places::Account {
+		export: None,
+		..account("x", Some("places-x"), Some("browser-x"))
+	};
+	let mut w = World::on(vec![both("a", 1.0), (unheld, None), (unexported, None)]).await;
+	let now = Timestamp::now();
+	let rank = ByStanding {
+		store: w.db.store().await,
+		accounts: Arc::new(w.panel.accounts().clone()),
+	};
+	let names = ["a", "u", "x"].map(str::to_owned);
+	assert_eq!(
+		rank.rank(PlacesRequest::Details, &names).await.unwrap(),
+		[Some(0), None, None],
+		"u is held by nothing, x has no export"
+	);
+	let zero = json!({ "allow": { "maps": { "day": 0.0, "month": 0.0 } }, "unguarded": [] });
+	let (status, refused) = w.call(Method::PUT, "/api/v1/admin/meters/accounts/x/hold", Some(zero.clone())).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "nothing holds an account without an export: {refused}");
+	let (status, _) = w.call(Method::PUT, "/api/v1/admin/meters/accounts/u/hold", Some(zero)).await;
+	assert_eq!(status, StatusCode::OK);
+	assert_eq!(rank.rank(PlacesRequest::Details, &names).await.unwrap(), [Some(0), Some(0), None], "u once held");
+
+	let (status, refused) = w.call(Method::PUT, "/api/v1/admin/meters/accounts/a/hold", Some(json!({ "allow": {}, "unguarded": [] }))).await;
+	assert_eq!(status, StatusCode::BAD_REQUEST, "a hold short of a slice: {refused}");
+	let set = json!({ "allow": { "maps": { "day": 2.0, "month": 10.0 } }, "unguarded": ["run.googleapis.com"] });
+	let (status, held) = w.call(Method::PUT, "/api/v1/admin/meters/accounts/a/hold", Some(set.clone())).await;
+	assert_eq!((status, &held), (StatusCode::OK, &set));
+	let (_, meters) = w.call(Method::GET, "/api/v1/admin/meters", None).await;
+	assert_eq!(meters["accounts"][0]["hold"], set, "{meters}");
+
+	let reader = Told {
+		account: "a",
+		units: 0,
+		net: 0,
+		through: now,
+		bill: bill("2026-11-10", 0, None),
+		published: Default::default(),
+	};
+	let mut last = None;
+	w.panel.publish_definition(&reader, &mut last, now).await.unwrap();
+	w.panel.publish_definition(&reader, &mut last, now).await.unwrap();
+	let published = reader.published.lock().unwrap().clone();
+	assert_eq!(published.len(), 1, "published once while unchanged");
+	assert_eq!(
+		(published[0].held.hold.allow["maps"].day, published[0].held.hold.unguarded.as_slice()),
+		(2.0, ["run.googleapis.com".to_owned()].as_slice())
+	);
+	let (status, _) = w
+		.call(
+			Method::PUT,
+			"/api/v1/admin/meters/accounts/a/hold",
+			Some(json!({ "allow": { "maps": { "day": 0.0, "month": 0.0 } }, "unguarded": [] })),
+		)
+		.await;
+	assert_eq!(status, StatusCode::OK);
+	w.panel.publish_definition(&reader, &mut last, now).await.unwrap();
+	assert_eq!(reader.published.lock().unwrap().len(), 2, "a change is published");
 }

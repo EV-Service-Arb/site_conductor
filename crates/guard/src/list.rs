@@ -1,66 +1,16 @@
-//! nix/google.nix as the guard reads it, its secrets aside, and BigQuery, which it reads the billing exports through.
-
-use std::collections::BTreeMap;
+//! BigQuery, which the guard reads the billing exports and the definitions beside them through.
 
 use eyre::{Result, ensure, eyre};
-use jiff::civil::Date;
 use regex::Regex;
-use sa_core::google::{Allow, Credit, Drawn, Held, Slice};
-use serde::Deserialize;
 use serde_json::{Value, json};
 
-#[derive(Deserialize)]
-pub struct Config {
-	pub accounts: Vec<Account>,
-	pub slices: Vec<Slice>,
-}
-impl Config {
-	pub fn slices(&self) -> Result<Vec<Drawn>> {
-		sa_core::google::drawn(&self.slices, self.accounts.iter().map(|a| (a.name.as_str(), &a.allow))).map_err(|e| eyre!("nix/google.nix: {}", e.0))
-	}
-
-	/// What the conductor holds too, if it runs this definition.
-	pub fn digest(&self) -> String {
-		let held: Vec<Held> = self
-			.accounts
-			.iter()
-			.map(|a| Held {
-				name: a.name.clone(),
-				table: a.export.table.clone(),
-				since: a.export.since,
-				credits: a.credits.clone(),
-				allow: a.allow.clone(),
-				unguarded: a.unguarded.clone(),
-			})
-			.collect();
-		sa_core::google::digest(&held, &self.slices)
-	}
-}
-
-#[derive(Deserialize)]
-pub struct Account {
-	pub name: String,
-	pub export: Export,
-	pub credits: Vec<Credit>,
-	pub allow: BTreeMap<String, Allow>,
-	pub unguarded: Vec<String>,
-}
-impl Account {
-	/// `<project>.<dataset>.gcp_billing_export_v1_<billing account>`, split.
-	pub fn export(&self) -> Result<(&str, &str, String)> {
-		let table = &self.export.table;
-		let caps = Regex::new(r"^([\w-]+)\.(\w+)\.gcp_billing_export_v1_(\w{6})_(\w{6})_(\w{6})$")?
-			.captures(table)
-			.ok_or_else(|| eyre!("`table` is not <project>.<dataset>.gcp_billing_export_v1_<billing account>: {table}"))?;
-		let part = |i| caps.get(i).expect("matched above").as_str();
-		Ok((part(1), part(2), format!("{}-{}-{}", part(3), part(4), part(5))))
-	}
-}
-
-#[derive(Deserialize)]
-pub struct Export {
-	pub table: String, // <project>.<dataset>.gcp_billing_export_v1_<billing account>
-	pub since: Date,
+/// `<project>.<dataset>.gcp_billing_export_v1_<billing account>`, split.
+pub fn export(table: &str) -> Result<(&str, &str, String)> {
+	let caps = Regex::new(r"^([\w-]+)\.(\w+)\.gcp_billing_export_v1_(\w{6})_(\w{6})_(\w{6})$")?
+		.captures(table)
+		.ok_or_else(|| eyre!("`table` is not <project>.<dataset>.gcp_billing_export_v1_<billing account>: {table}"))?;
+	let part = |i| caps.get(i).expect("matched above").as_str();
+	Ok((part(1), part(2), format!("{}-{}-{}", part(3), part(4), part(5))))
 }
 
 pub struct BigQuery {

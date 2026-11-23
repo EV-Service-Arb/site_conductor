@@ -99,6 +99,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/meters/accounts/{name}/hold": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Holds account `name` to the body: what the guard reads once it is published beside the export, within a minute. Refused for an account without an export, or a hold short of a slice or past a sane amount. */
+        put: operations["set_hold"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/meters/bill": {
         parameters: {
             query?: never;
@@ -2422,6 +2439,19 @@ export interface components {
             /** @description The rules open to the caller: their permissions', and the GMB rules once they hold a GMB. */
             rules: components["schemas"]["Rule"][];
         };
+        /** @description Real money a slice may spend past free units and credits, in the account's currency. */
+        Allow: {
+            /**
+             * Format: double
+             * @description A Pacific day: Google's quota day.
+             */
+            day: number;
+            /**
+             * Format: double
+             * @description A Pacific month: Google's billing month.
+             */
+            month: number;
+        };
         /** @enum {string} */
         AnswerState: "working" | "writing" | "done" | "stopped";
         /**
@@ -3251,6 +3281,15 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
+        /** @description What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone. */
+        Hold: {
+            /** @description Every slice's. */
+            allow: {
+                [key: string]: components["schemas"]["Allow"];
+            };
+            /** @description APIs on its billed projects the guard leaves alone: spending with no lever but the backstop. */
+            unguarded: string[];
+        };
         Imap: {
             checked: components["schemas"]["Checked"];
             host: string;
@@ -3757,11 +3796,6 @@ export interface components {
         MentionKind: "location";
         /** @description A Google billing account, as configured. */
         MeterAccount: {
-            /**
-             * Format: double
-             * @description Money a month past its free units and credits, in its currency.
-             */
-            allow: number;
             /** @description Each slice's real money against its allowance, and its levers, at the guard's last tick. */
             allowances: components["schemas"]["MeterAllowance"][];
             /** @description RFC 3339: when the bill was last read; `null`, never. */
@@ -3769,8 +3803,12 @@ export interface components {
             browser: boolean;
             /** @description Each configured credit's balance. */
             credits: components["schemas"]["MeterCredit"][];
+            /** @description Whether its billing export is set: without one nothing of ours uses it. */
+            exported: boolean;
             /** @description The guard's last tick; `null` before it ticked, or before the bill was read. */
             guard: components["schemas"]["MeterGuard"] | null;
+            /** @description What the guard is to hold it to; `null`, never set: until then nothing of ours uses it. */
+            hold: components["schemas"]["Hold"] | null;
             name: string;
             /** @description Whether it has a Places key, and a browser key. */
             places: boolean;
@@ -3868,7 +3906,7 @@ export interface components {
         MeterGuard: {
             /** @description APIs it disabled, nothing holding them. */
             disabled: components["schemas"]["MeterApi"][];
-            /** @description Whether it held the definition this conductor runs (`sa_core::google::digest`). */
+            /** @description Whether it held the definition this conductor publishes (`sa_core::google::Definition::digest`). */
             holds_this_list: boolean;
             /** @description RFC 3339. */
             tick: string;
@@ -3964,6 +4002,8 @@ export interface components {
             /** @description In the config's order. */
             accounts: components["schemas"]["MeterAccount"][];
             meters: components["schemas"]["MeterUse"][];
+            /** @description The slices a hold names, in the config's order. */
+            slices: string[];
         };
         /** @description The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]). */
         ModelUsed: {
@@ -5197,6 +5237,7 @@ export type AdditionalCategory = components['schemas']['AdditionalCategory'];
 export type AdditionalIn = components['schemas']['AdditionalIn'];
 export type Advance = components['schemas']['Advance'];
 export type Alerts = components['schemas']['Alerts'];
+export type Allow = components['schemas']['Allow'];
 export type AnswerState = components['schemas']['AnswerState'];
 export type Approval = components['schemas']['Approval'];
 export type Area = components['schemas']['Area'];
@@ -5277,6 +5318,7 @@ export type GmbPhoto = components['schemas']['GmbPhoto'];
 export type GoogleCategories = components['schemas']['GoogleCategories'];
 export type GoogleCategory = components['schemas']['GoogleCategory'];
 export type HeadIn = components['schemas']['HeadIn'];
+export type Hold = components['schemas']['Hold'];
 export type Imap = components['schemas']['Imap'];
 export type InternalReads = components['schemas']['InternalReads'];
 export type Invite = components['schemas']['Invite'];
@@ -5993,6 +6035,141 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Meters"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_hold: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        /** @description What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Hold"];
+            };
+        };
+        responses: {
+            /** @description What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Hold"];
                 };
             };
             /** @description `bad_request` */

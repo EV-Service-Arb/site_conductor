@@ -64,11 +64,10 @@ impl Drawn {
 	}
 }
 
-/// `slices` compiled, refused when a regex does not compile, no slice is [`crate::meters::SLICE`] while an account is
-/// listed, or an account's `allow` misses a slice, names one that is not, or holds a day past its month or no amount.
-pub fn drawn<'a>(slices: &[Slice], allows: impl IntoIterator<Item = (&'a str, &'a BTreeMap<String, Allow>)>) -> Result<Vec<Drawn>, Invalid> {
+/// `slices` compiled, refused when a regex does not compile.
+pub fn drawn(slices: &[Slice]) -> Result<Vec<Drawn>, Invalid> {
 	let regex = |s: &str| Regex::new(s).map_err(|e| Invalid::new(format!("a slice's regex {s:?}: {e}")));
-	let drawn = slices
+	slices
 		.iter()
 		.map(|s| {
 			Ok(Drawn {
@@ -77,26 +76,40 @@ pub fn drawn<'a>(slices: &[Slice], allows: impl IntoIterator<Item = (&'a str, &'
 				sku: s.sku.as_deref().map(regex).transpose()?,
 			})
 		})
-		.collect::<Result<Vec<_>, Invalid>>()?;
-	for (account, allow) in allows {
-		if !drawn.iter().any(|s| s.name == crate::meters::SLICE) {
+		.collect()
+}
+
+/// What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize, schemars::JsonSchema)]
+pub struct Hold {
+	/// Every slice's.
+	pub allow: BTreeMap<String, Allow>,
+	/// APIs on its billed projects the guard leaves alone: spending with no lever but the backstop.
+	pub unguarded: Vec<String>,
+}
+
+impl Hold {
+	/// Refused when no slice is [`crate::meters::SLICE`], or `allow` misses a slice, names one that is not, or holds a
+	/// day past its month or no amount.
+	pub fn check(&self, slices: &[Drawn]) -> Result<(), Invalid> {
+		if !slices.iter().any(|s| s.name == crate::meters::SLICE) {
 			return Err(Invalid::new(format!("no slice is {:?}, which every meter falls in", crate::meters::SLICE)));
 		}
-		for s in &drawn {
-			if !allow.contains_key(&s.name) {
-				return Err(Invalid::new(format!("{account}: `allow` names no {:?}: each slice's day and month, 0 for none", s.name)));
+		for s in slices {
+			if !self.allow.contains_key(&s.name) {
+				return Err(Invalid::new(format!("`allow` names no {:?}: each slice's day and month, 0 for none", s.name)));
 			}
 		}
-		for (k, a) in allow {
-			if !drawn.iter().any(|s| &s.name == k) {
-				return Err(Invalid::new(format!("{account}: `allow` names {k:?}, which is no slice")));
+		for (k, a) in &self.allow {
+			if !slices.iter().any(|s| &s.name == k) {
+				return Err(Invalid::new(format!("`allow` names {k:?}, which is no slice")));
 			}
 			if !(a.day.is_finite() && a.month.is_finite() && 0.0 <= a.day && a.day <= a.month) {
-				return Err(Invalid::new(format!("{account}: `allow.{k}` is {a:?}: 0 <= day <= month")));
+				return Err(Invalid::new(format!("`allow.{k}` is {a:?}: 0 <= day <= month")));
 			}
 		}
+		Ok(())
 	}
-	Ok(drawn)
 }
 
 /// The slice usage of `service`'s `sku` falls in: the first drawing it, else the service itself.
@@ -113,15 +126,21 @@ pub struct Held {
 	/// Usage before this day is not drawn.
 	pub since: Date,
 	pub credits: Vec<Credit>,
-	/// Every slice's.
-	pub allow: BTreeMap<String, Allow>,
-	/// APIs the guard leaves alone on its billed projects: spending with no lever but the backstop.
-	pub unguarded: Vec<String>,
+	#[serde(flatten)]
+	pub hold: Hold,
 }
 
-/// The definition's secret-free part, hashed: two deploys of it (the conductor's and the guard's)
-/// tell whether they hold the same one.
-pub fn digest(accounts: &[Held], slices: &[Slice]) -> String {
-	let canonical = serde_json::to_string(&(accounts, slices)).expect("plain data serializes");
-	hex::encode(Sha256::digest(canonical))[..16].to_owned()
+/// What the conductor publishes beside an account's export for the guard to hold it to.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Definition {
+	pub held: Held,
+	pub slices: Vec<Slice>,
+}
+
+impl Definition {
+	/// Hashed: the conductor's and the guard's tell whether they hold the same one.
+	pub fn digest(&self) -> String {
+		let canonical = serde_json::to_string(self).expect("plain data serializes");
+		hex::encode(Sha256::digest(canonical))[..16].to_owned()
+	}
 }

@@ -1,7 +1,7 @@
 //! Google billing accounts, each declared once with the slots we recognize. Free units, credits and
 //! the money kept are per billing account, so every key bills on the account it is listed under.
 
-use std::{collections::BTreeMap, ops::Deref};
+use std::ops::Deref;
 
 /// One Google billing account, as site_conductor's `nix/google.nix` lists it.
 // r[impl google.keys-on-accounts]
@@ -10,27 +10,24 @@ use std::{collections::BTreeMap, ops::Deref};
 pub struct Account {
 	/// Stable: stored with each use and reading.
 	pub name: String,
-	pub export: Export,
+	/// `None` until its billing account is open and exported: nothing of ours uses it, and the guard has nothing to hold.
+	pub export: Option<Export>,
 	/// Each credit's balance, as the console read it.
 	pub credits: Vec<sa_core::google::Credit>,
-	/// Every slice's real money past its free units and credits, in its currency.
-	pub allow: BTreeMap<String, sa_core::google::Allow>,
-	/// APIs the guard leaves alone (`sa_core::google::Held::unguarded`).
-	pub unguarded: Vec<String>,
 	pub provides: Provides,
 }
 
 impl Account {
-	/// What the guard holds it to and its bill is read by.
-	pub fn held(&self) -> sa_core::google::Held {
-		sa_core::google::Held {
+	/// What the guard holds it to and its bill is read by, under `hold`; `None` without an export.
+	pub fn held(&self, hold: sa_core::google::Hold) -> Option<sa_core::google::Held> {
+		let export = self.export.as_ref()?;
+		Some(sa_core::google::Held {
 			name: self.name.clone(),
-			table: self.export.table.clone(),
-			since: self.export.since,
+			table: export.table.clone(),
+			since: export.since,
 			credits: self.credits.clone(),
-			allow: self.allow.clone(),
-			unguarded: self.unguarded.clone(),
-		}
+			hold,
+		})
 	}
 }
 
@@ -75,15 +72,14 @@ impl std::fmt::Debug for Account {
 		let tail = |k: Option<&str>| k.map(|k| format!("…{}", crate::keys::tail(k)));
 		f.debug_struct("Account")
 			.field("name", &self.name)
-			.field("export", &self.export.table)
+			.field("export", &self.export.as_ref().map(|e| &e.table))
 			.field("places", &tail(self.provides.places.as_deref()))
 			.field("browser", &tail(self.provides.browser.as_deref()))
-			.field("allow", &self.allow)
 			.finish_non_exhaustive()
 	}
 }
 
-/// Every account, in the order ties are broken in, and the slices their `allow` is per.
+/// Every account, in the order ties are broken in, and the slices their holds are per.
 #[derive(Clone, Debug)]
 pub struct Accounts {
 	accounts: Vec<Account>,
@@ -93,7 +89,12 @@ pub struct Accounts {
 
 impl Accounts {
 	pub fn new(accounts: Vec<Account>, slices: Vec<sa_core::google::Slice>) -> Self {
-		let drawn = sa_core::google::drawn(&slices, accounts.iter().map(|a| (a.name.as_str(), &a.allow))).unwrap_or_else(|e| panic!("the Google accounts' slices: {}", e.0));
+		let drawn = sa_core::google::drawn(&slices).unwrap_or_else(|e| panic!("the Google accounts' slices: {}", e.0));
+		assert!(
+			accounts.is_empty() || drawn.iter().any(|s| s.name == sa_core::meters::SLICE),
+			"no slice is {:?}, which every meter falls in",
+			sa_core::meters::SLICE
+		);
 		for (i, a) in accounts.iter().enumerate() {
 			assert!(!a.name.is_empty(), "a Google account without a name");
 			let earlier = &accounts[..i];
@@ -123,9 +124,9 @@ impl Accounts {
 		&self.drawn
 	}
 
-	/// [`sa_core::google::digest`] of this definition.
-	pub fn digest(&self) -> String {
-		sa_core::google::digest(&self.accounts.iter().map(Account::held).collect::<Vec<_>>(), &self.slices)
+	/// As configured: what a definition carries.
+	pub fn defined_slices(&self) -> &[sa_core::google::Slice] {
+		&self.slices
 	}
 }
 

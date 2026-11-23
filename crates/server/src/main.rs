@@ -171,7 +171,13 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 	let connect = || async {
 		let store = open().await?;
 		let accounts = accounts()?;
-		let keys = sa_places::Keys::new(accounts.iter().filter_map(|a| Some((a.name.clone(), a.provides.places.as_deref()?.to_owned()))).collect());
+		let keys = sa_places::Keys::new(
+			accounts
+				.iter()
+				.filter(|a| a.export.is_some()) // a key bills only on an account whose export we read
+				.filter_map(|a| Some((a.name.clone(), a.provides.places.as_deref()?.to_owned())))
+				.collect(),
+		);
 		let rank = sa_panel::meters::ByStanding {
 			store: store.clone(),
 			accounts: accounts.clone(),
@@ -210,14 +216,18 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				"PANEL_GRAFANA_SERVER needs the forward (PANEL_ASSERTION_KEY and the services' URLs): Grafana reads the services through it"
 			);
 			let panel = connect().await?;
-			let readers = panel.accounts().iter().map(sa_panel::meters::google::Google::try_new).collect::<eyre::Result<Vec<_>>>()?;
+			let readers = panel
+				.accounts()
+				.iter()
+				.filter(|a| a.export.is_some())
+				.map(sa_panel::meters::google::Google::try_new)
+				.collect::<eyre::Result<Vec<_>>>()?;
 			for a in panel.accounts().iter() {
 				tracing::info!(
 					account = a.name,
-					export = a.export.table,
+					export = a.export.as_ref().map(|e| e.table.as_str()),
 					places = a.provides.places.is_some(),
 					browser = a.provides.browser.is_some(),
-					allow = sa_panel::meters::allowance(a),
 					"Google account"
 				);
 			}

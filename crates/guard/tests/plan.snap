@@ -112,7 +112,7 @@ a	video generation	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
 Error: a: the guard runs or reads through run.googleapis.com on p, which it must never cap, zero or disable: name each in the account's `unguarded`
 == BigQuery on an export's project not in unguarded: refused, nothing set
 Error: a: the guard runs or reads through bigquery.googleapis.com on p, which it must never cap, zero or disable: name each in the account's `unguarded`
-== a slice missing from allow: the config refused
-Error: nix/google.nix: a: `allow` names no "LLM": each slice's day and month, 0 for none
+== a slice missing from allow: the definition refused
+Error: a: `allow` names no "LLM": each slice's day and month, 0 for none
 == a credit drawn that nix/google.nix does not name stops the tick
 Error: a: the export draws on credits ["c2"] with no `credits` entry in nix/google.nix

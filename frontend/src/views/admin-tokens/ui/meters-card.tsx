@@ -1,11 +1,14 @@
 "use client";
 
-import { Badge, Card, CardContent, cn } from "@evinvest/uikit";
+import { Badge, Button, Card, CardContent, Input, Textarea, cn, toast } from "@evinvest/uikit";
 import { useState } from "react";
 
 import { tokens } from "@/entities/tokens";
-import type { MeterAccount, Meters } from "@/shared/api/schema";
+import { api, ok } from "@/shared/api";
+import type { Hold, MeterAccount, Meters } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
+import { notifyFailure } from "@/shared/ui/notify";
+import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 /** A reading older than this is stale: the sync runs daily. */
 const STALE_MS = 36 * 3600 * 1000;
@@ -22,22 +25,97 @@ function Bar({ share, thin }: { share: number; thin?: boolean }) {
   );
 }
 
+/** What the conductor may buy past free units a month: the meters' slice's month. */
+const allowed = (a: MeterAccount) => (a.hold === null ? "-" : (a.hold.allow.maps?.month ?? 0).toLocaleString());
+
 const money = (x: number) => x.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
-/** An account as the guard last held it: each slice's real money against its day and month, and the levers holding it; what spends with no lever, and what it disabled. */
-function Guarded({ account: a }: { account: MeterAccount }) {
+/** What the guard holds an account to: each slice's real money a day and a month, and the APIs it leaves alone. Published beside the export within a minute, held from the guard's next tick. */
+function HoldEditor({ account: a, slices, onSaved }: { account: MeterAccount; slices: string[]; onSaved: () => void }) {
   const t = useT();
-  if (a.guard === null) {
-    return <p className="text-xs text-ink-soft">{t(tokens.meters.unguardedYet, "{name}: the guard never ticked here", { name: a.name })}</p>;
+  const size = useControlSize();
+  const button = useButtonSize();
+  const start = (): Record<string, string> =>
+    Object.fromEntries(slices.flatMap((s) => (["day", "month"] as const).map((f) => [`${s}.${f}`, a.hold === null ? "" : String(a.hold.allow[s]?.[f] ?? "")])));
+  const [drafts, setDrafts] = useState(start);
+  const [unguarded, setUnguarded] = useState(a.hold === null ? "" : a.hold.unguarded.join("\n"));
+  const [busy, setBusy] = useState(false);
+  const num = (k: string) => (drafts[k] === "" ? undefined : Number(drafts[k]));
+  const invalid = slices.some((s) => {
+    const [d, m] = [num(`${s}.day`), num(`${s}.month`)];
+    return d === undefined || m === undefined || !Number.isFinite(d) || !Number.isFinite(m) || d < 0 || d > m;
+  });
+  const save = () => {
+    const body: Hold = {
+      allow: Object.fromEntries(slices.map((s) => [s, { day: num(`${s}.day`)!, month: num(`${s}.month`)! }])),
+      unguarded: unguarded
+        .split(/\s+/)
+        .map((u) => u.trim())
+        .filter((u) => u !== ""),
+    };
+    setBusy(true);
+    ok(api.PUT("/admin/meters/accounts/{name}/hold", { params: { path: { name: a.name } }, body }))
+      .then(() => {
+        toast.positive(t(tokens.meters.holdSaved, "{name}: held from the guard's next tick", { name: a.name }));
+        onSaved();
+      })
+      .catch((err: unknown) => notifyFailure(err, t))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <div className="flex flex-col gap-1.5 pl-3">
+      {a.hold === null && <Badge tone="error">{t(tokens.meters.noHold, "no hold set: nothing of ours uses it, and the guard holds nothing of it")}</Badge>}
+      <ul className="flex flex-col gap-1">
+        {slices.map((s) => (
+          <li key={s} className="flex flex-wrap items-center gap-2">
+            <span className="w-32 text-ink">{s}</span>
+            {(["day", "month"] as const).map((f) => (
+              <label key={f} className="flex items-center gap-1 text-ink-soft">
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="any"
+                  size={size}
+                  className="w-20 tabular-nums"
+                  aria-invalid={num(`${s}.${f}`) === undefined || undefined}
+                  value={drafts[`${s}.${f}`]}
+                  onChange={(e) => setDrafts((d) => ({ ...d, [`${s}.${f}`]: e.target.value }))}
+                />
+                {f === "day" ? t(tokens.meters.perDay, "a day") : t(tokens.meters.perMonth, "a month")}
+              </label>
+            ))}
+          </li>
+        ))}
+      </ul>
+      <label className="flex flex-col gap-1 text-ink-soft">
+        {t(tokens.meters.unguardedLabel, "Left alone by the guard, one API a line (no lever but the backstop)")}
+        <Textarea rows={3} className="font-mono text-xs" value={unguarded} onChange={(e) => setUnguarded(e.target.value)} />
+      </label>
+      <div>
+        <Button type="button" size={button("sm")} disabled={busy || invalid} onClick={save}>
+          {t(tokens.meters.holdSave, "Hold to this")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** An account as the guard last held it: each slice's real money against its day and month, and the levers holding it; what spends with no lever, and what it disabled. */
+function Guarded({ account: a, slices, onSaved }: { account: MeterAccount; slices: string[]; onSaved: () => void }) {
+  const t = useT();
+  if (!a.exported) {
+    return <p className="text-xs text-ink-soft">{t(tokens.meters.unexported, "{name}: no billing export, so nothing of ours uses it", { name: a.name })}</p>;
   }
   const g = a.guard;
   return (
     <section className="flex flex-col gap-1.5 text-xs">
       <div className="flex flex-wrap items-baseline gap-2">
         <span className="text-ink">{a.name}</span>
-        <span className="text-ink-soft">{t(tokens.meters.tick, "guard's tick {at}", { at: day(g.tick) })}</span>
-        {!g.holds_this_list && <Badge tone="warn">{t(tokens.meters.otherList, "holds another nix/google.nix")}</Badge>}
+        <span className="text-ink-soft">{g === null ? t(tokens.meters.unguardedYet, "the guard never ticked here") : t(tokens.meters.tick, "guard's tick {at}", { at: day(g.tick) })}</span>
+        {g !== null && !g.holds_this_list && <Badge tone="warn">{t(tokens.meters.otherList, "holds another definition than this one")}</Badge>}
       </div>
+      <HoldEditor key={JSON.stringify(a.hold)} account={a} slices={slices} onSaved={onSaved} />
       <ul className="flex flex-col gap-1 pl-3">
         {a.allowances.map((s) => (
           <li key={s.slice} className="flex flex-col gap-0.5">
@@ -63,12 +141,12 @@ function Guarded({ account: a }: { account: MeterAccount }) {
           </li>
         ))}
       </ul>
-      {g.unguarded.length > 0 && (
+      {g !== null && g.unguarded.length > 0 && (
         <p className="pl-3 text-ink-soft">
           <Badge tone="warn">{t(tokens.meters.noLever, "no lever")}</Badge> {g.unguarded.map((u) => `${u.api} (${u.project})`).join(", ")}
         </p>
       )}
-      {g.disabled.length > 0 && (
+      {g !== null && g.disabled.length > 0 && (
         <p className="pl-3 text-ink-soft">
           <Badge tone="error">{t(tokens.meters.disabled, "disabled")}</Badge> {g.disabled.map((u) => `${u.api} (${u.project})`).join(", ")}
         </p>
@@ -78,7 +156,7 @@ function Guarded({ account: a }: { account: MeterAccount }) {
 }
 
 /** Each vendor meter this period, over every billing account and folded out per account: the vendor's own count plus ours since it, against its free units; and each account's spend against its allowance, as the guard holds it. */
-export function MetersCard({ meters: { accounts, meters } }: { meters: Meters }) {
+export function MetersCard({ meters: { accounts, slices, meters }, onSaved }: { meters: Meters; onSaved: () => void }) {
   const t = useT();
   const [now] = useState(Date.now);
   return (
@@ -99,15 +177,15 @@ export function MetersCard({ meters: { accounts, meters } }: { meters: Meters })
               <span className="text-ink">{a.name}</span>
               <span className="tabular-nums text-ink-soft">
                 {a.spend === null
-                  ? t(tokens.meters.unspent, "no reading this month · allows {allow}", { allow: a.allow.toLocaleString() })
-                  : t(tokens.meters.spent, "{net} of {allow} {currency} net", { net: a.spend.net.toLocaleString(undefined, { maximumFractionDigits: 2 }), allow: a.allow.toLocaleString(), currency: a.spend.currency })}
+                  ? t(tokens.meters.unspent, "no reading this month · allows {allow}", { allow: allowed(a) })
+                  : t(tokens.meters.spent, "{net} of {allow} {currency} net", { net: a.spend.net.toLocaleString(undefined, { maximumFractionDigits: 2 }), allow: allowed(a), currency: a.spend.currency })}
               </span>
             </li>
           ))}
         </ul>
         <div className="flex flex-col gap-2">
           {accounts.map((a) => (
-            <Guarded key={a.name} account={a} />
+            <Guarded key={a.name} account={a} slices={slices} onSaved={onSaved} />
           ))}
         </div>
         <ul className="flex flex-col divide-y divide-border">

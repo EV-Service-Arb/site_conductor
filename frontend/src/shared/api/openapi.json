@@ -842,6 +842,188 @@
         "x-permission": "sa:admin:tokens:grant"
       }
     },
+    "/admin/meters/accounts/{name}/hold": {
+      "put": {
+        "tags": [
+          "meters"
+        ],
+        "summary": "Holds account `name` to the body: what the guard reads once it is published beside the export, within a minute. Refused for an account without an export, or a hold short of a slice or past a sane amount.",
+        "operationId": "set_hold",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "description": "What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Hold"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hold"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:admin:tokens:grant"
+      }
+    },
     "/admin/meters/bill": {
       "get": {
         "tags": [
@@ -26810,6 +26992,26 @@
           "destinations"
         ]
       },
+      "Allow": {
+        "description": "Real money a slice may spend past free units and credits, in the account's currency.",
+        "type": "object",
+        "properties": {
+          "day": {
+            "description": "A Pacific day: Google's quota day.",
+            "type": "number",
+            "format": "double"
+          },
+          "month": {
+            "description": "A Pacific month: Google's billing month.",
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "required": [
+          "day",
+          "month"
+        ]
+      },
       "AnswerState": {
         "type": "string",
         "enum": [
@@ -29313,6 +29515,30 @@
           "version"
         ]
       },
+      "Hold": {
+        "description": "What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone.",
+        "type": "object",
+        "properties": {
+          "allow": {
+            "description": "Every slice's.",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Allow"
+            }
+          },
+          "unguarded": {
+            "description": "APIs on its billed projects the guard leaves alone: spending with no lever but the backstop.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "allow",
+          "unguarded"
+        ]
+      },
       "Imap": {
         "type": "object",
         "properties": {
@@ -30892,11 +31118,6 @@
         "description": "A Google billing account, as configured.",
         "type": "object",
         "properties": {
-          "allow": {
-            "description": "Money a month past its free units and credits, in its currency.",
-            "type": "number",
-            "format": "double"
-          },
           "allowances": {
             "description": "Each slice's real money against its allowance, and its levers, at the guard's last tick.",
             "type": "array",
@@ -30921,11 +31142,26 @@
               "$ref": "#/components/schemas/MeterCredit"
             }
           },
+          "exported": {
+            "description": "Whether its billing export is set: without one nothing of ours uses it.",
+            "type": "boolean"
+          },
           "guard": {
             "description": "The guard's last tick; `null` before it ticked, or before the bill was read.",
             "anyOf": [
               {
                 "$ref": "#/components/schemas/MeterGuard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hold": {
+            "description": "What the guard is to hold it to; `null`, never set: until then nothing of ours uses it.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Hold"
               },
               {
                 "type": "null"
@@ -30962,7 +31198,8 @@
           "name",
           "places",
           "browser",
-          "allow",
+          "exported",
+          "hold",
           "spend",
           "credits",
           "unnamed_credits",
@@ -31158,7 +31395,7 @@
             }
           },
           "holds_this_list": {
-            "description": "Whether it held the definition this conductor runs (`sa_core::google::digest`).",
+            "description": "Whether it held the definition this conductor publishes (`sa_core::google::Definition::digest`).",
             "type": "boolean"
           },
           "tick": {
@@ -31418,10 +31655,18 @@
             "items": {
               "$ref": "#/components/schemas/MeterUse"
             }
+          },
+          "slices": {
+            "description": "The slices a hold names, in the config's order.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
           "accounts",
+          "slices",
           "meters"
         ]
       },
