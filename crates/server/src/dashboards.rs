@@ -412,7 +412,7 @@ fn tokens(doc: &OpenApi) -> Value {
 }
 
 fn meters(doc: &OpenApi) -> Value {
-	Board::new(doc, CONDUCTOR)
+	let board = Board::new(doc, CONDUCTOR)
 		.panel(
 			Panel { id: 1, kind: "table", title: "This period, every meter on each account", grid: [0, 0, 24, 10] },
 			Query {
@@ -575,41 +575,54 @@ fn meters(doc: &OpenApi) -> Value {
 					"overrides": []
 				}
 			}),
-		)
-		.panel(
-			Panel { id: 4, kind: "table", title: "Credits, each account's, in its currency", grid: [0, 19, 12, 7] },
-			Query {
-				operation: op_id(crate::meters::meters),
-				path: &[],
-				params: &[],
-				select: Some(Select {
-					root_selector: r##"$map(accounts, function($a) { $map($a.credits, function($c) { {"account": $a.name, "credit": $c.name, "left": $c.left, "per day": $c.per_day, "runs out": $c.runs_out, "ends": $c.ends, "days left": $c.days_left, "first": $c.binds, "as of": $c.as_of} }) })"##,
-					columns: &[("account", Column::String), ("credit", Column::String), ("left", Column::Number), ("per day", Column::Number), ("runs out", Column::String), ("ends", Column::String), ("days left", Column::Number), ("first", Column::String), ("as of", Column::Timestamp)],
-				}),
-			},
-			json!({
-				"options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
-				"fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [] },
-				"transformations": [order(&["account", "credit", "left", "per day", "runs out", "ends", "days left", "first", "as of"])]
-			}),
-		)
-		.panel(
-			Panel { id: 5, kind: "table", title: "Allowances, as the guard last held them", grid: [12, 19, 12, 7] },
-			Query {
-				operation: op_id(crate::meters::meters),
-				path: &[],
-				params: &[],
-				select: Some(Select {
-					root_selector: r##"$map(accounts, function($a) { $map($a.allowances, function($s) { {"account": $a.name, "slice": $s.slice, "allowed": $s.allowed, "real used": $s.real, "headroom": $s.headroom, "is": $s.state, "levers": $join($map($s.levers, function($l) { ($l.project ? $l.project & " " : "") & $l.lever & " = " & $string($l.setting) & " (" & ($l.state ? $l.state : "new") & ")" }), "; "), "guard's tick": $a.guard.tick, "holds this list": $string($a.guard.holds_this_list)} }) })"##,
-					columns: &[("account", Column::String), ("slice", Column::String), ("allowed", Column::Number), ("real used", Column::Number), ("headroom", Column::Number), ("is", Column::String), ("levers", Column::String), ("guard's tick", Column::Timestamp), ("holds this list", Column::String)],
-				}),
-			},
-			json!({
-				"options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
-				"fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [] },
-				"transformations": [order(&["account", "slice", "allowed", "real used", "headroom", "is", "levers", "guard's tick", "holds this list"])]
-			}),
-		)
+		);
+	let board = table(
+		board,
+		Panel {
+			id: 4,
+			kind: "table",
+			title: "Credits, each account's, in its currency",
+			grid: [0, 19, 12, 7],
+		},
+		op_id(crate::meters::meters),
+		false,
+		r##"$map(accounts, function($a) { $map($a.credits, function($c) { {"account": $a.name, "credit": $c.name, "left": $c.left, "per day": $c.per_day, "runs out": $c.runs_out, "ends": $c.ends, "days left": $c.days_left, "first": $c.binds, "as of": $c.as_of} }) })"##,
+		&[
+			("account", Column::String),
+			("credit", Column::String),
+			("left", Column::Number),
+			("per day", Column::Number),
+			("runs out", Column::String),
+			("ends", Column::String),
+			("days left", Column::Number),
+			("first", Column::String),
+			("as of", Column::Timestamp),
+		],
+	);
+	let board = table(
+		board,
+		Panel {
+			id: 5,
+			kind: "table",
+			title: "Allowances, as the guard last held them",
+			grid: [12, 19, 12, 7],
+		},
+		op_id(crate::meters::meters),
+		false,
+		r##"$map(accounts, function($a) { $map($a.allowances, function($s) { {"account": $a.name, "slice": $s.slice, "allowed": $s.allowed, "real used": $s.real, "headroom": $s.headroom, "is": $s.state, "levers": $join($map($s.levers, function($l) { ($l.project ? $l.project & " " : "") & $l.lever & " = " & $string($l.setting) & " (" & ($l.state ? $l.state : "new") & ")" }), "; "), "guard's tick": $a.guard.tick, "holds this list": $string($a.guard.holds_this_list)} }) })"##,
+		&[
+			("account", Column::String),
+			("slice", Column::String),
+			("allowed", Column::Number),
+			("real used", Column::Number),
+			("headroom", Column::Number),
+			("is", Column::String),
+			("levers", Column::String),
+			("guard's tick", Column::Timestamp),
+			("holds this list", Column::String),
+		],
+	);
+	let board = board
 		.panel(
 			Panel { id: 6, kind: "stat", title: "The bill over the range, in the accounts' currency", grid: [0, 26, 24, 4] },
 			in_range(
@@ -654,13 +667,18 @@ fn meters(doc: &OpenApi) -> Value {
 				},
 			),
 			bars_per_day("money", Unit::Plain, 2),
-		)
-		.panel(
-			Panel { id: 9, kind: "table", title: "By slice, over the range", grid: [0, 39, 12, 8] },
-			in_range(
-				op_id(crate::meters::bill),
-				Select {
-					root_selector: r##"(
+		);
+	let board = table(
+		board,
+		Panel {
+			id: 9,
+			kind: "table",
+			title: "By slice, over the range",
+			grid: [0, 39, 12, 8],
+		},
+		op_id(crate::meters::bill),
+		true,
+		r##"(
   $rows := days;
   [$distinct($rows.slice).(
     $s := $;
@@ -668,21 +686,25 @@ fn meters(doc: &OpenApi) -> Value {
     {"slice": $s, "used": $sum($d.used), "from credits": $sum($d.credit), "discounts": $sum($d.discount), "paid": $sum($d.paid)}
   )]
 )"##,
-					columns: &[("slice", Column::String), ("used", Column::Number), ("from credits", Column::Number), ("discounts", Column::Number), ("paid", Column::Number)],
-				},
-			),
-			json!({
-				"options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
-				"fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [] },
-				"transformations": [order(&["slice", "used", "from credits", "discounts", "paid"])]
-			}),
-		)
-		.panel(
-			Panel { id: 10, kind: "table", title: "By SKU, over the range", grid: [12, 39, 12, 8] },
-			in_range(
-				op_id(crate::meters::bill),
-				Select {
-					root_selector: r##"(
+		&[
+			("slice", Column::String),
+			("used", Column::Number),
+			("from credits", Column::Number),
+			("discounts", Column::Number),
+			("paid", Column::Number),
+		],
+	);
+	let board = table(
+		board,
+		Panel {
+			id: 10,
+			kind: "table",
+			title: "By SKU, over the range",
+			grid: [12, 39, 12, 8],
+		},
+		op_id(crate::meters::bill),
+		true,
+		r##"(
   $rows := days;
   [$distinct($rows.(account & "|" & slice & "|" & service & "|" & sku)).(
     $k := $;
@@ -690,39 +712,48 @@ fn meters(doc: &OpenApi) -> Value {
     {"account": $d[0].account, "slice": $d[0].slice, "service": $d[0].service, "sku": $d[0].sku, "used": $sum($d.used), "paid": $sum($d.paid)}
   )]
 )"##,
-					columns: &[("account", Column::String), ("slice", Column::String), ("service", Column::String), ("sku", Column::String), ("used", Column::Number), ("paid", Column::Number)],
-				},
-			),
-			json!({
-				"options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
-				"fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [] },
-				"transformations": [order(&["account", "slice", "service", "sku", "used", "paid"])]
-			}),
-		)
-		.panel(
-			Panel { id: 11, kind: "table", title: "Free vs paid this month, by SKU", grid: [0, 47, 24, 8] },
-			in_range(
-				op_id(crate::meters::bill),
-				Select {
-					root_selector: r##"$map(tiers, function($t) { {"account": $t.account, "service": $t.service, "sku": $t.sku, "unit": $t.unit, "units": $t.units, "free to": $t.free_to, "until paid": $t.free_to = null ? null : $max([$t.free_to - $t.units, 0]), "paid units": $t.paid_units, "list": $t.list, "free": $t.free} })"##,
-					columns: &[("account", Column::String), ("service", Column::String), ("sku", Column::String), ("unit", Column::String), ("units", Column::Number), ("free to", Column::Number), ("until paid", Column::Number), ("paid units", Column::Number), ("list", Column::Number), ("free", Column::Number)],
-				},
-			),
-			json!({
-				"options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
-				"fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [] },
-				"transformations": [order(&["account", "service", "sku", "unit", "units", "free to", "until paid", "paid units", "list", "free"])]
-			}),
-		)
-		.build(
-			Dashboard {
-				uid: "sa-meters",
-				title: "Vendors' meters · everyone",
-				from: "now-90d",
-				variables: Vec::new(),
-			}
-			.into(),
-		)
+		&[
+			("account", Column::String),
+			("slice", Column::String),
+			("service", Column::String),
+			("sku", Column::String),
+			("used", Column::Number),
+			("paid", Column::Number),
+		],
+	);
+	let board = table(
+		board,
+		Panel {
+			id: 11,
+			kind: "table",
+			title: "Free vs paid this month, by SKU",
+			grid: [0, 47, 24, 8],
+		},
+		op_id(crate::meters::bill),
+		true,
+		r##"$map(tiers, function($t) { {"account": $t.account, "service": $t.service, "sku": $t.sku, "unit": $t.unit, "units": $t.units, "free to": $t.free_to, "until paid": $t.free_to = null ? null : $max([$t.free_to - $t.units, 0]), "paid units": $t.paid_units, "list": $t.list, "free": $t.free} })"##,
+		&[
+			("account", Column::String),
+			("service", Column::String),
+			("sku", Column::String),
+			("unit", Column::String),
+			("units", Column::Number),
+			("free to", Column::Number),
+			("until paid", Column::Number),
+			("paid units", Column::Number),
+			("list", Column::Number),
+			("free", Column::Number),
+		],
+	);
+	board.build(
+		Dashboard {
+			uid: "sa-meters",
+			title: "Vendors' meters · everyone",
+			from: "now-90d",
+			variables: Vec::new(),
+		}
+		.into(),
+	)
 }
 
 /// `rows` grouped by `day` and `series`, each group `$r` given the `day`, the `series` and `value` (a JSONata `"key": …` pair).
@@ -769,6 +800,27 @@ fn tokens_per_day<'a>(board: Board<'a>, panel: Panel, rows: &str, series: &str, 
 			},
 		),
 		bars_per_day("tokens", Unit::Plain, 0),
+	)
+}
+
+/// A table of `columns`, in their order, of what `root_selector` makes of `operation`'s answer, over
+/// the range when `ranged`.
+fn table<'a>(board: Board<'a>, panel: Panel, operation: &'a str, ranged: bool, root_selector: &'a str, columns: &'a [(&'a str, Column)]) -> Board<'a> {
+	let names: Vec<&str> = columns.iter().map(|(name, _)| *name).collect();
+	let query = Query {
+		operation,
+		path: &[],
+		params: if ranged { RANGE } else { &[] },
+		select: Some(Select { root_selector, columns }),
+	};
+	board.panel(
+		panel,
+		query,
+		json!({
+			"options": { "showHeader": true, "cellHeight": "sm", "footer": { "show": false } },
+			"fieldConfig": { "defaults": { "custom": { "align": "auto" } }, "overrides": [] },
+			"transformations": [order(&names)]
+		}),
 	)
 }
 

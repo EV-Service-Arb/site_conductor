@@ -321,7 +321,7 @@ fn plan(config: &Config, slices: &[Drawn], read: &Read) -> Result<Vec<(Vec<Row>,
 				let open: BTreeSet<(&str, &str)> = quotas.iter().filter(|q| meters::pace(&q.api).is_some()).map(|q| (q.project.as_str(), q.api.as_str())).collect();
 				for q in &quotas {
 					let value = match meters::pace(&q.api) {
-						_ if maps.closed.iter().any(|c| *c == q.api) => 0,
+						_ if maps.closed.contains(&q.api) => 0,
 						None => unreachable!("only the closed and the metered are paced"),
 						Some((free, price)) => {
 							let bought = match allow(&maps.name) / open.len() as f64 {
