@@ -72,7 +72,10 @@ impl<S: Subscriber + for<'a> LookupSpan<'a>> Layer<S> for Spans {
 		let mut args = Map::new();
 		attrs.record(&mut Fields(&mut args));
 		let ts = SystemTime::now().duration_since(UNIX_EPOCH).expect("the clock is past 1970").as_micros();
-		ctx.span(id).expect("a new span is in the registry").extensions_mut().insert(Opened { at: Instant::now(), ts, args });
+		ctx.span(id)
+			.expect("a new span is in the registry")
+			.extensions_mut()
+			.insert(Opened { at: Instant::now(), ts, args });
 	}
 
 	fn on_record(&self, id: &span::Id, values: &span::Record<'_>, ctx: Context<'_, S>) {

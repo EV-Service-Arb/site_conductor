@@ -250,6 +250,12 @@ impl Services {
 		}
 	}
 
+	/// The public half of the key the conductor vouches with: what it checks an assertion a service
+	/// hands back against.
+	pub(crate) fn vouchers(&self) -> sa_auth::Keys {
+		self.upstreams.signer.public().parse().expect("a signer's public half is a key")
+	}
+
 	/// `method path[?query]` to `service`, `principal` vouched for by an assertion bound to the
 	/// path; what only the conductor may say, and hop-by-hop headers, are not passed either way.
 	/// The answer streams.

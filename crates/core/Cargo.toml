@@ -22,6 +22,7 @@ futures = { workspace = true, optional = true }
 hex.workspace = true
 hmac.workspace = true
 jiff = { workspace = true, features = ["serde", "tzdb-bundle-always"] }
+regex.workspace = true
 sa_alerts.workspace = true
 sa_auth.workspace = true
 schemars.workspace = true
@@ -37,7 +38,6 @@ uuid = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 http-body-util.workspace = true
-regex.workspace = true
 tokio.workspace = true
 
 [[test]]

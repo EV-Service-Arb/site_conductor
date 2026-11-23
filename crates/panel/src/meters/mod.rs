@@ -8,6 +8,7 @@
 //!                                           else  0, ours on the account after the period's start
 //!                          ─ refused past the free units if the meter stops there, or with no reading at all
 //! which account buys ─ its standing: 0 free units left, 1 its net spend this period under its allowance
+//! the same read ─ the account's bill from its `since`, and the guard's last tick: replaced whole
 //! ```
 
 pub mod google;
@@ -15,12 +16,13 @@ pub mod google;
 use std::{future::Future, sync::Arc};
 
 use eyre::WrapErr;
-use jiff::Timestamp;
+use jiff::{Timestamp, civil::Date};
 use sa_core::{
 	meters::{ALL, Meter, Stop, Vendor},
 	prices::{Item, MapLoad, PlacesRequest, StreetViewLoad},
 };
 use sa_places::{Account, Accounts, Pending};
+use serde::{Deserialize, Serialize};
 use sqlx::SqliteConnection;
 
 pub use crate::store::meters::{Reading, Spend, Synced};
@@ -38,6 +40,82 @@ pub trait Reader {
 
 	/// Each of `meters` as the vendor counts it in its period around `now`.
 	fn read(&self, meters: &[&'static Meter], now: Timestamp) -> impl Future<Output = eyre::Result<Vec<Reading>>> + Send;
+
+	/// The account's bill from `since`, whole.
+	fn bill(&self, since: Date) -> impl Future<Output = eyre::Result<Bill>> + Send;
+}
+
+/// What the vendor's record tells of an account's bill from its `since`: read whole each time, as
+/// Google revises the days it exported. Amounts in millionths of their currency.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Bill {
+	pub days: Vec<Day>,
+	pub draws: Vec<Draw>,
+	pub tiers: Vec<Tier>,
+	/// The guard's last tick on the account; `None`, it never ticked there.
+	pub guard: Option<Vec<Lever>>,
+}
+
+/// A day's use of one SKU.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Day {
+	pub day: Date,
+	pub service: String,
+	pub sku: String,
+	pub currency: String,
+	/// At list price.
+	pub cost_micros: i64,
+	/// Drawn from a credit's balance ([`sa_core::google::BALANCES`]); negative.
+	pub credit_micros: i64,
+	/// Every other credit; negative.
+	pub discount_micros: i64,
+}
+
+/// A credit's balance drawn, by the hour Google exported it.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Draw {
+	pub credit: String,
+	pub hour: Timestamp,
+	/// Negative.
+	pub amount_micros: i64,
+}
+
+/// An SKU's units an invoice month, and where its first priced tier starts.
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Tier {
+	/// `YYYYMM`.
+	pub month: String,
+	pub service: String,
+	pub sku: String,
+	pub unit: Option<String>,
+	pub units: f64,
+	/// Billed at a price above nothing.
+	pub paid_units: f64,
+	/// Where its first priced tier starts; `None`, none was reached.
+	pub free_to: Option<f64>,
+	/// At list price.
+	pub cost_micros: i64,
+	/// What every credit but a balance's took off; negative.
+	pub free_micros: i64,
+}
+
+/// One lever the guard set, or a slice's real money it read, at its tick (crates/guard).
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Lever {
+	pub tick: Timestamp,
+	pub slice: String,
+	pub project: Option<String>,
+	/// `cap: <service>`, `quota: <api> <id>`, or `real money`.
+	pub lever: String,
+	pub allow: Option<f64>,
+	pub real: Option<f64>,
+	pub setting: Option<f64>,
+	pub state: Option<String>,
+	/// Requests since the quota day began.
+	pub today: Option<i64>,
+	pub action: Option<String>,
+	/// The digest of the definition it held ([`sa_core::google::digest`]).
+	pub list: Option<String>,
 }
 
 /// A meter's use on an account, now.
@@ -93,9 +171,9 @@ impl Gauge {
 }
 
 /// What `account` may spend a month past its free units and credits on what is metered here: all
-/// of it falls in accounting's `maps` slice.
+/// of it falls in [`sa_core::meters::SLICE`].
 pub fn allowance(account: &Account) -> f64 {
-	account.allow.get("maps").copied().unwrap_or(0.0) // a slice not named is allowed none, as accounting's guard reads it
+	account.allow.get(sa_core::meters::SLICE).copied().unwrap_or(0.0) // a slice not named is allowed none, as the guard reads it
 }
 
 /// The conductor's [`sa_places::Rank`]: each account by its `standing` on the meter of the
@@ -162,11 +240,14 @@ impl sa_places::Rank for ByStanding {
 }
 
 impl Panel {
-	/// Every meter of `reader`'s vendor read on its account, and kept in one write. How many.
+	/// Every meter of `reader`'s vendor read on its account, and its bill, kept in one write. How
+	/// many meters.
 	pub async fn sync_meters(&self, reader: &impl Reader, now: Timestamp) -> eyre::Result<usize> {
 		let (vendor, account) = (reader.vendor(), reader.account());
 		let meters: Vec<&'static Meter> = ALL.iter().filter(|m| m.vendor == vendor).collect();
 		let readings = reader.read(&meters, now).await?;
+		let since = self.accounts.get(account).ok_or_else(|| eyre::eyre!("{account} is read but not configured"))?.export.since;
+		let bill = reader.bill(since).await.wrap_err("the bill")?;
 		let start = vendor.period(now).0;
 		for m in &meters {
 			eyre::ensure!(readings.iter().filter(|r| r.meter == *m).count() == 1, "{vendor:?} answered {m} other than once");
@@ -181,6 +262,7 @@ impl Panel {
 		for r in &readings {
 			db::append(&mut tx, r, now).await?;
 		}
+		db::put_bill(&mut tx, account, &bill, now).await?;
 		tx.commit().await.wrap_err("committing the meters' readings")?;
 		Ok(readings.len())
 	}
@@ -220,6 +302,16 @@ impl Panel {
 			}
 		}
 		Ok(best.map(|(_, a)| a))
+	}
+
+	/// Each account's bill as last read, and when, in the config's order; `None`, never read.
+	pub async fn bills(&self) -> eyre::Result<Vec<(&Account, Option<(Bill, Timestamp)>)>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the bills")?;
+		let mut bills = Vec::with_capacity(self.accounts.len());
+		for a in self.accounts.iter() {
+			bills.push((a, db::bill(&mut conn, &a.name).await?));
+		}
+		Ok(bills)
 	}
 
 	/// Every reading synced in `[from, to)`, oldest first.

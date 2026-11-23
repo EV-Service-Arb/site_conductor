@@ -1,0 +1,89 @@
+== credits left, nothing allowed: Vertex in use takes every credit; nothing capped yet
+a	Cloud Run functions	p	cap: Cloud Run functions	allow -	real -	set 0.00	is -
+a	LLM	p	cap: Gemini API	allow -	real -	set 0.00	is -
+a	video generation	p	cap: Vertex AI	allow -	real -	set 100.00	is -
+a	LLM	p	cap: Vertex AI	allow -	real -	set 100.00	is -
+a	Cloud Run	q	cap: Cloud Run	allow -	real -	set 0.00	is -
+a	Cloud Run functions	q	cap: Cloud Run functions	allow -	real -	set 0.00	is -
+a	LLM	q	cap: Gemini API	allow -	real -	set 0.00	is -
+a	video generation	q	cap: Vertex AI	allow -	real -	set 0.00	is -
+a	LLM	q	cap: Vertex AI	allow -	real -	set 0.00	is -
+a	LLM	-	real money	allow 0.00	real 0.00	set -	is within
+a	maps	-	real money	allow 0.00	real 0.00	set -	is within
+a	video generation	-	real money	allow 0.00	real 0.00	set -	is within
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "29E7-DA93-CA13", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "AEFD-7695-64FA", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "C7E2-9256-1C43", amount: 100.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "152E-C115-5142", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "29E7-DA93-CA13", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "AEFD-7695-64FA", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 0.0 }
+== credits ending tomorrow count as gone: caps fall to what was spent
+a	Cloud Run functions	p	cap: Cloud Run functions	allow -	real -	set 0.00	is -
+a	LLM	p	cap: Gemini API	allow -	real -	set 0.00	is -
+a	video generation	p	cap: Vertex AI	allow -	real -	set 40.00	is CONFIGURED
+a	LLM	p	cap: Vertex AI	allow -	real -	set 40.00	is CONFIGURED
+a	Cloud Run	q	cap: Cloud Run	allow -	real -	set 0.00	is -
+a	Cloud Run functions	q	cap: Cloud Run functions	allow -	real -	set 0.00	is -
+a	LLM	q	cap: Gemini API	allow -	real -	set 0.00	is -
+a	video generation	q	cap: Vertex AI	allow -	real -	set 0.00	is -
+a	LLM	q	cap: Vertex AI	allow -	real -	set 0.00	is -
+a	LLM	-	real money	allow 0.00	real 0.00	set -	is within
+a	maps	-	real money	allow 0.00	real 0.00	set -	is within
+a	video generation	-	real money	allow 0.00	real 0.00	set -	is within
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "29E7-DA93-CA13", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "AEFD-7695-64FA", amount: 0.0 }
+a	Set { name: "billingAccounts/x/budgets/v", amount: 40.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "152E-C115-5142", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "29E7-DA93-CA13", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "AEFD-7695-64FA", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 0.0 }
+== an enforced cap whose allowance was raised is lifted, then set
+a	Cloud Run functions	p	cap: Cloud Run functions	allow -	real -	set 0.00	is -
+a	LLM	p	cap: Gemini API	allow -	real -	set 0.00	is -
+a	video generation	p	cap: Vertex AI	allow -	real -	set 45.00	is ENFORCED
+a	LLM	p	cap: Vertex AI	allow -	real -	set 45.00	is ENFORCED
+a	Cloud Run	q	cap: Cloud Run	allow -	real -	set 0.00	is -
+a	Cloud Run functions	q	cap: Cloud Run functions	allow -	real -	set 0.00	is -
+a	LLM	q	cap: Gemini API	allow -	real -	set 0.00	is -
+a	video generation	q	cap: Vertex AI	allow -	real -	set 5.00	is -
+a	LLM	q	cap: Vertex AI	allow -	real -	set 5.00	is -
+a	LLM	-	real money	allow 0.00	real 0.00	set -	is within
+a	maps	-	real money	allow 0.00	real 0.00	set -	is within
+a	video generation	-	real money	allow 10.00	real 0.05	set -	is within
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "29E7-DA93-CA13", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "AEFD-7695-64FA", amount: 0.0 }
+a	Lift { name: "billingAccounts/x/budgets/v" }
+a	Set { name: "billingAccounts/x/budgets/v", amount: 45.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "152E-C115-5142", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "29E7-DA93-CA13", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "AEFD-7695-64FA", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 5.0 }
+== maps: the meters' free units and what 10 buys, a day; an API nothing calls, none; real money past the allowance unlinks
+a	Cloud Run functions	p	cap: Cloud Run functions	allow -	real -	set 0.00	is -
+a	LLM	p	cap: Gemini API	allow -	real -	set 0.00	is -
+a	video generation	p	cap: Vertex AI	allow -	real -	set 0.00	is -
+a	LLM	p	cap: Vertex AI	allow -	real -	set 0.00	is -
+a	Cloud Run	q	cap: Cloud Run	allow -	real -	set 0.00	is -
+a	Cloud Run functions	q	cap: Cloud Run functions	allow -	real -	set 0.00	is -
+a	LLM	q	cap: Gemini API	allow -	real -	set 0.00	is -
+a	video generation	q	cap: Vertex AI	allow -	real -	set 0.00	is -
+a	LLM	q	cap: Vertex AI	allow -	real -	set 0.00	is -
+a	maps	q	quota: geocoding-backend.googleapis.com GeocodingPerDay	allow -	real -	set 394.00	is -1
+a	maps	q	quota: routes.googleapis.com ComputeRoutesPerDay	allow -	real -	set 0.00	is 32
+a	BigQuery	-	real money	allow 0.00	real 0.01	set -	is within
+a	LLM	-	real money	allow 0.00	real 0.00	set -	is within
+a	maps	-	real money	allow 10.00	real 10.50	set -	is over
+a	video generation	-	real money	allow 0.00	real 0.00	set -	is within
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "29E7-DA93-CA13", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "AEFD-7695-64FA", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "C7E2-9256-1C43", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "152E-C115-5142", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "29E7-DA93-CA13", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "AEFD-7695-64FA", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 0.0 }
+a	Quota { project: "q", api: "geocoding-backend.googleapis.com", id: "GeocodingPerDay", value: 394 }
+a	Quota { project: "q", api: "routes.googleapis.com", id: "ComputeRoutesPerDay", value: 0 }
+a	Unlink { project: "q" }
+== a credit drawn that nix/google.nix does not name stops the tick
+Error: a: the export draws on credits ["c2"] with no `credits` entry in nix/google.nix

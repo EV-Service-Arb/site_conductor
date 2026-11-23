@@ -132,7 +132,7 @@ pub async fn panel(db: &TestDb) -> Panel {
 /// Google account.
 pub fn panel_with(store: Store, key: DataKey) -> Panel {
 	let keyless = sa_places::Google::try_new(sa_places::Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(store.clone())).expect("a Places client");
-	panel_on(store, key, keyless, sa_places::Accounts::new(vec![]))
+	panel_on(store, key, keyless, sa_places::Accounts::new(vec![], vec![]))
 }
 
 /// A panel on `store` asking `google` on `accounts`, tokens as [`panel_with`].
@@ -154,7 +154,9 @@ pub fn account(name: &str, places: Option<&str>, browser: Option<&str>) -> sa_pl
 		export: sa_places::Export {
 			table: format!("{name}.billing.export"),
 			reader: "{}".to_owned(),
+			since: jiff::civil::date(2026, 10, 1),
 		},
+		credits: vec![],
 		allow: Default::default(),
 		provides: sa_places::Provides {
 			places: places.map(|k| sa_places::Key { key: k.to_owned() }),
@@ -228,6 +230,7 @@ pub struct Told {
 	pub units: i64,
 	pub net: i64,
 	pub through: Timestamp,
+	pub bill: crate::meters::Bill,
 }
 
 /// A database and a history migrated once per state of migrations/ and history_migrations/, shared by
@@ -296,5 +299,9 @@ impl crate::meters::Reader for Told {
 				through: self.through,
 			})
 			.collect())
+	}
+
+	async fn bill(&self, _: jiff::civil::Date) -> eyre::Result<crate::meters::Bill> {
+		Ok(self.bill.clone())
 	}
 }

@@ -10,6 +10,9 @@ use uuid::Uuid;
 use super::{from_db, to_db};
 use crate::categories::{Body, Key, Move, Version, Why};
 
+/// A move as its row reads: id, why, from, to, listing version, at.
+type MoveRow = (i64, String, Option<i64>, i64, Option<i64>, i64);
+
 /// A category's head, and the listing version its lineage last took it from.
 pub(crate) struct Row {
 	pub trade: String,
@@ -111,7 +114,7 @@ pub(crate) async fn moved(conn: &mut SqliteConnection, key: Key, why: Why, from:
 
 /// `key`'s moves since it was last created, oldest first.
 pub(crate) async fn history(conn: &mut SqliteConnection, key: Key) -> eyre::Result<Vec<Move>> {
-	let rows: Vec<(i64, String, Option<i64>, i64, Option<i64>, i64)> = sqlx::query_as(
+	let rows: Vec<MoveRow> = sqlx::query_as(
 		"SELECT m.id, m.why, m.from_version, m.to_version, m.listing_version, m.at FROM category_moves m \
 		 WHERE m.owner = $1 AND m.trade = $2 AND m.country = $3 AND m.id >= (SELECT max(s.id) FROM category_moves s \
 		 WHERE s.owner = $1 AND s.trade = $2 AND s.country = $3 AND s.from_version IS NULL) ORDER BY m.id",

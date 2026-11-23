@@ -189,6 +189,33 @@
           auditable = false; # cargo-auditable doesn't support edition 2024
           meta.description = "the panel binary";
         };
+        # The guard (crates/guard): a Cloud Run job, out of the cluster, every 15 minutes. Its image carries
+        # nix/google.nix as of the commit it is built from, which is what it holds the accounts to.
+        guardProject = "gen-lang-client-0759123990"; # where the guard runs, and evinvest's export lives
+        guardRegion = "europe-west1";
+        guardSa = "guard@${guardProject}.iam.gserviceaccount.com";
+        guard = rustPlatform.buildRustPackage {
+          pname = "guard";
+          inherit cargoLock;
+          version = manifest.version;
+          src = pureSrc;
+          cargoBuildFlags = [ "-p" "sa_guard" ];
+          doCheck = false;
+          auditable = false; # cargo-auditable doesn't support edition 2024
+          meta.description = "the guard";
+        };
+        guardImage = pkgs.dockerTools.buildLayeredImage {
+          name = "guard";
+          config.Entrypoint = [ "${guard}/bin/guard" "tick" ];
+          config.Env = [
+            "GUARD_CONFIG=${builtins.toJSON (import ./nix/google.nix)}"
+            "GUARD_PROJECT=${guardProject}"
+            "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+          ];
+        };
+        # The checkout's nix/google.nix, so an edit counts on save.
+        googleNix = ''"$(git rev-parse --show-toplevel)/nix/google.nix"'';
+
         # The CLI must be the lock's `wasm-bindgen`: a skew is a hard error at bindgen time.
         wasmBindgen = (lib.findFirst (p: p.name == "wasm-bindgen") (throw "Cargo.lock holds no wasm-bindgen") (lib.importTOML ./Cargo.lock).package).version;
         wasm-bindgen-cli =
@@ -480,13 +507,77 @@
             });
             meta.description = "a local state's answers (<state>: its panel.db and queries_history.db) into prod's queries cache (docs/LOCAL.md)";
           };
+          # Same service account locally, through impersonation, so a dry run reads with exactly the rights a tick has.
+          guard = {
+            type = "app";
+            program = lib.getExe (pkgs.writeShellApplication {
+              name = "guard";
+              runtimeInputs = [ pkgs.google-cloud-sdk pkgs.gitMinimal pkgs.nix ];
+              text = ''
+                GUARD_CONFIG=$(nix eval --json --file ${googleNix})
+                GUARD_PROJECT=${guardProject}
+                GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --impersonate-service-account=${guardSa})
+                export GUARD_CONFIG GUARD_PROJECT GOOGLE_OAUTH_ACCESS_TOKEN
+                [ $# -gt 0 ] || set -- tick --dry-run
+                exec ${guard}/bin/guard "$@"
+              '';
+            });
+            meta.description = "what the guard's tick would set now, setting nothing; args go to `guard` (tick, read, plan <read.json>)";
+          };
+          # Idempotent: rerun after any change to crates/guard or nix/google.nix, as whoever owns each account's billing (gcloud's active login).
+          guard-deploy = {
+            type = "app";
+            program = lib.getExe (pkgs.writeShellApplication {
+              name = "guard-deploy";
+              runtimeInputs = [ pkgs.google-cloud-sdk pkgs.skopeo pkgs.jq pkgs.gnused ];
+              text = ''
+                P=${guardProject} R=${guardRegion} SA=${guardSa}
+                config='${builtins.toJSON (import ./nix/google.nix)}'
+                gcloud services enable --project "$P" run.googleapis.com cloudscheduler.googleapis.com artifactregistry.googleapis.com \
+                  billingbudgets.googleapis.com cloudbilling.googleapis.com cloudquotas.googleapis.com monitoring.googleapis.com \
+                  serviceusage.googleapis.com cloudresourcemanager.googleapis.com bigquery.googleapis.com iamcredentials.googleapis.com
+                gcloud iam service-accounts describe "$SA" --project "$P" >/dev/null 2>&1 ||
+                  gcloud iam service-accounts create guard --project "$P" --display-name "holds real money to nix/google.nix's allow"
+                me=$(gcloud config get account)
+                gcloud iam service-accounts add-iam-policy-binding "$SA" --project "$P" --member "user:$me" --role roles/iam.serviceAccountTokenCreator >/dev/null # `nix run .#guard`
+                gcloud projects add-iam-policy-binding "$P" --member "serviceAccount:$SA" --role roles/run.invoker --condition None >/dev/null # Scheduler starts the job as the guard
+
+                # Per account: the billing account's budgets, caps and links; each billed project's quotas, usage and billing link; the export's dataset.
+                for t in $(jq -r '.accounts[].export.table' <<<"$config"); do
+                  ds=''${t%.*} project=''${t%%.*} billing=$(sed -E 's/.*_v1_(\w{6})_(\w{6})_(\w{6})$/\1-\2-\3/' <<<"$t")
+                  gcloud billing accounts add-iam-policy-binding "$billing" --member "serviceAccount:$SA" --role roles/billing.admin >/dev/null
+                  for p in $(gcloud billing projects list --billing-account "$billing" --format 'value(projectId)'); do
+                    for role in roles/billing.projectManager roles/cloudquotas.admin roles/serviceusage.serviceUsageViewer roles/monitoring.viewer roles/browser; do
+                      gcloud projects add-iam-policy-binding "$p" --member "serviceAccount:$SA" --role "$role" --condition None >/dev/null
+                    done
+                  done
+                  gcloud projects add-iam-policy-binding "$project" --member "serviceAccount:$SA" --role roles/bigquery.jobUser --condition None >/dev/null
+                  bq show "''${ds/./:}.guard" >/dev/null 2>&1 ||
+                    bq mk --table "''${ds/./:}.guard" tick:INTEGER,account:STRING,category:STRING,project:STRING,lever:STRING,allow:FLOAT,real:FLOAT,setting:FLOAT,state:STRING,today:INTEGER,action:STRING,list:STRING
+                  bq add-iam-policy-binding --member "serviceAccount:$SA" --role roles/bigquery.dataEditor "''${ds/./:}" >/dev/null
+                done
+
+                gcloud artifacts repositories describe guard --project "$P" --location "$R" >/dev/null 2>&1 ||
+                  gcloud artifacts repositories create guard --project "$P" --location "$R" --repository-format docker
+                image="$R-docker.pkg.dev/$P/guard/guard:$(basename ${guardImage} | cut -c1-32)"
+                skopeo copy --dest-creds "oauth2accesstoken:$(gcloud auth print-access-token)" docker-archive:${guardImage} "docker://$image"
+                gcloud run jobs deploy guard --project "$P" --region "$R" --image "$image" --service-account "$SA" --max-retries 0 --task-timeout 300s
+                run="https://run.googleapis.com/v2/projects/$P/locations/$R/jobs/guard:run"
+                if gcloud scheduler jobs describe guard --project "$P" --location "$R" >/dev/null 2>&1; then verb=update; else verb=create; fi
+                gcloud scheduler jobs "$verb" http guard --project "$P" --location "$R" --schedule '*/15 * * * *' \
+                  --uri "$run" --http-method POST --oauth-service-account-email "$SA"
+                gcloud run jobs execute guard --project "$P" --region "$R" --wait
+              '';
+            });
+            meta.description = "(re)deploy the guard to Cloud Run from this commit's nix/google.nix, as the billing owner";
+          };
           local-stack = { type = "app"; program = lib.getExe localStack; meta.description = "the conductor, its Grafana, sites_panel, review_archive and the landings, wired together on this machine (docs/LOCAL.md)"; };
         };
 
         packages = {
           default = bin;
-          inherit bin frontend placementOverlay;
-        } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { grafana-server = grafanaServer; inherit orbita; mlx = multilogin.mlx; phone-tools = multilogin.phoneTools; });
+          inherit bin frontend placementOverlay guard;
+        } // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux (containerStd.packages // { guard-image = guardImage; grafana-server = grafanaServer; inherit orbita; mlx = multilogin.mlx; phone-tools = multilogin.phoneTools; });
 
         containers = lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux containers;
 

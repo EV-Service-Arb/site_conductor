@@ -21,9 +21,10 @@ use sa_panel::{
 	seal::DataKey,
 	testing::{TestDb, admin, operator, panel_on},
 };
-use sa_places::{Google, Keys};
+use sa_places::{Ask, Error, Google, Keys, Remote, Vouched};
 use sa_server::{
 	concierge::{Concierge, DevIdentity},
+	forward::Forward,
 	http,
 	signin::{SignIn, SignInConfig},
 	testing::{Browser, ORIGIN},
@@ -72,6 +73,8 @@ struct World {
 	app: Router,
 	b: Browser,
 	db: TestDb,
+	/// Places' stand-in, `…/v1/places`.
+	base: String,
 }
 
 impl World {
@@ -92,12 +95,12 @@ impl World {
 		let google = Google::try_new(Keys::new(vec![("house".to_owned(), SHARED.to_owned())]), Arc::new(sa_places::InOrder), Arc::new(store.clone()))
 			.unwrap()
 			.spend(true)
-			.at(base);
+			.at(&base);
 		let panel = panel_on(
 			store,
 			DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
 			google,
-			sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some(SHARED), Some("browser-key"))]),
+			sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some(SHARED), Some("browser-key"))], vec![]),
 		);
 		let empty = Export {
 			people: vec![],
@@ -116,20 +119,26 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
-		let app = http::app(
-			SignIn::new(panel.clone(), Concierge::dev(who), config),
-			None,
-			None,
-			Default::default(),
-			None,
-			None,
-			None,
-			sa_server::testing::sandbox(),
-			None,
-		);
+		let sign_in = SignIn::new(panel.clone(), Concierge::dev(who), config);
+		let forward = Forward::new(sign_in.clone(), sa_server::testing::services(&"http://127.0.0.1:9".parse().unwrap()));
+		let app = http::app(sign_in, Some(forward), None, Default::default(), None, None, None, sa_server::testing::sandbox(), None);
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
-		Self { stub, panel, app, b, db }
+		Self { stub, panel, app, b, db, base }
+	}
+
+	/// The conductor on a socket, as review_archive reaches it: its queries cache's URL.
+	async fn served(&self) -> String {
+		let app = self.app.clone();
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+		let url = format!("http://{}/api/queries_cache", listener.local_addr().unwrap());
+		tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+		url
+	}
+
+	/// review_archive, asking Places through the conductor at `url`.
+	fn archive(&self, url: &str) -> Google<Remote> {
+		Google::remote(url).unwrap().at(&self.base)
 	}
 
 	async fn call(&mut self, method: Method, uri: &str, body: Option<Value>) -> (StatusCode, Value) {
@@ -450,4 +459,121 @@ async fn a_spend_is_its_cost_times_the_multiplier_and_keeps_what_it_cost_us() {
 		.map(|f| (f["tokens"].clone(), f["at_cost"].clone()))
 		.collect();
 	assert_eq!(spent, [(json!(-18), json!(-7.0))], "charged, and at cost: {flows}");
+}
+
+/// What the conductor signs for review_archive on a request the signed-in person makes there,
+/// signed with `seed`, alive until `exp`.
+fn vouched_by(seed: &str, exp: i64) -> String {
+	seed.parse::<sa_auth::Signer>().unwrap().sign(&sa_auth::Assertion {
+		aud: sa_auth::Service::ReviewArchive,
+		principal: sa_auth::Principal::User(sa_auth::User {
+			sub: DevIdentity::named("dev@localhost").to_string(),
+			email: "dev@localhost".to_owned(),
+			email_verified: true,
+			name: "Dev".to_owned(),
+			permissions: std::iter::empty::<&str>().collect(),
+			actor: None,
+		}),
+		method: "POST".to_owned(),
+		path: "/me/gmbs/1/tracks/1/relink".to_owned(),
+		exp,
+	})
+}
+
+fn alive() -> i64 {
+	jiff::Timestamp::now().as_second() + sa_auth::TTL
+}
+
+#[tokio::test]
+async fn review_archive_buys_as_the_person_its_request_is_for_their_gbps_gmail_first() {
+	let mut w = World::new().await;
+	w.price(3).await;
+	let (a, _b) = (w.gmail("a@gmail.com").await, w.gmail("b@gmail.com").await);
+	let (status, set) = w.call(Method::PUT, &format!("/api/v1/gmails/{a}/maps_key"), Some(json!({ "key": "own-key-of-a" }))).await;
+	assert_eq!(status, StatusCode::OK, "{set}");
+	let (status, gbp) = w.add_gbp(a, PROCOPE).await;
+	assert_eq!(status, StatusCode::CREATED, "{gbp}");
+	w.billed();
+	let start = w.balance().await;
+	let archive = w.archive(&w.served().await);
+	let assertion = vouched_by(sa_server::testing::SEED, alive());
+	let theirs = Vouched {
+		assertion: &assertion,
+		gbp: Some(gbp["id"].as_i64().unwrap()),
+	};
+
+	archive.details(FLORE, Ask::Afresh, &theirs).await.unwrap();
+	assert_eq!(w.billed(), ["own-key-of-a"], "the GBP's gmail's own key");
+	assert_eq!(w.balance().await, start, "free");
+
+	w.stub.spent.lock().unwrap().insert("own-key-of-a".to_owned());
+	archive.details(FLORE, Ask::Afresh, &theirs).await.unwrap();
+	assert_eq!(w.billed(), ["own-key-of-a", SHARED], "theirs spent: the rotation");
+	assert_eq!(w.balance().await, start - 3, "at the price, in their tokens");
+	let (_, ledger) = w.call(Method::GET, "/api/v1/tokens/ledger?limit=1", None).await;
+	assert_eq!(ledger["entries"][0]["label"], format!("Places details · {FLORE}"), "{ledger}");
+
+	let anyone = Vouched { assertion: &assertion, gbp: None };
+	assert_eq!(archive.details(FLORE, Ask::Cached, &anyone).await.unwrap().place_id, FLORE);
+	assert_eq!(w.billed(), Vec::<String>::new(), "kept: Google is not asked again");
+	assert_eq!(w.balance().await, start - 3, "and nothing is charged for it");
+}
+
+#[tokio::test]
+async fn a_buy_is_only_for_whom_the_conductor_vouched_on_what_they_hold() {
+	let mut w = World::new().await;
+	let balance = w.balance().await;
+	let archive = w.archive(&w.served().await);
+	let ask = async |assertion: &str, gbp: Option<i64>| archive.details(PROCOPE, Ask::Cached, &Vouched { assertion, gbp }).await.unwrap_err();
+	let other = "k1:HyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4=";
+	for (why, assertion) in [
+		("none", String::new()),
+		("another key's", vouched_by(other, alive())),
+		("expired", vouched_by(sa_server::testing::SEED, jiff::Timestamp::now().as_second() - 1)),
+	] {
+		let refused = ask(&assertion, None).await;
+		assert!(matches!(&refused, Error::QueriesCache(m) if m.contains("unauthenticated")), "{why}: {refused:#}");
+	}
+	let assertion = vouched_by(sa_server::testing::SEED, alive());
+	assert!(matches!(ask(&assertion, Some(4242)).await, Error::Invalid(m) if m.contains("4242")), "a GBP not theirs");
+
+	w.price(balance + 1).await;
+	assert!(matches!(ask(&assertion, None).await, Error::Unpaid(_)), "below the price");
+	assert_eq!(w.billed(), Vec::<String>::new(), "Google never asked");
+	assert_eq!(w.balance().await, balance);
+}
+
+#[tokio::test]
+async fn only_sa_places_own_requests_are_bought_for_another() {
+	let mut w = World::new().await;
+	w.balance().await;
+	let url = w.served().await;
+	let assertion = vouched_by(sa_server::testing::SEED, alive());
+	let buy = async |request: &str, key: sa_core::queries_cache::Key| {
+		reqwest::Client::new()
+			.post(format!("{url}/places/{key}/buy"))
+			.header(sa_auth::HEADER, &assertion)
+			.json(&json!({ "request": request, "fresh_since": null, "gbp": null }))
+			.send()
+			.await
+			.unwrap()
+	};
+	let mask = "id,displayName,formattedAddress,location,addressComponents";
+	for request in [
+		format!("GET\nhttp://elsewhere.example/v1/places/{PROCOPE}\n{mask}\n"),
+		format!("GET\n{}/{PROCOPE}\nid\n", w.base),
+		format!("GET\n{}/{PROCOPE}/../x\n{mask}\n", w.base),
+		format!("DELETE\n{}/{PROCOPE}\n{mask}\n", w.base),
+	] {
+		let refused = buy(&request, sa_core::queries_cache::Key::of(&request)).await;
+		assert_eq!(refused.status(), reqwest::StatusCode::BAD_REQUEST, "{request:?}");
+	}
+	let ours = format!("GET\n{}/{PROCOPE}\n{mask}\n", w.base);
+	assert_eq!(
+		buy(&ours, sa_core::queries_cache::Key([0; 32])).await.status(),
+		reqwest::StatusCode::BAD_REQUEST,
+		"a key not the request's"
+	);
+	assert_eq!(w.billed(), Vec::<String>::new(), "our key went nowhere");
+	assert_eq!(buy(&ours, sa_core::queries_cache::Key::of(&ours)).await.status(), reqwest::StatusCode::OK);
 }

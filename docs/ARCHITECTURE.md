@@ -28,6 +28,7 @@ conductor ─── pushes (Conductor) ─▶ review_archive /api/conductor/gmbs
 conductor ── GET <origin>/.well-known/sa-site, public :443 ──────▶ each site key's landing
 landings ──────────────────────── direct, in-cluster ────────────▶ sites /api/internal
 review_archive, laptops ────────────────── open, rate-limited ─▶ conductor /api/queries_cache: what was paid for
+review_archive ── its request's User assertion, handed back ──▶ conductor /api/queries_cache/places/{key}/buy
 conductor ─── (Conductor) launch, stop, devtools ─────────────────▶ sa_browsers /profiles/{gmail}/…
 ```
 
@@ -42,7 +43,8 @@ crates/core/             no I/O: the queries cache's wire, a GBP's states and mo
                          page (`tokens::ChargePage`; review_archive takes it too), and what
                          costs (`prices`: every tool a vendor bills us or we bill a person for, its
                          items), a service's feed of what it spent (`usage`), and the vendors'
-                         meters each item draws on, their free units and stops (`meters`)
+                         meters each item draws on, their free units, list prices and stops (`meters`), and a
+                         Google account's definition less its secrets (`google`): its slices, credits, digest
 crates/panel/            the engine: `Panel` (sources and their authentication, sessions, access
                          requests, the hubs' state), `seal` (XChaCha20-Poly1305 at rest), `store`
                          (SQLite, migrations/ applied on open, writes BEGIN IMMEDIATE; the queries
@@ -82,7 +84,9 @@ crates/places/           Google Places: a place from what a person pastes (an id
                          place's review link; every request through the queries cache (in process,
                          or `Remote` over /api/queries_cache), then the payer's own keys, then the
                          rotation its purse pays for; the Google accounts (`Account`) the rotation's
-                         keys are on; review_archive takes it too
+                         keys are on; review_archive takes it too, buying through the conductor (`Remote`)
+crates/guard/            sa_guard, the guard: each account's spend caps, Maps quotas and billing links held to
+                         nix/google.nix and the meters, from Cloud Run (Google accounts)
 crates/ui/               Dioxus components the services' front ends share
 crates/placement_overlay/  placement's overlay re-exported (wasm, imported by the front end), so Cargo.lock
                          pins it to the builder `placement.rs` links: a renderer, the host fetches and pulls
@@ -116,8 +120,9 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/trash.rs           /api/v1/trash; the hourly purge
   src/usage.rs           /api/v1/map/load, /api/v1/admin/usage; the services' usage feeds followed
-  src/meters.rs          /api/v1/admin/meters{,/readings}; each account's meters read at start and daily
-  src/config.rs          the config file (`--config`): the Google accounts
+  src/meters.rs          /api/v1/admin/meters{,/readings,/bill}; each account's meters and bill read at start
+                         and hourly
+  src/config.rs          the config file (`--config`): the Google accounts and their slices
   src/assistant.rs       /api/v1/assistant; the turns' shape
   src/kit.rs             the review kit: its /api/v1 routes, the landings' /api/kit/v1
   src/brands.rs          /api/v1/brands, /api/v1/gmbs/brand
@@ -504,6 +509,15 @@ PUT    /api/queries_cache/{scheme}/{key}         {answer, request, bought: {item
   whoever writes it.
 - **Open to everyone**, reads and writes: bounded as ingest, a body ≤ 8 MiB, and rate-limited per
   client at the edge.
+- **review_archive buys through the conductor** (`sa_places::Remote`), holding no key and no
+  list: `POST /places/{key}/buy`, `{request, fresh_since?, gbp?}`, carries the User assertion the
+  conductor signed on the request it serves (`x-sa-assertion`, `sa_auth::vouched`). The conductor
+  buys as it would for that person's own request: the GBP's gmail's key, their other gmails', then
+  the rotation at the price; `{answer}`, or why not (`BuyRefused`: 400 not a request sa_places
+  makes, its SKU read off the field mask and never the caller's; 401, 402, 502 Places refused it,
+  503). The trade-off: for its 60 s the assertion is good for any buy, not only the request's
+  own, so review_archive, which already charges the person for its walks, can spend their tokens
+  on Places for that long.
 - **Prod's is the one authority; every other conductor works on a copy and gives back what it
   bought.** `panel queries-cache index` lists every version held, `export --except <index>` the
   ones that index lacks, `import` keeps those, each as of its own `fetched_at`: run at both ends
@@ -652,6 +666,7 @@ GET    /admin/tokens/flows                  tokens:grant
 GET    /admin/usage                         tokens:grant
 GET    /admin/meters                        tokens:grant
 GET    /admin/meters/readings               tokens:grant
+GET    /admin/meters/bill                   tokens:grant
 POST   /admin/gmails                        tokens:grant, fresh
 POST   /admin/imports/review-archive        tokens:grant, fresh
 GET    /assistant/chats
@@ -855,10 +870,10 @@ other gmails' keys, free; then the Google accounts' Places keys (below) at the a
 request kind (Places' SKU), held under one lock per person from the balance read to the charge, so a
 request below the price is refused before Google is asked. A cached answer costs
 nothing.
-review_archive's lookups are the house's for now.
+review_archive's lookups are its caller's too: the conductor buys them (Queries cache, the buy).
 
 **A study's pull is sold per search** (`placement.search`) the conductor buys for it, on the
-house's rotation, under the same lock:
+caller's own keys first, then the house's rotation, under the same lock:
 
 ```text
 POST /api/v1/placement/study/pull ─ price set, budget = balance ÷ price ─▶ the study's asks: [Ask]
@@ -910,20 +925,25 @@ finds (free) asks `POST /map/street_view` on the page's account, which records i
 Only then does the browser open it.
 
 **Google accounts.** Free units, credits and the money kept are per billing account, so each is
-declared once, in accounting's `google.nix`, which the config file (`--config`, `google`:
-`sa_places::Account`) imports whole: its export and reader, `allow` per slice of accounting's
-(the conductor holds its rank 1 against `maps`, which every meter here falls in; the guard holds
-them all at Google), and what it `provides`, each slot optional: `places` (Places, Geocoding),
-`browser` (Maps JS). Every key bills on its account (docs/spec/google.md); each use of ours is
+declared once, in `nix/google.nix`, which the config file (`--config`, `google`:
+`sa_places::Account`, and `slices`) imports whole: its export, its reader and the day it is read
+from, its credits as the console read them, `allow` per slice (the conductor holds its rank 1
+against `maps`, `sa_core::meters::SLICE`, which every meter falls in; the guard holds them all at
+Google), and what it `provides`, each slot optional: `places` (Places, Geocoding), `browser` (Maps
+JS). What of it is no secret is `sa_core::google`'s, which the conductor and the guard both read. Every key bills on its account (docs/spec/google.md); each use of ours is
 stored with the account that paid (`usage.account`). N accounts are one with N× the free units,
 the money capped per account.
 
 ```text
-accounting/google.nix  accounts = [ { name, export { table, reader, since }, credits, allow { <slice> }, provides { places?, browser?, ads? } } … ]
-  ├─ the guard (accounting): holds each slice's real money to `allow` at Google
-  ├─ the conductor, review_archive, gop: `import`, each reading the slots it uses
-  └─ devops: the same list, each secret slot `{ env = "SA_GOOGLE_<NAME>_<SLOT>"; }`
-  each account ─ its Cloud Billing export, read at boot and daily ─▶ meter_readings (account, meter)
+nix/google.nix  accounts = [ { name, export { table, reader, since }, credits, allow { <slice> }, provides { places?, browser?, ads? } } … ]
+                slices = [ { name, service, sku?, closed? } … ]
+  ├─ the guard (crates/guard, Cloud Run): the list baked into its image; holds each slice's real
+  │    money to `allow` at Google, and the meters' APIs to their daily pace (`sa_core::meters::pace`)
+  ├─ the conductor: `import` (~/.config/sa_conductor.nix), or devops' literal of google_env.nix,
+  │    each secret slot `{ env = "SA_GOOGLE_<NAME>_<SLOT>"; }`
+  each account ─ its Cloud Billing export, read at boot and hourly ─▶ meter_readings (account, meter)
+                                                                  ─▶ google_bills: its bill from `since`,
+                                                                     and the guard's last tick, whole
 a buy of an item on a meter ─ each account's standing (`meters::standing`):
      0  its free units of that meter left
      1  its net spend this period (the export's, after credits) under `allow.maps`
@@ -931,6 +951,21 @@ a buy of an item on a meter ─ each account's standing (`meters::standing`):
   the lowest, config order breaking ties: Places' rotation (sa_places `Rank`); a page's map
   (`GET /map`: free map loads and panoramas both, its key and account for the page's life)
 ```
+
+**The guard holds the money at Google, out of the cluster.** A Cloud Run job every 15 minutes
+(`nix run .#guard`: a dry run; `.#guard-deploy`: from this commit, as the billing owner), so it
+holds while the cluster is down and billing.admin stays out of it. Its levers: a **spend cap** on
+each billed project's services Google caps (Vertex AI, Gemini API, Cloud Run, Cloud Run functions)
+at this month's list-price spend plus the credits left and the allowance; a **daily quota** on each
+API a meter is asked through (`sa_core::meters`: its meters that only count, their least free
+units and dearest list price, what `allow.maps` buys over 31 days), none on a `closed` one;
+**unlinking billing** from a project a slice spent real money in past its allowance by 0.10. Each
+tick lands in `<export dataset>.guard`, with the definition's digest, which the next read of the
+bill brings back: sa-meters shows its levers, and whether it holds the list the conductor runs. To
+add an account: its *Standard usage cost* export into a dataset, a service account with BigQuery
+Data Viewer on it and Job User on its project (its key the `reader`), an entry here with its
+`since` and each credit as the console's Credits page reads it (`id` once the export names it),
+then `guard-deploy`.
 
 **A meter is the vendor's count, plus ours since it, on one account.** dev, prod, placement and
 anything else billed on an account draw on its free units, and each database sees only its own.
@@ -1267,7 +1302,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
 - **A service trusts the conductor's assertion and nothing else**, and one assertion opens one
   request: its audience, its method, its path, 60 s; a User's permissions only of that service;
   a Source's over the body its MAC covered. The conductor never forwards a cookie, nor an
-  assertion it did not sign.
+  assertion it did not sign. The one it takes back is a User's it signed for review_archive,
+  alive: that person's say for the Places buys that request makes (docs/spec/google.md).
 - **The conductor authenticates, sites authorizes.** A signed request reaches sites only with a
   verified MAC over its timestamp and body (the 5-minute window cannot be dodged by re-stamping);
   what the key may write is never judged here.
@@ -1371,8 +1407,8 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   sign-in, rotation and `GetMe`. concierge must register client `sa` with redirect URI
   `<PANEL_PUBLIC_ORIGIN>/auth/callback` exactly and hold the hash of `RP_CLIENT_SECRET_SA`.
 - **The config file.** The image runs `panel --config /etc/settings/sa_conductor.json`: the
-  deploy's literal `sa_conductor.json`, built from one list of the accounts, each slot a sops key
-  of the Secret the file names by its variable. review_archive takes the same list.
+  deploy's literal `sa_conductor.json`, built from `nix/google_env.nix` (the accounts and their
+  slices), each slot a sops key of the Secret the file names by its variable.
 - **Places, outbound.** With an account's Places key the pods need egress to
   `places.googleapis.com:443` and `geocode.googleapis.com:443` (the keys need the Geocoding API
   on) (a pasted URL without a place id, a GMB's name, address and point).

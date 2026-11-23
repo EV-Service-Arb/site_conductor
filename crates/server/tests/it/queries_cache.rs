@@ -30,7 +30,7 @@ async fn housed(db: &TestDb) -> Panel {
 	let store = db.store().await;
 	let keyless = Google::try_new(Keys::new(vec![]), Arc::new(InOrder), Arc::new(store.clone())).unwrap();
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
-	panel_on(store, key, keyless, Accounts::new(vec![account("house", Some("k"), None)]))
+	panel_on(store, key, keyless, Accounts::new(vec![account("house", Some("k"), None)], vec![]))
 }
 
 /// The conductor on a socket, its queries cache's URL.

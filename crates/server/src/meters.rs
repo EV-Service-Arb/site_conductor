@@ -1,9 +1,12 @@
-//! The vendors' meters (`sa_panel::meters`): in `serve` each read at start and daily, and their use
-//! for the Admin page and Grafana.
+//! The vendors' meters (`sa_panel::meters`) and each account's bill: in `serve` each read at start
+//! and hourly, and their use for the Admin page and Grafana.
 //!
 //! ```text
-//! GET /api/v1/admin/meters                     Meters: each meter's use this period, all accounts and each
+//! GET /api/v1/admin/meters                     Meters: each meter's use this period, all accounts and each;
+//!                                              each account's credits and allowances, as the guard holds them
 //! GET /api/v1/admin/meters/readings?from=&to=  MeterReadings: every reading synced, Unix ms
+//! GET /api/v1/admin/meters/bill?from=&to=      Bill: each account's days in the window, by slice and SKU,
+//!                                              and this month's tiers
 //! ```
 
 use std::{sync::Mutex, time::Duration};
@@ -19,7 +22,7 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel,
-	meters::{Gauge, Reader, Synced},
+	meters::{Bill, Gauge, Reader, Synced},
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
@@ -29,12 +32,17 @@ use crate::{
 	http::{ApiRoute, USER},
 };
 
-/// How often a reading is due.
-const SYNC_EVERY: SignedDuration = SignedDuration::from_hours(24);
+/// How often a reading is due: each scans under a megabyte of an export partitioned by day.
+const SYNC_EVERY: SignedDuration = SignedDuration::from_hours(1);
 /// How soon a failed read is tried again.
 const RETRY: Duration = Duration::from_secs(15 * 60);
 /// The widest window `/admin/meters/readings` reads.
 const SPAN: SignedDuration = SignedDuration::from_hours(24 * 400);
+
+/// How many days of draws set a credit's pace.
+const BURN_DAYS: i64 = 14;
+
+type Standing = (Vec<CreditDto>, Vec<String>, Vec<AllowanceDto>, Option<GuardDto>);
 
 /// Reads each account's meters now, then every SYNC_EVERY, a failure again after RETRY, until
 /// `shutdown`, each on its own: one failing leaves the others be, and its last good reading in
@@ -161,6 +169,124 @@ pub struct AccountDto {
 	pub allow: f64,
 	/// `null` before a reading of this period.
 	pub spend: Option<SpendDto>,
+	/// Each configured credit's balance.
+	pub credits: Vec<CreditDto>,
+	/// Credits the export draws on that the config names not.
+	pub unnamed_credits: Vec<String>,
+	/// Each slice's real money against its allowance, and its levers, at the guard's last tick.
+	pub allowances: Vec<AllowanceDto>,
+	/// The guard's last tick; `null` before it ticked, or before the bill was read.
+	pub guard: Option<GuardDto>,
+	/// RFC 3339: when the bill was last read; `null`, never.
+	pub bill_read: Option<String>,
+}
+
+/// A credit's balance, in its account's currency.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MeterCredit")]
+pub struct CreditDto {
+	pub name: String,
+	/// The console's reading less what the export drew since.
+	pub left: f64,
+	/// RFC 3339: the later of the console's reading and the bill's.
+	pub as_of: String,
+	/// At the last 14 days' pace; `null` before any draw.
+	pub per_day: Option<f64>,
+	/// The day it is spent at that pace; `null`, never.
+	pub runs_out: Option<String>,
+	pub ends: String,
+	/// To whichever comes first.
+	pub days_left: f64,
+	/// `spent`, `ends` or `ended`.
+	pub binds: String,
+}
+
+/// A slice's allowance as the guard held it.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MeterAllowance")]
+pub struct AllowanceDto {
+	pub slice: String,
+	/// Real money a month, past credits and free tiers.
+	pub allowed: f64,
+	/// What it spent of that this month.
+	pub real: f64,
+	pub headroom: f64,
+	/// `within` or `over`.
+	pub state: String,
+	pub levers: Vec<LeverDto>,
+}
+
+/// One lever the guard set.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MeterLever")]
+pub struct LeverDto {
+	pub project: Option<String>,
+	pub lever: String,
+	pub setting: Option<f64>,
+	/// What it was before.
+	pub state: Option<String>,
+	pub today: Option<i64>,
+	/// What the tick changed.
+	pub action: Option<String>,
+}
+
+/// The guard's last tick on an account.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MeterGuard")]
+pub struct GuardDto {
+	/// RFC 3339.
+	pub tick: String,
+	/// Whether it held the definition this conductor runs (`sa_core::google::digest`).
+	pub holds_this_list: bool,
+}
+
+/// A day's use of one SKU on an account, in its currency.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "BillDay")]
+pub struct DayDto {
+	pub account: String,
+	/// RFC 3339, the day's midnight UTC.
+	pub day: String,
+	pub slice: String,
+	pub service: String,
+	pub sku: String,
+	pub currency: String,
+	/// At list price.
+	pub used: f64,
+	/// What credits' balances paid of it.
+	pub credit: f64,
+	/// What discounts took off.
+	pub discount: f64,
+	/// What was billed.
+	pub paid: f64,
+}
+
+/// An SKU's units this invoice month on an account.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "BillTier")]
+pub struct TierDto {
+	pub account: String,
+	pub service: String,
+	pub sku: String,
+	pub unit: Option<String>,
+	pub units: f64,
+	/// Where its first priced tier starts; `null`, none reached.
+	pub free_to: Option<f64>,
+	pub paid_units: f64,
+	/// At list price, in the account's currency.
+	pub list: f64,
+	/// What free tiers and discounts took off.
+	pub free: f64,
+}
+
+/// `GET /admin/meters/bill`.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Bill")]
+pub struct BillDto {
+	/// In the window, oldest first.
+	pub days: Vec<DayDto>,
+	/// Each account's latest invoice month.
+	pub tiers: Vec<TierDto>,
 }
 
 /// `GET /admin/meters`: every meter, in the catalog's order.
@@ -185,6 +311,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	vec![
 		ApiRoute::new(M::GET, "/admin/meters", admin, meters),
 		ApiRoute::new(M::GET, "/admin/meters/readings", admin, meter_readings),
+		ApiRoute::new(M::GET, "/admin/meters/bill", admin, bill),
 	]
 }
 
@@ -211,10 +338,20 @@ impl From<Synced> for ReadingDto {
 pub(crate) async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersDto>> {
 	let now = Timestamp::now();
 	let prices = panel.prices().await?;
+	let digest = panel.accounts().digest();
 	let mut accounts = Vec::with_capacity(panel.accounts().len());
-	for a in panel.accounts().iter() {
+	for (a, bill) in panel.bills().await? {
 		let spend = panel.spend(&a.name, Vendor::Google, now).await?;
+		let (credits, unnamed_credits, allowances, guard) = match &bill {
+			None => (Vec::new(), Vec::new(), Vec::new(), None),
+			Some((bill, read_at)) => standing(a, bill, *read_at, &digest, now)?,
+		};
 		accounts.push(AccountDto {
+			credits,
+			unnamed_credits,
+			allowances,
+			guard,
+			bill_read: bill.as_ref().map(|(_, at)| at.to_string()),
 			name: a.name.clone(),
 			places: a.provides.places.is_some(),
 			browser: a.provides.browser.is_some(),
@@ -299,4 +436,125 @@ pub(crate) async fn meter_readings(State(panel): State<Panel>, Params(q): Params
 	Ok(Json(ReadingsDto {
 		readings: panel.meter_readings(from, to).await?.into_iter().map(ReadingDto::from).collect(),
 	}))
+}
+
+/// `account`'s credits off `bill`, read at `read_at`, and its allowances as the guard last held them.
+fn standing(account: &sa_places::Account, bill: &Bill, read_at: Timestamp, digest: &str, now: Timestamp) -> eyre::Result<Standing> {
+	let today = now.to_zoned(jiff::tz::TimeZone::UTC).date();
+	let window_from = now - SignedDuration::from_hours(BURN_DAYS * 24);
+	let named: Vec<&str> = account.credits.iter().filter_map(|c| c.id.as_deref()).collect();
+	let mut unnamed: Vec<String> = bill.draws.iter().map(|d| d.credit.clone()).filter(|id| !named.contains(&id.as_str())).collect();
+	unnamed.dedup();
+	let mut credits = Vec::with_capacity(account.credits.len());
+	for c in &account.credits {
+		let draws: Vec<&sa_panel::meters::Draw> = bill.draws.iter().filter(|d| Some(d.credit.as_str()) == c.id.as_deref()).collect(); // none until the export first names it
+		let since_read = draws.iter().filter(|d| d.hour >= c.read).map(|d| d.amount_micros).sum::<i64>() as f64 / 1e6;
+		let burnt = -(draws.iter().filter(|d| d.hour >= window_from).map(|d| d.amount_micros).sum::<i64>() as f64) / 1e6;
+		let left = c.left_on(since_read, today);
+		let covered = draws
+			.iter()
+			.map(|d| d.hour)
+			.min()
+			.map(|first| (now.duration_since(first.max(window_from)).as_secs_f64() / 86_400.0).max(1.0));
+		let per_day = covered.map(|days| burnt / days);
+		let to_spent = per_day.filter(|&d| d > 0.0).map(|d| left / d);
+		let to_end = (c.ends - today).get_days() as f64;
+		let (days_left, binds) = match to_spent {
+			_ if to_end <= 0.0 => (0.0, "ended"),
+			Some(s) if s < to_end => (s, "spent"),
+			_ => (to_end, "ends"),
+		};
+		credits.push(CreditDto {
+			name: c.name.clone(),
+			left,
+			as_of: read_at.max(c.read).to_string(),
+			per_day,
+			runs_out: to_spent.map(|d| today.checked_add(jiff::Span::new().days(d.floor() as i64))).transpose()?.map(|d| d.to_string()),
+			ends: c.ends.to_string(),
+			days_left,
+			binds: binds.to_owned(),
+		});
+	}
+	let Some(levers) = &bill.guard else {
+		return Ok((credits, unnamed, Vec::new(), None));
+	};
+	let allowances = levers
+		.iter()
+		.filter(|l| l.lever == "real money")
+		.map(|m| {
+			let (allowed, real) = (m.allow.expect("the guard writes a slice's allow with its real money"), m.real.expect("and its real money"));
+			AllowanceDto {
+				slice: m.slice.clone(),
+				allowed,
+				real,
+				headroom: allowed - real,
+				state: m.state.clone().expect("and whether it is within"),
+				levers: levers
+					.iter()
+					.filter(|l| l.slice == m.slice && l.lever != "real money")
+					.map(|l| LeverDto {
+						project: l.project.clone(),
+						lever: l.lever.clone(),
+						setting: l.setting,
+						state: l.state.clone(),
+						today: l.today,
+						action: l.action.clone(),
+					})
+					.collect(),
+			}
+		})
+		.collect();
+	let guard = levers.first().map(|l| GuardDto {
+		tick: l.tick.to_string(),
+		holds_this_list: l.list.as_deref() == Some(digest),
+	});
+	Ok((credits, unnamed, allowances, guard))
+}
+
+/// Each account's days in a window, by slice and SKU, and its latest month's tiers: what the
+/// sa-meters dashboard draws the bill from.
+pub(crate) async fn bill(State(panel): State<Panel>, Params(q): Params<Window>) -> ApiResult<Json<BillDto>> {
+	let at = |ms: i64| Timestamp::from_millisecond(ms).map_err(|e| Refusal::new(Code::BadRequest, format!("{ms}: {e}")));
+	let (from, to) = (at(q.from)?, at(q.to)?);
+	if from >= to || to.duration_since(from) > SPAN {
+		return Err(Refusal::new(Code::BadRequest, format!("from is before to, at most {} days", SPAN.as_hours().div_euclid(24))));
+	}
+	let slices = panel.accounts().slices().to_vec();
+	let (mut days, mut tiers) = (Vec::new(), Vec::new());
+	for (a, bill) in panel.bills().await? {
+		let Some((bill, _)) = bill else { continue };
+		let money = |micros: i64| micros as f64 / 1e6;
+		for d in &bill.days {
+			let midnight = d.day.to_zoned(jiff::tz::TimeZone::UTC).expect("every day has a UTC midnight").timestamp();
+			if midnight < from || midnight >= to {
+				continue;
+			}
+			days.push(DayDto {
+				account: a.name.clone(),
+				day: midnight.to_string(),
+				slice: sa_core::google::slice_of(&slices, &d.service, &d.sku),
+				service: d.service.clone(),
+				sku: d.sku.clone(),
+				currency: d.currency.clone(),
+				used: money(d.cost_micros),
+				credit: -money(d.credit_micros),
+				discount: -money(d.discount_micros),
+				paid: money(d.cost_micros + d.credit_micros + d.discount_micros),
+			});
+		}
+		let latest = bill.tiers.iter().map(|t| t.month.as_str()).max();
+		tiers.extend(bill.tiers.iter().filter(|t| Some(t.month.as_str()) == latest).map(|t| TierDto {
+			account: a.name.clone(),
+			service: t.service.clone(),
+			sku: t.sku.clone(),
+			unit: t.unit.clone(),
+			units: t.units,
+			free_to: t.free_to,
+			paid_units: t.paid_units,
+			list: money(t.cost_micros),
+			free: -money(t.free_micros),
+		}));
+	}
+	days.sort_by(|a, b| a.day.cmp(&b.day));
+	Ok(Json(BillDto { days, tiers }))
 }

@@ -229,7 +229,7 @@ run .#queries-cache-sync -- <state>`.
 ## Google
 
 The conductor's Google accounts are `~/.config/sa_conductor.nix`'s `google` (`SA_CONDUCTOR_CONFIG`
-names another): `{ google = (import ~/s/ev/_sa/accounting/google.nix).accounts; }`, its keys
+names another): `{ inherit (import ~/s/ev/_sa/site_conductor/nix/google.nix) slices; google = (import ~/s/ev/_sa/site_conductor/nix/google.nix).accounts; }`, its keys
 `{ env = "GOOGLE_MAPS_KEY_EVINVEST"; }` from the shell. The stack refuses to start without the
 file; `google = [ ];` is no account: a GMB is added by its place id alone and `/` has no map.
 Answers are kept in the conductor's queries cache, `.local/panel.db`, and given to prod's (Prod's

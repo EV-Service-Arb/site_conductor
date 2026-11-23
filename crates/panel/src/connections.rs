@@ -13,7 +13,10 @@ use std::sync::{Arc, Mutex};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::prices::{Item, PlacesRequest, Rate, Spender};
+use sa_core::{
+	prices::{Item, PlacesRequest, Rate, Spender},
+	queries_cache::{BuyBody, BuyRefused},
+};
 use sa_places::{Bought, Hold, Payer, Pending, Purse};
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -27,6 +30,7 @@ use crate::{
 		connections::{self as db, Inbox, Sealed},
 		gmbs as gmbs_db,
 		tokens::{self as ledger, Charged, Entry, Kind},
+		users as users_db,
 	},
 	tokens::is_open,
 };
@@ -309,6 +313,42 @@ impl Panel {
 			}
 		}
 		Ok(Payer { own, purse })
+	}
+
+	/// `body.request` (a Places request of sa_places', as its key's preimage) kept, else bought for
+	/// `user`, as their GBP `body.gbp`'s gmail when it names one: what another service asks for the
+	/// person whose request it serves.
+	// r[impl google.buy-as-user]
+	pub async fn buy_for(&self, user: Uuid, body: &BuyBody) -> eyre::Result<Result<serde_json::Value, BuyRefused>> {
+		if !users_db::exists(&mut *self.store.pool().acquire().await.wrap_err("a connection for a person")?, user).await? {
+			return Ok(Err(BuyRefused::Unauthenticated {
+				why: format!("{user} is nobody this conductor has signed in"),
+			}));
+		}
+		let gmail = match body.gbp {
+			None => None,
+			Some(id) => match gmbs_db::gmb_of(&mut *self.store.pool().acquire().await.wrap_err("a connection for a GBP")?, Some(user), id).await? {
+				Some(gbp) => gbp.gmail_id,
+				None =>
+					return Ok(Err(BuyRefused::Invalid {
+						why: format!("no GBP {id} is theirs"),
+					})),
+			},
+		};
+		let purse = self.purse(Spender::new(user));
+		let payer = self.payer(user, gmail, Some(&purse)).await?;
+		Ok(match self.google.bought(&body.request, body.fresh_since, &payer).await {
+			Ok(answer) => Ok(answer),
+			Err(sa_places::Error::Invalid(why)) => Err(BuyRefused::Invalid { why }),
+			Err(e @ sa_places::Error::OwnKey { .. }) => Err(BuyRefused::Invalid {
+				why: format!("{e}; replace it on its gmail's Connections"),
+			}),
+			Err(sa_places::Error::Unpaid(why)) => Err(BuyRefused::Unpaid { why }),
+			Err(sa_places::Error::Unbought) => Err(BuyRefused::Unbought),
+			Err(sa_places::Error::Api { asked, status, body }) => Err(BuyRefused::Places { asked, status, body }),
+			Err(e @ (sa_places::Error::Exhausted(_) | sa_places::Error::Http(_))) => Err(BuyRefused::Unavailable { why: e.to_string() }),
+			Err(e) => return Err(eyre::eyre!(e).wrap_err("buying a Places answer for another service")),
+		})
 	}
 
 	/// The tokens of `by` paying for buys on the rotation.

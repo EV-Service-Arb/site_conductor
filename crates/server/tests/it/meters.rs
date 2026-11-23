@@ -14,7 +14,7 @@ use sa_core::prices::{Item, MapLoad, PlacesRequest, StreetViewLoad};
 use sa_panel::{
 	Panel,
 	import::Export,
-	meters::ByStanding,
+	meters::{Bill, ByStanding, Day, Draw, Lever, Tier},
 	seal::DataKey,
 	testing::{TestDb, Told, account, admin, panel_on},
 };
@@ -47,7 +47,13 @@ impl World {
 		let store = db.store().await;
 		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(InOrder), Arc::new(store.clone())).unwrap();
 		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
-		let panel = panel_on(store, key, keyless, Accounts::new(accounts));
+		let maps = sa_core::google::Slice {
+			name: sa_core::meters::SLICE.to_owned(),
+			service: "(?i)maps|places|geocoding|street view".to_owned(),
+			sku: None,
+			closed: vec![],
+		};
+		let panel = panel_on(store, key, keyless, Accounts::new(accounts, vec![maps]));
 		let empty = Export {
 			people: vec![],
 			gmails: vec![],
@@ -89,7 +95,13 @@ impl World {
 	/// Google counts `units` of each meter on `account`, each `net` after credits (millionths), at
 	/// `now`, its record reaching `through`.
 	async fn read_on(&self, account: &'static str, units: i64, net: i64, through: Timestamp, now: Timestamp) {
-		self.panel.sync_meters(&Told { account, units, net, through }, now).await.unwrap();
+		let bill = Bill {
+			days: vec![],
+			draws: vec![],
+			tiers: vec![],
+			guard: None,
+		};
+		self.panel.sync_meters(&Told { account, units, net, through, bill }, now).await.unwrap();
 	}
 
 	async fn price(&self, tokens: i64) {
@@ -298,4 +310,123 @@ async fn places_go_to_free_units_first_then_within_the_allowance_then_nowhere() 
 	assert_eq!(ranks().await, [Some(1), None, Some(0)], "a past its free units but 0.6 of its 2 spent; b allowed none");
 	w.read_on("a", 5000, 400_000, now, now).await;
 	assert_eq!(ranks().await, [None, None, Some(0)], "a past its 2");
+}
+
+/// What an account's export told of its bill, the guard's last tick there among it.
+fn bill(day: &str, credit_micros: i64, guard: Option<Vec<Lever>>) -> Bill {
+	let day = |service: &str, sku: &str, cost_micros| Day {
+		day: day.parse().unwrap(),
+		service: service.to_owned(),
+		sku: sku.to_owned(),
+		currency: "EUR".to_owned(),
+		cost_micros,
+		credit_micros,
+		discount_micros: 0,
+	};
+	Bill {
+		days: vec![day("Maps API", "Dynamic Maps", -credit_micros), day("Vertex AI", "Veo 3 video", 0)],
+		draws: vec![Draw {
+			credit: "c1".to_owned(),
+			hour: Timestamp::now() - SignedDuration::from_hours(24),
+			amount_micros: credit_micros,
+		}],
+		tiers: vec![Tier {
+			month: "202611".to_owned(),
+			service: "Maps API".to_owned(),
+			sku: "Dynamic Maps".to_owned(),
+			unit: Some("count".to_owned()),
+			units: 114.0,
+			paid_units: 0.0,
+			free_to: None,
+			cost_micros: 0,
+			free_micros: 0,
+		}],
+		guard,
+	}
+}
+
+fn real_money(list: &str) -> Lever {
+	Lever {
+		tick: Timestamp::now(),
+		slice: sa_core::meters::SLICE.to_owned(),
+		project: None,
+		lever: "real money".to_owned(),
+		allow: Some(0.0),
+		real: Some(0.0),
+		setting: None,
+		state: Some("within".to_owned()),
+		today: None,
+		action: None,
+		list: Some(list.to_owned()),
+	}
+}
+
+#[tokio::test]
+async fn an_accounts_bill_is_read_whole_by_slice_with_its_credits_and_the_guards_last_tick() {
+	let credit = sa_core::google::Credit {
+		id: Some("c1".to_owned()),
+		name: "trial".to_owned(),
+		read: Timestamp::now() - SignedDuration::from_hours(48),
+		left: 100.0,
+		ends: jiff::civil::date(2099, 1, 1),
+	};
+	let mut w = World::on(vec![Account {
+		credits: vec![credit],
+		..both("a", 0.0)
+	}])
+	.await;
+	let now = Timestamp::now();
+	let digest = w.panel.accounts().digest();
+	let sync = async |w: &World, bill: Bill| {
+		w.panel
+			.sync_meters(
+				&Told {
+					account: "a",
+					units: 0,
+					net: 0,
+					through: now,
+					bill,
+				},
+				now,
+			)
+			.await
+			.unwrap()
+	};
+	let read = async |w: &mut World| w.call(Method::GET, "/api/v1/admin/meters", None).await.1["accounts"][0].clone();
+
+	let never = read(&mut w).await;
+	assert_eq!(
+		(&never["credits"], &never["guard"], &never["bill_read"]),
+		(&json!([]), &Value::Null, &Value::Null),
+		"before a read: {never}"
+	);
+
+	sync(&w, bill("2026-11-10", -7_000_000, Some(vec![real_money(&digest)]))).await;
+	let a = read(&mut w).await;
+	assert_eq!(
+		(a["credits"][0]["left"].as_f64(), a["credits"][0]["binds"].as_str()),
+		(Some(93.0), Some("spent")),
+		"less what was drawn since the console's reading: {a}"
+	);
+	assert_eq!((&a["allowances"][0]["slice"], &a["guard"]["holds_this_list"]), (&json!("maps"), &json!(true)), "{a}");
+	let window = format!(
+		"/api/v1/admin/meters/bill?from={}&to={}",
+		(now - SignedDuration::from_hours(24 * 60)).as_millisecond(),
+		now.as_millisecond()
+	);
+	let (status, b) = w.call(Method::GET, &window, None).await;
+	assert_eq!(status, StatusCode::OK, "{b}");
+	let slices: Vec<(&str, f64, f64)> = b["days"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.map(|d| (d["slice"].as_str().unwrap(), d["credit"].as_f64().unwrap(), d["paid"].as_f64().unwrap()))
+		.collect();
+	assert_eq!(slices, [("maps", 7.0, 0.0), ("Vertex AI", 7.0, -7.0)], "a service no slice draws is its own: {b}");
+	assert_eq!(b["tiers"][0]["units"], 114.0);
+
+	sync(&w, bill("2026-11-11", 0, Some(vec![real_money("another list")]))).await;
+	let (_, b) = w.call(Method::GET, &window, None).await;
+	assert_eq!(b["days"][0]["day"], "2026-11-11T00:00:00Z", "the read before is replaced whole: {b}");
+	assert_eq!(read(&mut w).await["guard"]["holds_this_list"], false, "a guard deployed from another definition is told apart");
 }

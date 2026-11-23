@@ -18,7 +18,7 @@ use eyre::WrapErr;
 use gmaps_optimal_placement_core::Ask;
 use jiff::Timestamp;
 use sa_core::prices::{Item, PlacementRequest, PlacesRequest};
-use sa_places::{Bought, Hold, Payer, Pending, Purse};
+use sa_places::{Bought, Hold, Pending, Purse};
 use uuid::Uuid;
 
 use crate::{
@@ -72,10 +72,11 @@ impl Pull {
 		Ok(since)
 	}
 
-	/// `ask` bought on the house's rotation, unless the queries cache holds an answer fetched since
-	/// `since`; refused [`sa_places::Error::Unpaid`] past [`Self::budget`].
+	/// `ask` bought on the caller's own Maps keys, then on the house's rotation, unless the queries
+	/// cache holds an answer fetched since `since`; refused [`sa_places::Error::Unpaid`] past
+	/// [`Self::budget`] of the rotation's.
 	pub async fn buy(&self, ask: &Ask, since: Timestamp) -> Result<(), sa_places::Error> {
-		let payer = Payer { own: Vec::new(), purse: Some(self) };
+		let payer = self.panel.payer(self.user, None, Some(self)).await.map_err(|e| sa_places::Error::Purse(format!("{e:#}")))?;
 		self.panel.google.asked(&ask.mask, &ask.body, since, &payer).await
 	}
 

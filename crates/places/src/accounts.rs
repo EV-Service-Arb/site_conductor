@@ -3,7 +3,7 @@
 
 use std::{collections::BTreeMap, ops::Deref};
 
-/// One Google billing account, as `accounting/google.nix` lists it.
+/// One Google billing account, as site_conductor's `nix/google.nix` lists it.
 // r[impl google.keys-on-accounts]
 #[derive(Clone)]
 #[cfg_attr(feature = "settings", derive(v_utils::macros::ConfigJsonSchema, v_utils::macros::MyConfigPrimitives))]
@@ -11,10 +11,24 @@ pub struct Account {
 	/// Stable: stored with each use and reading.
 	pub name: String,
 	pub export: Export,
-	/// Money a month past its free units and credits per slice of accounting's, in its currency; a
-	/// slice not named, none.
+	/// Each credit's balance, as the console read it.
+	pub credits: Vec<sa_core::google::Credit>,
+	/// Money a month past its free units and credits per slice, in its currency; a slice not named, none.
 	pub allow: BTreeMap<String, f64>,
 	pub provides: Provides,
+}
+
+impl Account {
+	/// What the guard holds it to and its bill is read by.
+	pub fn held(&self) -> sa_core::google::Held {
+		sa_core::google::Held {
+			name: self.name.clone(),
+			table: self.export.table.clone(),
+			since: self.export.since,
+			credits: self.credits.clone(),
+			allow: self.allow.clone(),
+		}
+	}
 }
 
 /// An account's Cloud Billing export.
@@ -25,6 +39,8 @@ pub struct Export {
 	pub table: String,
 	/// The JSON key of a service account that may query `table`.
 	pub reader: String,
+	/// Usage before this day is not drawn.
+	pub since: jiff::civil::Date,
 }
 
 /// What an account's keys are for.
@@ -64,12 +80,17 @@ impl std::fmt::Debug for Account {
 	}
 }
 
-/// Every account, in the order ties are broken in.
+/// Every account, in the order ties are broken in, and the slices their `allow` is per.
 #[derive(Clone, Debug)]
-pub struct Accounts(Vec<Account>);
+pub struct Accounts {
+	accounts: Vec<Account>,
+	slices: Vec<sa_core::google::Slice>,
+	drawn: Vec<sa_core::google::Drawn>,
+}
 
 impl Accounts {
-	pub fn new(accounts: Vec<Account>) -> Self {
+	pub fn new(accounts: Vec<Account>, slices: Vec<sa_core::google::Slice>) -> Self {
+		let drawn = sa_core::google::drawn(&slices, accounts.iter().map(|a| (a.name.as_str(), &a.allow))).unwrap_or_else(|e| panic!("the Google accounts' slices: {}", e.0));
 		for (i, a) in accounts.iter().enumerate() {
 			assert!(!a.name.is_empty(), "a Google account without a name");
 			for (slice, allow) in &a.allow {
@@ -91,11 +112,21 @@ impl Accounts {
 				);
 			}
 		}
-		Self(accounts)
+		Self { accounts, slices, drawn }
 	}
 
 	pub fn get(&self, name: &str) -> Option<&Account> {
-		self.0.iter().find(|a| a.name == name)
+		self.accounts.iter().find(|a| a.name == name)
+	}
+
+	/// Compiled, in their order.
+	pub fn slices(&self) -> &[sa_core::google::Drawn] {
+		&self.drawn
+	}
+
+	/// [`sa_core::google::digest`] of this definition.
+	pub fn digest(&self) -> String {
+		sa_core::google::digest(&self.accounts.iter().map(Account::held).collect::<Vec<_>>(), &self.slices)
 	}
 }
 
@@ -103,6 +134,6 @@ impl Deref for Accounts {
 	type Target = [Account];
 
 	fn deref(&self) -> &[Account] {
-		&self.0
+		&self.accounts
 	}
 }

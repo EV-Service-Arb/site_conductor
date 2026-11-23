@@ -9,4 +9,8 @@ pub struct Config {
 	/// The Google billing accounts our keys bill on, in the order ties are broken in.
 	#[settings(skip)]
 	pub google: Vec<sa_places::Account>,
+	/// What their usage is for, `allow` per slice; none without accounts.
+	#[serde(default)]
+	#[settings(skip)]
+	pub slices: Vec<sa_core::google::Slice>,
 }

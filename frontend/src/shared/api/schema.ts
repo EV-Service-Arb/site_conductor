@@ -99,6 +99,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/meters/bill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Each account's days in a window, by slice and SKU, and its latest month's tiers: what the sa-meters dashboard draws the bill from. */
+        get: operations["bill"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/meters/readings": {
         parameters: {
             query?: never;
@@ -2483,6 +2500,69 @@ export interface components {
          * @enum {string}
          */
         Bill: "ours" | "theirs";
+        /** @description `GET /admin/meters/bill`. */
+        Bill2: {
+            /** @description In the window, oldest first. */
+            days: components["schemas"]["BillDay"][];
+            /** @description Each account's latest invoice month. */
+            tiers: components["schemas"]["BillTier"][];
+        };
+        /** @description A day's use of one SKU on an account, in its currency. */
+        BillDay: {
+            account: string;
+            /**
+             * Format: double
+             * @description What credits' balances paid of it.
+             */
+            credit: number;
+            currency: string;
+            /** @description RFC 3339, the day's midnight UTC. */
+            day: string;
+            /**
+             * Format: double
+             * @description What discounts took off.
+             */
+            discount: number;
+            /**
+             * Format: double
+             * @description What was billed.
+             */
+            paid: number;
+            service: string;
+            sku: string;
+            slice: string;
+            /**
+             * Format: double
+             * @description At list price.
+             */
+            used: number;
+        };
+        /** @description An SKU's units this invoice month on an account. */
+        BillTier: {
+            account: string;
+            /**
+             * Format: double
+             * @description What free tiers and discounts took off.
+             */
+            free: number;
+            /**
+             * Format: double
+             * @description Where its first priced tier starts; `null`, none reached.
+             */
+            free_to: number | null;
+            /**
+             * Format: double
+             * @description At list price, in the account's currency.
+             */
+            list: number;
+            /** Format: double */
+            paid_units: number;
+            service: string;
+            sku: string;
+            unit: string | null;
+            /** Format: double */
+            units: number;
+        };
         /** @description A binding of the page's keymap, as the page has it bound now. */
         Bound: {
             id: string;
@@ -3682,12 +3762,22 @@ export interface components {
              * @description Money a month past its free units and credits, in its currency.
              */
             allow: number;
+            /** @description Each slice's real money against its allowance, and its levers, at the guard's last tick. */
+            allowances: components["schemas"]["MeterAllowance"][];
+            /** @description RFC 3339: when the bill was last read; `null`, never. */
+            bill_read: string | null;
             browser: boolean;
+            /** @description Each configured credit's balance. */
+            credits: components["schemas"]["MeterCredit"][];
+            /** @description The guard's last tick; `null` before it ticked, or before the bill was read. */
+            guard: components["schemas"]["MeterGuard"] | null;
             name: string;
             /** @description Whether it has a Places key, and a browser key. */
             places: boolean;
             /** @description `null` before a reading of this period. */
             spend: components["schemas"]["AccountSpend"] | null;
+            /** @description Credits the export draws on that the config names not. */
+            unnamed_credits: string[];
         };
         /**
          * @description A meter's use this period on one account: `used` is the vendor's `baseline` plus our `delta`
@@ -3710,6 +3800,71 @@ export interface components {
             since: string;
             /** Format: int64 */
             used: number;
+        };
+        /** @description A slice's allowance as the guard held it. */
+        MeterAllowance: {
+            /**
+             * Format: double
+             * @description Real money a month, past credits and free tiers.
+             */
+            allowed: number;
+            /** Format: double */
+            headroom: number;
+            levers: components["schemas"]["MeterLever"][];
+            /**
+             * Format: double
+             * @description What it spent of that this month.
+             */
+            real: number;
+            slice: string;
+            /** @description `within` or `over`. */
+            state: string;
+        };
+        /** @description A credit's balance, in its account's currency. */
+        MeterCredit: {
+            /** @description RFC 3339: the later of the console's reading and the bill's. */
+            as_of: string;
+            /** @description `spent`, `ends` or `ended`. */
+            binds: string;
+            /**
+             * Format: double
+             * @description To whichever comes first.
+             */
+            days_left: number;
+            ends: string;
+            /**
+             * Format: double
+             * @description The console's reading less what the export drew since.
+             */
+            left: number;
+            name: string;
+            /**
+             * Format: double
+             * @description At the last 14 days' pace; `null` before any draw.
+             */
+            per_day: number | null;
+            /** @description The day it is spent at that pace; `null`, never. */
+            runs_out: string | null;
+        };
+        /** @description The guard's last tick on an account. */
+        MeterGuard: {
+            /** @description Whether it held the definition this conductor runs (`sa_core::google::digest`). */
+            holds_this_list: boolean;
+            /** @description RFC 3339. */
+            tick: string;
+        };
+        /** @description One lever the guard set. */
+        MeterLever: {
+            /** @description What the tick changed. */
+            action: string | null;
+            lever: string;
+            project: string | null;
+            /** Format: double */
+            setting: number | null;
+            /** @description What it was before. */
+            state: string | null;
+            /** Format: int64 */
+            today: number | null;
         };
         /** @description The vendor's count of a meter, as last read. */
         MeterReading: {
@@ -5031,6 +5186,9 @@ export type Balance = components['schemas']['Balance'];
 export type BalanceChange = components['schemas']['BalanceChange'];
 export type BaseCountry = components['schemas']['BaseCountry'];
 export type Bill = components['schemas']['Bill'];
+export type Bill2 = components['schemas']['Bill2'];
+export type BillDay = components['schemas']['BillDay'];
+export type BillTier = components['schemas']['BillTier'];
 export type Bound = components['schemas']['Bound'];
 export type Brand = components['schemas']['Brand'];
 export type BrandId = components['schemas']['BrandId'];
@@ -5143,6 +5301,10 @@ export type Mention = components['schemas']['Mention'];
 export type MentionKind = components['schemas']['MentionKind'];
 export type MeterAccount = components['schemas']['MeterAccount'];
 export type MeterAccountUse = components['schemas']['MeterAccountUse'];
+export type MeterAllowance = components['schemas']['MeterAllowance'];
+export type MeterCredit = components['schemas']['MeterCredit'];
+export type MeterGuard = components['schemas']['MeterGuard'];
+export type MeterLever = components['schemas']['MeterLever'];
 export type MeterReading = components['schemas']['MeterReading'];
 export type MeterReadings = components['schemas']['MeterReadings'];
 export type MeterTotal = components['schemas']['MeterTotal'];
@@ -5808,6 +5970,139 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Meters"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    bill: {
+        parameters: {
+            query: {
+                /** @description Unix milliseconds. */
+                from: number;
+                /** @description Unix milliseconds, at most 400 days after `from`. */
+                to: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /admin/meters/bill`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bill2"];
                 };
             };
             /** @description `bad_request` */

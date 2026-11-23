@@ -50,7 +50,7 @@ async fn an_area_has_the_country_its_place_or_its_centre_lies_in() {
 		store,
 		DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
 		google,
-		sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)]),
+		sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)], vec![]),
 	);
 	panel
 		.import_review_archive(Export {
