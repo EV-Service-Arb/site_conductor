@@ -17,7 +17,7 @@ use serde_json::{Value, json};
 use super::{Bill, Day, Draw, Lever, Reader, Reading, Tier};
 
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
-const SCOPE: &str = "https://www.googleapis.com/auth/bigquery.readonly";
+const SCOPE: &str = "https://www.googleapis.com/auth/bigquery"; // reads the export, and writes its dataset's `definition`
 /// How many times a query not done yet is waited on, a minute each.
 const WAITS: usize = 5;
 
@@ -35,7 +35,9 @@ pub struct Google {
 impl Google {
 	/// `account`'s export read with its reader.
 	pub fn try_new(account: &sa_places::Account) -> eyre::Result<Self> {
-		let (name, export, reader) = (&account.name, &account.export.table, &account.export.reader);
+		let name = &account.name;
+		let e = account.export.as_ref().ok_or_else(|| eyre!("{name} has no export to read"))?;
+		let (export, reader) = (&e.table, &e.reader);
 		let parts: Vec<&str> = export.split('.').collect();
 		eyre::ensure!(
 			parts.len() == 3 && parts.iter().all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')),
@@ -118,6 +120,11 @@ impl Google {
 		}
 	}
 
+	/// The export's dataset's `definition` table, `` `project.dataset.definition` ``.
+	fn definitions(&self) -> String {
+		format!("`{}.definition`", self.table.rsplit_once('.').expect("checked when made: project.dataset.table").0)
+	}
+
 	/// The export's dataset's `guard` table exists: the guard has ticked there.
 	async fn guarded(&self) -> eyre::Result<bool> {
 		let (project, rest) = self.table.split_once('.').expect("checked when made: project.dataset.table");
@@ -190,6 +197,21 @@ impl Reader for Google {
 				})
 			})
 			.collect()
+	}
+
+	async fn published(&self, now: Timestamp) -> eyre::Result<Option<String>> {
+		let rows = self.query(&format!("SELECT digest FROM {} ORDER BY at DESC LIMIT 1", self.definitions()), json!([]), now).await?;
+		rows.first().map(|r| string(&r[0], "a digest")).transpose()
+	}
+
+	async fn publish(&self, definition: &sa_core::google::Definition, now: Timestamp) -> eyre::Result<()> {
+		let (project, rest) = self.table.split_once('.').expect("checked when made: project.dataset.table");
+		let dataset = rest.split_once('.').expect("checked when made: project.dataset.table").0;
+		let url = format!("https://bigquery.googleapis.com/bigquery/v2/projects/{project}/datasets/{dataset}/tables/definition/insertAll");
+		let row = json!({ "at": now.as_microsecond(), "digest": definition.digest(), "definition": serde_json::to_string(definition).expect("plain data serializes") });
+		let got = call(self.http.post(url).bearer_auth(self.token(now).await?).json(&json!({ "rows": [{ "json": row }] }))).await?;
+		eyre::ensure!(got["insertErrors"].is_null(), "BigQuery refused the definition: {got}");
+		Ok(())
 	}
 
 	async fn bill(&self, since: Date) -> eyre::Result<Bill> {

@@ -18,6 +18,7 @@ use std::{future::Future, sync::Arc};
 use eyre::WrapErr;
 use jiff::{Timestamp, civil::Date};
 use sa_core::{
+	google::{Definition, Hold},
 	meters::{ALL, Meter, Stop, Vendor},
 	prices::{Item, MapLoad, PlacesRequest, StreetViewLoad},
 };
@@ -43,6 +44,12 @@ pub trait Reader {
 
 	/// The account's bill from `since`, whole.
 	fn bill(&self, since: Date) -> impl Future<Output = eyre::Result<Bill>> + Send;
+
+	/// The digest of the definition last published beside the export; `None`, none was.
+	fn published(&self, now: Timestamp) -> impl Future<Output = eyre::Result<Option<String>>> + Send;
+
+	/// `definition` beside the export, where the guard reads what to hold the account to.
+	fn publish(&self, definition: &Definition, now: Timestamp) -> impl Future<Output = eyre::Result<()>> + Send;
 }
 
 /// What the vendor's record tells of an account's bill from its `since`: read whole each time, as
@@ -173,12 +180,6 @@ impl Gauge {
 	}
 }
 
-/// What `account` may spend a month past its free units and credits on what is metered here: all
-/// of it falls in [`sa_core::meters::SLICE`]. Its day is the guard's to hold.
-pub fn allowance(account: &Account) -> f64 {
-	account.allow[sa_core::meters::SLICE].month // sa_core::google::drawn refuses an account short of a slice, and a list without this one
-}
-
 /// The conductor's [`sa_places::Rank`]: each account by its `standing` on the meter of the
 /// SKU bought.
 #[derive(Debug)]
@@ -209,8 +210,15 @@ pub(crate) async fn gauge(conn: &mut SqliteConnection, account: &str, meter: &'s
 
 /// `account`'s standing for one buy on each of `meters` at `now`: 0 with free units of each left
 /// (a meter never read counts ours alone), 1 with its net spend this period, as read, under its
-/// allowance, `None` past both.
+/// month's allowance of [`sa_core::meters::SLICE`], `None` past both, and for an account with no export or no hold:
+/// one the guard does not hold is not used.
 pub(crate) async fn standing(conn: &mut SqliteConnection, account: &Account, meters: &[&'static Meter], now: Timestamp) -> eyre::Result<Option<u8>> {
+	if account.export.is_none() {
+		return Ok(None);
+	}
+	let Some(hold) = db::hold(conn, &account.name).await? else {
+		return Ok(None);
+	};
 	let mut free = true;
 	for m in meters {
 		free &= gauge(conn, &account.name, m, now).await?.left() > 0;
@@ -221,7 +229,8 @@ pub(crate) async fn standing(conn: &mut SqliteConnection, account: &Account, met
 	let vendor = meters[0].vendor;
 	assert!(meters.iter().all(|m| m.vendor == vendor), "an account bills one vendor");
 	let spend = db::spend(conn, &account.name, vendor.period(now).0).await?;
-	Ok(spend.is_some_and(|s| (s.net_micros as f64) < allowance(account) * 1e6).then_some(1))
+	let allowance = hold.allow[sa_core::meters::SLICE].month; // Hold::check refuses one short of a slice, or with no meters' slice
+	Ok(spend.is_some_and(|s| (s.net_micros as f64) < allowance * 1e6).then_some(1))
 }
 
 impl sa_places::Rank for ByStanding {
@@ -249,7 +258,9 @@ impl Panel {
 		let (vendor, account) = (reader.vendor(), reader.account());
 		let meters: Vec<&'static Meter> = ALL.iter().filter(|m| m.vendor == vendor).collect();
 		let readings = reader.read(&meters, now).await?;
-		let since = self.accounts.get(account).ok_or_else(|| eyre::eyre!("{account} is read but not configured"))?.export.since;
+		let since = (self.accounts.get(account).ok_or_else(|| eyre::eyre!("{account} is read but not configured"))?.export.as_ref())
+			.ok_or_else(|| eyre::eyre!("{account} is read but has no export"))?
+			.since;
 		let bill = reader.bill(since).await.wrap_err("the bill")?;
 		let start = vendor.period(now).0;
 		for m in &meters {
@@ -305,6 +316,59 @@ impl Panel {
 			}
 		}
 		Ok(best.map(|(_, a)| a))
+	}
+
+	/// What `account` is held to now; `None`, never set.
+	pub async fn hold(&self, account: &str) -> eyre::Result<Option<Hold>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a hold")?;
+		db::hold(&mut conn, account).await
+	}
+
+	/// Holds `account` to `hold` from `now`: the guard reads it once published beside the export.
+	pub async fn set_hold(&self, account: &str, hold: &Hold, by: &str, now: Timestamp) -> eyre::Result<Result<(), crate::Refused>> {
+		let Some(a) = self.accounts.get(account) else {
+			return Ok(Err(crate::Refused::Invalid(format!("no Google account is {account:?}"))));
+		};
+		if a.export.is_none() {
+			return Ok(Err(crate::Refused::Invalid(format!("{account} has no export: nothing holds it"))));
+		}
+		if let Err(e) = hold.check(self.accounts.slices()) {
+			return Ok(Err(crate::Refused::Invalid(format!("{account}: {}", e.0))));
+		}
+		let mut tx = self.store.begin_write().await?;
+		db::put_hold(&mut tx, account, hold, by, now).await?;
+		tx.commit().await.wrap_err("committing a hold")?;
+		tracing::info!(account, by, ?hold, "hold set");
+		Ok(Ok(()))
+	}
+
+	/// What the guard is to hold `account` to; `None` without an export or a hold.
+	pub async fn definition(&self, account: &Account) -> eyre::Result<Option<Definition>> {
+		Ok(self.hold(&account.name).await?.and_then(|h| account.held(h)).map(|held| Definition {
+			held,
+			slices: self.accounts.defined_slices().to_vec(),
+		}))
+	}
+
+	/// `reader`'s account's definition published beside its export, unless `last`, what was, already is.
+	pub async fn publish_definition(&self, reader: &impl Reader, last: &mut Option<String>, now: Timestamp) -> eyre::Result<()> {
+		let account = self
+			.accounts
+			.get(reader.account())
+			.ok_or_else(|| eyre::eyre!("{} is read but not configured", reader.account()))?;
+		let Some(definition) = self.definition(account).await? else {
+			return Ok(()); // no hold set: the admin's meters card says so, and the guard refuses the account
+		};
+		let digest = definition.digest();
+		if last.as_ref() == Some(&digest) {
+			return Ok(());
+		}
+		if reader.published(now).await? != Some(digest.clone()) {
+			reader.publish(&definition, now).await.wrap_err_with(|| format!("publishing {}'s definition", account.name))?;
+			tracing::info!(account = account.name, digest, "definition published");
+		}
+		*last = Some(digest);
+		Ok(())
 	}
 
 	/// Each account's bill as last read, and when, in the config's order; `None`, never read.

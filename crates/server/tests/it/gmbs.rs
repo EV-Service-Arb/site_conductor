@@ -423,7 +423,16 @@ async fn the_map_is_told_only_when_configured() {
 		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 		let store = db.store().await;
 		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(store.clone())).unwrap();
-		let app = app(panel_on(store, key, keyless, sa_places::Accounts::new(accounts, sa_panel::testing::slices())), admin());
+		let names: Vec<String> = accounts.iter().map(|a| a.name.clone()).collect();
+		let panel = panel_on(store, key, keyless, sa_places::Accounts::new(accounts, sa_panel::testing::slices()));
+		let none = sa_core::google::Hold {
+			allow: [(sa_core::meters::SLICE.to_owned(), sa_core::google::Allow { day: 0.0, month: 0.0 })].into(),
+			unguarded: vec![],
+		};
+		for name in &names {
+			panel.set_hold(name, &none, "test", jiff::Timestamp::now()).await.unwrap().unwrap();
+		}
+		let app = app(panel, admin());
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		assert_eq!(call(&mut b, &app, Method::GET, "/api/v1/map", None).await, want);

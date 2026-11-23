@@ -121,7 +121,8 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
   src/trash.rs           /api/v1/trash; the hourly purge
   src/usage.rs           /api/v1/map/load, /api/v1/admin/usage; the services' usage feeds followed
-  src/meters.rs          /api/v1/admin/meters{,/readings,/bill}; each account's meters and bill read at start
+  src/meters.rs          /api/v1/admin/meters{,/readings,/bill,/accounts/{name}/hold}; each account's definition
+                         published when it changes; each account's meters and bill read at start
                          and hourly
   src/config.rs          the config file (`--config`): the Google accounts and their slices
   src/assistant.rs       /api/v1/assistant; the turns' shape
@@ -668,6 +669,7 @@ GET    /admin/usage                         tokens:grant
 GET    /admin/meters                        tokens:grant
 GET    /admin/meters/readings               tokens:grant
 GET    /admin/meters/bill                   tokens:grant
+PUT    /admin/meters/accounts/{name}/hold   tokens:grant, fresh
 POST   /admin/gmails                        tokens:grant, fresh
 POST   /admin/imports/review-archive        tokens:grant, fresh
 GET    /assistant/chats
@@ -927,23 +929,29 @@ Only then does the browser open it.
 
 **Google accounts.** Free units, credits and the money kept are per billing account, so each is
 declared once, in `nix/google.nix`, which the config file (`--config`, `google`:
-`sa_places::Account`, and `slices`) imports whole: its export, its reader and the day it is read
-from, its credits as the console read them, `allow` for every slice, a Pacific day's and month's
-real money (`{ day; month; }`, 0 for none; the conductor holds the month of `maps`,
-`sa_core::meters::SLICE`, which every meter falls in, at rank 1; the guard holds both of every
-slice at Google), `unguarded`, the APIs the guard leaves alone (below), and what it `provides`,
-each slot optional: `places` (Places, Geocoding), `browser` (Maps JS). `sa_core::google::drawn`
-refuses a slice missing from or unknown to an `allow`, an amount below 0 or not finite, and a day
-past its month. What of it is no secret is `sa_core::google`'s, which the conductor and the guard both read. Every key bills on its account (docs/spec/google.md); each use of ours is
+`sa_places::Account`, and `slices`) imports whole: its export (`null` until its billing account is
+open: then nothing of ours uses it), its reader and the day it is read from, its credits as the
+console read them, and what it `provides`, each slot optional: `places` (Places, Geocoding),
+`browser` (Maps JS). What it is **held** to an admin sets in the meters card (`PUT
+/admin/meters/accounts/{name}/hold`, `sa_core::google::Hold`, kept in `google_holds`, every one):
+`allow` for every slice, a Pacific day's and month's real money (`{ day; month; }`, 0 for none; the
+conductor holds the month of `maps`, `sa_core::meters::SLICE`, which every meter falls in, at rank
+1; the guard holds both of every slice at Google), and `unguarded`, the APIs the guard leaves alone
+(below). `Hold::check` refuses a slice missing or unknown, an amount below 0 or not finite, and a
+day past its month. An account with no export or no hold is not used. What of it is no secret is
+`sa_core::google`'s, which the conductor and the guard both read. Every key bills on its account (docs/spec/google.md); each use of ours is
 stored with the account that paid (`usage.account`). N accounts are one with N× the free units,
 the money capped per account.
 
 ```text
-nix/google.nix  accounts = [ { name, export { table, reader, since }, credits, allow { <slice> = { day, month } }, unguarded [ <api> ],
-                               provides { places?, browser?, ads? } } … ]
+nix/google.nix  accounts = [ { name, export { table, reader, since } | null, credits, provides { places?, browser?, ads? } } … ]
                 slices = [ { name, service, sku? } … ]
-  ├─ the guard (crates/guard, Cloud Run): the list baked into its image; holds every enabled API of each
-  │    billed project by its class (below), each slice's real money to `allow`
+the admin       PUT …/accounts/{name}/hold { allow { <slice> = { day, month } }, unguarded [ <api> ] } ─▶ google_holds
+the conductor   each minute, a definition (sa_core::google::Definition: the account less its secrets, its hold,
+                the slices) changed ─▶ <export dataset>.definition, with its reader
+  ├─ the guard (crates/guard, Cloud Run): the exports baked into its image; each tick reads each one's latest
+  │    definition, and holds every enabled API of each billed project by its class (below), each slice's real
+  │    money to `allow`; an account it cannot read or hold is reported, the others held all the same
   ├─ the conductor: `import` (~/.config/sa_conductor.nix), or devops' literal of google_env.nix,
   │    each secret slot `{ env = "SA_GOOGLE_<NAME>_<SLOT>"; }`
   each account ─ its Cloud Billing export, read at boot and hourly ─▶ meter_readings (account, meter)
@@ -958,8 +966,9 @@ a buy of an item on a meter ─ each account's standing (`meters::standing`):
 ```
 
 **The guard holds the money at Google, out of the cluster.** A Cloud Run job every 15 minutes
-(`nix run .#guard`: a dry run; `.#guard-deploy`: from this commit, as the billing owner), so it
-holds while the cluster is down and billing.admin stays out of it. Every API enabled on a billed
+(`nix run .#guard`: a dry run; `.#guard-deploy`: from this commit, as the billing owner, after a change
+to crates/guard or an account added), so it holds while the cluster is down, to the definition last
+published, and billing.admin stays out of it. Every API enabled on a billed
 project falls in one class, which the guard derives and the config never restates
 (docs/spec/google.md, `google.guarded`):
 
@@ -989,12 +998,12 @@ least-free SKU, and a SKU of a metered billing service whose priced tier starts 
 pace stops the tick. Each tick lands in `<export dataset>.guard`, with the definition's digest,
 which the next read of the bill brings back: the admin's meters card and sa-meters show each
 slice's day and month, its levers, the APIs spending with no lever and those disabled, and
-whether it holds the list the conductor runs. To add an account: its *Standard usage cost* export
+whether it holds the definition the conductor publishes now. To add an account: its *Standard usage cost* export
 into a dataset, a service account with BigQuery Data Viewer on it and Job User on its project (its
 key the `reader`), an entry here with its `since`, each credit as the console's Credits page
-reads it (`id` once the export names it), `allow` with every slice's day and month, and
-`unguarded` from its first dry run (`nix run .#guard`: what it would disable and what it refuses,
-never guessed), then `guard-deploy`.
+reads it (`id` once the export names it), then `guard-deploy` (it makes the dataset's `definition`
+table, the reader its editor); then its hold in the meters card, `unguarded` from the guard's dry
+run (`nix run .#guard`: what it would disable and what it refuses, never guessed).
 
 **A meter is the vendor's count, plus ours since it, on one account.** dev, prod, placement and
 anything else billed on an account draw on its free units, and each database sees only its own.

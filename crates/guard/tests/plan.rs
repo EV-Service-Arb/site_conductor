@@ -26,21 +26,22 @@ fn allow(given: &[(&str, f64, f64)]) -> String {
 }
 
 /// What `guard plan` prints: each lever (stderr), then what would change (stdout); an error by its message alone.
+/// The account's definition is as the conductor published it: `allow`, `unguarded` and its credit.
 fn replay(dir: &Path, name: &str, allow: &str, unguarded: &str, left: f64, ends: &str, seen: &str) -> String {
-	let config = format!(
-		r#"{{"accounts": [{{"name": "a", "export": {{"table": "{TABLE}", "reader": {{"file": ""}}, "since": "2026-10-01"}}, "allow": {allow}, "unguarded": {unguarded},
-		"credits": [{{"id": "c1", "name": "trial", "read": "2026-11-01T00:00:00Z", "left": {left}, "ends": "{ends}"}}]}}], "slices": {SLICES}}}"#
+	let definition = format!(
+		r#"{{"held": {{"name": "a", "table": "{TABLE}", "since": "2026-10-01", "allow": {allow}, "unguarded": {unguarded},
+		"credits": [{{"id": "c1", "name": "trial", "read": "2026-11-01T00:00:00Z", "left": {left}, "ends": "{ends}"}}]}}, "slices": {SLICES}}}"#
 	);
 	let read = dir.join("read.json");
 	fs::write(
 		&read,
 		format!(
-			r#"{{"now": "2026-11-12T12:00:00Z", "own": "p", "services": {SERVICES}, "accounts": [{{"account": "a", "billing": "000000-AAAAAA-BBBBBB",
-			"usd": 0.9, "projects": {{"p": 1, "q": 2}}, {seen}}}]}}"#
+			r#"{{"now": "2026-11-12T12:00:00Z", "own": "p", "services": {SERVICES}, "exports": ["{TABLE}"], "accounts": [{{"account": "a", "definition": {definition},
+			"billing": "000000-AAAAAA-BBBBBB", "usd": 0.9, "projects": {{"p": 1, "q": 2}}, {seen}}}]}}"#
 		),
 	)
 	.unwrap();
-	let out = Command::new(env!("CARGO_BIN_EXE_guard")).arg("plan").arg(&read).env("GUARD_CONFIG", config).output().unwrap();
+	let out = Command::new(env!("CARGO_BIN_EXE_guard")).arg("plan").arg(&read).output().unwrap();
 	let stderr = String::from_utf8(out.stderr).unwrap();
 	let stderr = match stderr.split_once("\n\nLocation:") {
 		Some((message, _)) => format!("{message}\n"), // where in the source it was raised moves with every edit
@@ -175,7 +176,7 @@ fn plan() {
 		),
 		replay(
 			d,
-			"a slice missing from allow: the config refused",
+			"a slice missing from allow: the definition refused",
 			r#"{"video generation": {"day": 0, "month": 0}, "maps": {"day": 0, "month": 0}}"#,
 			OWN,
 			0.0,

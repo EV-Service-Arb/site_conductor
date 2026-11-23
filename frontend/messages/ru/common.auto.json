@@ -3811,6 +3811,14 @@
     "en": "disabled",
     "t": "отключено"
   },
+  "tokens.meters.holdSave": {
+    "en": "Hold to this",
+    "t": "Закрепить за этим"
+  },
+  "tokens.meters.holdSaved": {
+    "en": "{name}: held from the guard's next tick",
+    "t": "{name}: удерживается со следующего прохода стража"
+  },
   "tokens.meters.near": {
     "en": "{p}% of free",
     "t": "{p}% бесплатных"
@@ -3819,17 +3827,29 @@
     "en": "never read",
     "t": "никогда не читались"
   },
+  "tokens.meters.noHold": {
+    "en": "no hold set: nothing of ours uses it, and the guard holds nothing of it",
+    "t": "удержание не задано: нашего здесь ничего не использует, и страж ничего из этого не удерживает"
+  },
   "tokens.meters.noLever": {
     "en": "no lever",
     "t": "нет рычага"
   },
   "tokens.meters.otherList": {
-    "en": "holds another nix/google.nix",
-    "t": "находится в другом nix/google.nix"
+    "en": "holds another definition than this one",
+    "t": "удерживает другое определение, не это"
   },
   "tokens.meters.over": {
     "en": "over",
     "t": "превышено"
+  },
+  "tokens.meters.perDay": {
+    "en": "a day",
+    "t": "в день"
+  },
+  "tokens.meters.perMonth": {
+    "en": "a month",
+    "t": "в месяц"
   },
   "tokens.meters.requests": {
     "en": "{n} today",
@@ -3859,9 +3879,17 @@
     "en": "Vendors this month",
     "t": "Поставщики в этом месяце"
   },
+  "tokens.meters.unexported": {
+    "en": "{name}: no billing export, so nothing of ours uses it",
+    "t": "{name}: нет экспорта биллинга, поэтому наше здесь ничего не использует"
+  },
+  "tokens.meters.unguardedLabel": {
+    "en": "Left alone by the guard, one API a line (no lever but the backstop)",
+    "t": "Страж не трогает, по одному API в строке (рычага нет, только страховка)"
+  },
   "tokens.meters.unguardedYet": {
-    "en": "{name}: the guard never ticked here",
-    "t": "{name}: страж здесь ещё ни разу не срабатывал"
+    "en": "the guard never ticked here",
+    "t": "страж здесь ещё ни разу не срабатывал"
   },
   "tokens.meters.unread": {
     "en": "{n} not read lately",

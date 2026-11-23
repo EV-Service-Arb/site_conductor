@@ -1,4 +1,4 @@
-# Every Google billing account a key or credential of ours is on (docs/spec/google.md): read off its BigQuery billing export by the conductor's meters, held to `allow` and `unguarded` by the guard (crates/guard), and the conductor's config for what it `provides`.
+# Every Google billing account a key or credential of ours is on (docs/spec/google.md): read off its BigQuery billing export by the conductor's meters, held by the guard (crates/guard) to what an admin sets it to in the meters card, and the conductor's config for what it `provides`.
 {
   accounts = [
     {
@@ -11,17 +11,6 @@
       # A credit's balance is the console's reading at `read`, less what the export brought in after it.
       credits = [
         { id = "Starter:Credit-010027-EEDB26-C25F67"; name = "GCP Free Credit"; read = "2026-11-23T19:55:00Z"; left = 100.94; ends = "2027-01-13"; }
-      ];
-      # Real money per slice past free units and credits, in the account's currency, a Pacific day's and month's; every slice named, 0 for none. Credits are always spent.
-      allow = { "video generation" = { day = 0; month = 0; }; LLM = { day = 0; month = 0; }; maps = { day = 0; month = 0; }; };
-      # APIs on its billed projects the guard leaves alone: no lever but the backstop. Filled from its dry run (`nix run .#guard`), never guessed.
-      unguarded = [
-        # what the guard runs and reads through on its own project
-        "artifactregistry.googleapis.com"
-        "bigquery.googleapis.com"
-        "cloudscheduler.googleapis.com"
-        "monitoring.googleapis.com"
-        "run.googleapis.com"
       ];
       # What its keys are for, each slot optional; secrets as `{ env = "…"; }` or `{ file = "…"; }`.
       provides = {
@@ -38,20 +27,12 @@
         since = "2026-11-23";
       };
       credits = [ ];
-      allow = { "video generation" = { day = 0; month = 0; }; LLM = { day = 0; month = 0; }; maps = { day = 0; month = 0; }; };
-      unguarded = [ ];
       provides.places = { key = { env = "GOOGLE_MAPS_KEY"; }; }; # Maps Platform Demo API Key: Places, Geocoding, Maps JS, Routes, YouTube
     }
     {
       name = "icos1"; # 1cryptoicos@gmail.com
-      export = {
-        table = "gmp-demo-project-232535659.billing.gcp_billing_export_v1_PENDING"; # its billing account is not opened yet
-        reader = { file = "~/.config/gcloud/icos1-reader.json"; }; # accounting-reader@gmp-demo-project-232535659
-        since = "2026-11-23";
-      };
+      export = null; # its billing account is not open yet: nothing of ours uses it. Its reader, once it is: ~/.config/gcloud/icos1-reader.json (accounting-reader@gmp-demo-project-232535659)
       credits = [ ];
-      allow = { "video generation" = { day = 0; month = 0; }; LLM = { day = 0; month = 0; }; maps = { day = 0; month = 0; }; };
-      unguarded = [ ];
       provides.places = { key = { env = "GOOGLE_MAPS_KEY_ICOS1"; }; }; # Maps Platform Demo API Key: Places, Geocoding, Maps JS, Routes
     }
   ];

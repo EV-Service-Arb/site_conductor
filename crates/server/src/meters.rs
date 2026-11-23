@@ -3,7 +3,9 @@
 //!
 //! ```text
 //! GET /api/v1/admin/meters                     Meters: each meter's use this period, all accounts and each;
-//!                                              each account's credits and allowances, as the guard holds them
+//!                                              each account's credits, its hold, and its allowances as the guard holds them
+//! PUT /api/v1/admin/meters/accounts/{name}/hold  Hold: what the guard holds an account to; published beside its
+//!                                              export within a minute, read by the guard's next tick
 //! GET /api/v1/admin/meters/readings?from=&to=  MeterReadings: every reading synced, Unix ms
 //! GET /api/v1/admin/meters/bill?from=&to=      Bill: each account's days in the window, by slice and SKU,
 //!                                              and this month's tiers
@@ -11,12 +13,13 @@
 
 use std::{sync::Mutex, time::Duration};
 
-use axum::{Json, extract::State, http::Method};
-use ev_lib::api::{JsonSchema, Params, Refusal};
+use axum::{Extension, Json, extract::State, http::Method};
+use ev_lib::api::{Body, Ids, JsonSchema, Params, Refusal};
 use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
 use sa_auth::Tokens;
 use sa_core::{
+	google::Hold,
 	meters::{ALL, Meter, Stop, Vendor},
 	prices::Item,
 };
@@ -29,11 +32,14 @@ use tokio::sync::watch;
 
 use crate::{
 	api::{ApiResult, Code},
-	http::{ApiRoute, USER},
+	http::{ApiRoute, FRESH, USER},
+	signin::Caller,
 };
 
 /// How often a reading is due: each scans under a megabyte of an export partitioned by day.
 const SYNC_EVERY: SignedDuration = SignedDuration::from_hours(1);
+/// How often a hold set is looked for: published only when changed.
+const PUBLISH_EVERY: Duration = Duration::from_secs(60);
 /// How soon a failed read is tried again.
 const RETRY: Duration = Duration::from_secs(15 * 60);
 /// The widest window `/admin/meters/readings` reads.
@@ -44,13 +50,19 @@ const BURN_DAYS: i64 = 14;
 
 type Standing = (Vec<CreditDto>, Vec<String>, Vec<AllowanceDto>, Option<GuardDto>);
 
-/// Reads each account's meters now, then every SYNC_EVERY, a failure again after RETRY, until
-/// `shutdown`, each on its own: one failing leaves the others be, and its last good reading in
-/// force meanwhile.
+/// Reads each account's meters now, then every SYNC_EVERY, a failure again after RETRY, and publishes its
+/// definition whenever it changes, until `shutdown`, each on its own: one failing leaves the others be, and its
+/// last good reading in force meanwhile.
 pub async fn run(panel: Panel, readers: Vec<impl Reader + Sync>, shutdown: watch::Receiver<bool>) {
 	let lasts: Vec<Mutex<Option<Timestamp>>> = readers.iter().map(|_| Mutex::new(None)).collect();
+	let published: Vec<tokio::sync::Mutex<Option<String>>> = readers.iter().map(|_| tokio::sync::Mutex::new(None)).collect();
 	let panel = &panel;
-	futures::future::join_all(readers.iter().zip(&lasts).map(|(reader, last)| {
+	let publish = futures::future::join_all(readers.iter().zip(&published).map(|(reader, last)| {
+		crate::every(PUBLISH_EVERY, shutdown.clone(), "publishing an account's definition", move || async move {
+			panel.publish_definition(reader, &mut *last.lock().await, Timestamp::now()).await
+		})
+	}));
+	let read = futures::future::join_all(readers.iter().zip(&lasts).map(|(reader, last)| {
 		crate::every(RETRY, shutdown.clone(), "reading an account's meters", move || async move {
 			let now = Timestamp::now();
 			if last
@@ -65,8 +77,8 @@ pub async fn run(panel: Panel, readers: Vec<impl Reader + Sync>, shutdown: watch
 			*last.lock().expect("never poisoned: nothing panics holding it") = Some(now);
 			Ok(())
 		})
-	}))
-	.await;
+	}));
+	futures::future::join(publish, read).await;
 }
 
 /// The vendor's count of a meter, as last read.
@@ -165,8 +177,10 @@ pub struct AccountDto {
 	/// Whether it has a Places key, and a browser key.
 	pub places: bool,
 	pub browser: bool,
-	/// Money a month past its free units and credits, in its currency.
-	pub allow: f64,
+	/// Whether its billing export is set: without one nothing of ours uses it.
+	pub exported: bool,
+	/// What the guard is to hold it to; `null`, never set: until then nothing of ours uses it.
+	pub hold: Option<Hold>,
 	/// `null` before a reading of this period.
 	pub spend: Option<SpendDto>,
 	/// Each configured credit's balance.
@@ -241,7 +255,7 @@ pub struct LeverDto {
 pub struct GuardDto {
 	/// RFC 3339.
 	pub tick: String,
-	/// Whether it held the definition this conductor runs (`sa_core::google::digest`).
+	/// Whether it held the definition this conductor publishes (`sa_core::google::Definition::digest`).
 	pub holds_this_list: bool,
 	/// The account's `unguarded` APIs on: spending with no lever but the backstop.
 	pub unguarded: Vec<ApiDto>,
@@ -312,6 +326,8 @@ pub struct BillDto {
 pub struct MetersDto {
 	/// In the config's order.
 	pub accounts: Vec<AccountDto>,
+	/// The slices a hold names, in the config's order.
+	pub slices: Vec<String>,
 	pub meters: Vec<MeterDto>,
 }
 
@@ -329,7 +345,15 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/admin/meters", admin, meters),
 		ApiRoute::new(M::GET, "/admin/meters/readings", admin, meter_readings),
 		ApiRoute::new(M::GET, "/admin/meters/bill", admin, bill),
+		ApiRoute::new(M::PUT, "/admin/meters/accounts/{name}/hold", FRESH.needs(Tokens::Grant), set_hold),
 	]
+}
+
+/// Holds account `name` to the body: what the guard reads once it is published beside the export, within a
+/// minute. Refused for an account without an export, or a hold short of a slice or past a sane amount.
+pub(crate) async fn set_hold(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(AccountName { name }): Ids<AccountName>, Body(hold): Body<Hold>) -> ApiResult<Json<Hold>> {
+	panel.set_hold(&name, &hold, &caller.email, Timestamp::now()).await??;
+	Ok(Json(hold))
 }
 
 impl From<Synced> for ReadingDto {
@@ -355,13 +379,13 @@ impl From<Synced> for ReadingDto {
 pub(crate) async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersDto>> {
 	let now = Timestamp::now();
 	let prices = panel.prices().await?;
-	let digest = panel.accounts().digest();
 	let mut accounts = Vec::with_capacity(panel.accounts().len());
 	for (a, bill) in panel.bills().await? {
 		let spend = panel.spend(&a.name, Vendor::Google, now).await?;
+		let digest = panel.definition(a).await?.map(|d| d.digest());
 		let (credits, unnamed_credits, allowances, guard) = match &bill {
 			None => (Vec::new(), Vec::new(), Vec::new(), None),
-			Some((bill, read_at)) => standing(a, bill, *read_at, &digest, now)?,
+			Some((bill, read_at)) => standing(a, bill, *read_at, digest.as_deref(), now)?,
 		};
 		accounts.push(AccountDto {
 			credits,
@@ -372,7 +396,8 @@ pub(crate) async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersD
 			name: a.name.clone(),
 			places: a.provides.places.is_some(),
 			browser: a.provides.browser.is_some(),
-			allow: sa_panel::meters::allowance(a),
+			exported: a.export.is_some(),
+			hold: panel.hold(&a.name).await?,
 			spend: spend.map(|s| SpendDto {
 				cost: s.cost_micros as f64 / 1e6,
 				net: s.net_micros as f64 / 1e6,
@@ -429,7 +454,14 @@ pub(crate) async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersD
 			}
 		})
 		.collect();
-	Ok(Json(MetersDto { accounts, meters }))
+	let slices = panel.accounts().defined_slices().iter().map(|s| s.name.clone()).collect();
+	Ok(Json(MetersDto { accounts, slices, meters }))
+}
+
+/// A Google account, by its name in the config.
+#[derive(Deserialize, JsonSchema)]
+pub(crate) struct AccountName {
+	name: String,
 }
 
 /// Grafana's `${__from}` and `${__to}`.
@@ -456,7 +488,7 @@ pub(crate) async fn meter_readings(State(panel): State<Panel>, Params(q): Params
 }
 
 /// `account`'s credits off `bill`, read at `read_at`, and its allowances as the guard last held them.
-fn standing(account: &sa_places::Account, bill: &Bill, read_at: Timestamp, digest: &str, now: Timestamp) -> eyre::Result<Standing> {
+fn standing(account: &sa_places::Account, bill: &Bill, read_at: Timestamp, digest: Option<&str>, now: Timestamp) -> eyre::Result<Standing> {
 	let today = now.to_zoned(jiff::tz::TimeZone::UTC).date();
 	let window_from = now - SignedDuration::from_hours(BURN_DAYS * 24);
 	let named: Vec<&str> = account.credits.iter().filter_map(|c| c.id.as_deref()).collect();
@@ -541,7 +573,7 @@ fn standing(account: &sa_places::Account, bill: &Bill, read_at: Timestamp, diges
 		None => None,
 		Some(l) => Some(GuardDto {
 			tick: l.tick.to_string(),
-			holds_this_list: l.list.as_deref() == Some(digest),
+			holds_this_list: digest.is_some() && l.list.as_deref() == digest,
 			unguarded: apis("unguarded: ")?,
 			disabled: apis("disable: ")?,
 		}),

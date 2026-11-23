@@ -1,5 +1,5 @@
 //! The vendors' readings of each meter ([`sa_core::meters`]) on each account, only ever added, and
-//! our own uses of its items on that account after one; and each account's bill as last read.
+//! our own uses of its items on that account after one; each account's bill as last read, and what it is held to.
 
 use eyre::WrapErr;
 use jiff::Timestamp;
@@ -163,4 +163,27 @@ pub(crate) async fn bill(conn: &mut SqliteConnection, account: &str) -> eyre::Re
 		.wrap_err_with(|| format!("reading {account}'s bill"))?;
 	row.map(|(bill, at)| Ok((serde_json::from_str(&bill).wrap_err_with(|| format!("{account}'s bill as kept"))?, from_db(at)?)))
 		.transpose()
+}
+
+/// `account` held to `hold` from `at`, by `by`.
+pub(crate) async fn put_hold(conn: &mut SqliteConnection, account: &str, hold: &sa_core::google::Hold, by: &str, at: Timestamp) -> eyre::Result<()> {
+	sqlx::query("INSERT INTO google_holds (account, hold, at, by) VALUES ($1, $2, $3, $4)")
+		.bind(account)
+		.bind(serde_json::to_string(hold).expect("a hold serializes"))
+		.bind(to_db(at))
+		.bind(by)
+		.execute(conn)
+		.await
+		.wrap_err_with(|| format!("keeping {account}'s hold"))?;
+	Ok(())
+}
+
+/// What `account` is held to now; `None`, never set.
+pub(crate) async fn hold(conn: &mut SqliteConnection, account: &str) -> eyre::Result<Option<sa_core::google::Hold>> {
+	let row: Option<(String,)> = sqlx::query_as("SELECT hold FROM google_holds WHERE account = $1 ORDER BY at DESC, rowid DESC LIMIT 1")
+		.bind(account)
+		.fetch_optional(conn)
+		.await
+		.wrap_err_with(|| format!("reading {account}'s hold"))?;
+	row.map(|(h,)| serde_json::from_str(&h).wrap_err_with(|| format!("{account}'s hold as kept"))).transpose()
 }

@@ -1,12 +1,16 @@
-//! Holds every enabled API on every billed project of an account in nix/google.nix by a lever set before it spends,
-//! or leaves it to the account's `unguarded`; anything else it disables. Each slice's real money is held to its
-//! `allow`, a day's and a month's. docs/ARCHITECTURE.md, The guard; docs/spec/google.md.
+//! Holds every enabled API on every billed project of an account by a lever set before it spends, or leaves it to the
+//! account's `unguarded`; anything else it disables. Each slice's real money is held to its `allow`, a day's and a
+//! month's. What an account is held to is the definition the conductor last published beside its export.
+//! docs/ARCHITECTURE.md, The guard; docs/spec/google.md.
 //!
 //!     guard tick [--dry-run]   read every account, set its levers, record what it saw in `<export dataset>.guard`
 //!     guard read               print what a tick reads, as JSON
 //!     guard plan <read.json>   what a tick on that reading would set
 //!
-//! Env: GUARD_CONFIG, nix/google.nix as JSON; GUARD_PROJECT, the project it runs in; GOOGLE_OAUTH_ACCESS_TOKEN, else the metadata server's.
+//! An account failing is reported, and the others held all the same.
+//!
+//! Env: GUARD_EXPORTS, every account's export table as a JSON list; GUARD_PROJECT, the project it runs in;
+//! GOOGLE_OAUTH_ACCESS_TOKEN, else the metadata server's.
 
 use std::{
 	collections::{BTreeMap, BTreeSet},
@@ -17,9 +21,9 @@ mod list;
 
 use eyre::{Result, WrapErr, bail, ensure, eyre};
 use jiff::{Timestamp, ToSpan, tz::TimeZone};
-use list::{Account, BigQuery, Config, call, num, text};
+use list::{BigQuery, call, export, num, text};
 use sa_core::{
-	google::{Allow, BALANCES, Drawn},
+	google::{Allow, BALANCES, Definition, Hold},
 	meters,
 };
 use serde::{Deserialize, Serialize};
@@ -62,16 +66,22 @@ const PACIFIC: &str = "America/Los_Angeles"; // Google's billing month and quota
 fn main() -> Result<()> {
 	rustls::crypto::ring::default_provider().install_default().expect("the first thing main does");
 	let args: Vec<String> = env::args().skip(1).collect();
-	let config: Config = serde_json::from_str(&env::var("GUARD_CONFIG").wrap_err("GUARD_CONFIG")?).wrap_err("GUARD_CONFIG")?;
-	let slices = config.slices()?;
+	let exports = || -> Result<Vec<String>> { serde_json::from_str(&env::var("GUARD_EXPORTS").wrap_err("GUARD_EXPORTS")?).wrap_err("GUARD_EXPORTS") };
+	let mut failed = Vec::new();
 	match &args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
 		["plan", file] => {
 			let read: Read = serde_json::from_str(&fs::read_to_string(file)?)?;
-			for (account, (rows, acts)) in read.accounts.iter().zip(plan(&config, &slices, &read)?) {
-				print(&account.account, &rows, &acts);
+			for (seen, planned) in read.accounts.iter().zip(plan(&read)) {
+				match planned {
+					Ok((rows, acts)) => print(&seen.account, &rows, &acts),
+					Err(e) => failed.push(e),
+				}
 			}
 		}
-		["read"] => println!("{}", serde_json::to_string_pretty(&read(&Google::try_new()?, &config)?)?),
+		["read"] => {
+			let read = read(&Google::try_new()?, &exports()?, &mut failed)?;
+			println!("{}", serde_json::to_string_pretty(&read)?);
+		}
 		["tick", rest @ ..] => {
 			let dry = match rest {
 				[] => false,
@@ -79,35 +89,48 @@ fn main() -> Result<()> {
 				_ => bail!("usage: guard tick [--dry-run]"),
 			};
 			let google = Google::try_new()?;
-			let read = read(&google, &config)?;
-			let planned = plan(&config, &slices, &read)?;
-			let list = config.digest();
-			for (seen, (rows, acts)) in read.accounts.iter().zip(planned) {
+			let read = read(&google, &exports()?, &mut failed)?;
+			for (seen, planned) in read.accounts.iter().zip(plan(&read)) {
+				let (rows, acts) = match planned {
+					Ok(planned) => planned,
+					Err(e) => {
+						failed.push(e);
+						continue;
+					}
+				};
 				print(&seen.account, &rows, &acts);
-				if dry {
-					continue;
+				if !dry && let Err(e) = hold(&google, &read, seen, &rows, &acts) {
+					failed.push(e.wrap_err(seen.account.clone()));
 				}
-				for act in &acts {
-					google.act(act).wrap_err_with(|| format!("{}: {act:?}", seen.account))?;
-				}
-				let account = config.accounts.iter().find(|a| a.name == seen.account).expect("read from config");
-				let (project, dataset, _) = account.export()?;
-				let rows: Vec<Value> = rows
-					.iter()
-					.map(|r| {
-						let mut row = serde_json::to_value(r)?;
-						row["tick"] = json!(read.now.as_second());
-						row["list"] = json!(list);
-						Ok(json!({"json": row}))
-					})
-					.collect::<Result<_>>()?;
-				let url = format!("https://bigquery.googleapis.com/bigquery/v2/projects/{project}/datasets/{dataset}/tables/guard/insertAll");
-				let got = call(google.client.post(url).bearer_auth(&google.token).json(&json!({"rows": rows})))?;
-				ensure!(got["insertErrors"].is_null(), "{}: recording the tick: {got}", seen.account);
 			}
 		}
 		_ => bail!("usage: guard tick [--dry-run] | read | plan <read.json>"),
 	}
+	match failed.as_slice() {
+		[] => Ok(()),
+		_ => bail!("{}", failed.iter().map(|e| format!("{e:#}")).collect::<Vec<_>>().join("\n")),
+	}
+}
+
+/// `acts` set at Google, then `rows` recorded beside the account's export.
+fn hold(google: &Google, read: &Read, seen: &Seen, rows: &[Row], acts: &[Act]) -> Result<()> {
+	for act in acts {
+		google.act(act).wrap_err_with(|| format!("{act:?}"))?;
+	}
+	let (project, dataset, _) = export(&seen.definition.held.table)?;
+	let list = seen.definition.digest();
+	let rows: Vec<Value> = rows
+		.iter()
+		.map(|r| {
+			let mut row = serde_json::to_value(r)?;
+			row["tick"] = json!(read.now.as_second());
+			row["list"] = json!(list);
+			Ok(json!({"json": row}))
+		})
+		.collect::<Result<_>>()?;
+	let url = format!("https://bigquery.googleapis.com/bigquery/v2/projects/{project}/datasets/{dataset}/tables/guard/insertAll");
+	let got = call(google.client.post(url).bearer_auth(&google.token).json(&json!({"rows": rows})))?;
+	ensure!(got["insertErrors"].is_null(), "recording the tick: {got}");
 	Ok(())
 }
 
@@ -116,12 +139,14 @@ struct Read {
 	now: Timestamp,
 	own: String,
 	services: BTreeMap<String, String>, // cappable id -> display name
+	exports: Vec<String>,               // every account's, read or not
 	accounts: Vec<Seen>,
 }
 
 #[derive(Deserialize, Serialize)]
 struct Seen {
 	account: String,
+	definition: Definition, // as the conductor last published it
 	billing: String,
 	usd: Option<f64>,                       // the account's currency per USD, off the export
 	projects: BTreeMap<String, u64>,        // linked and billed, id -> number
@@ -219,8 +244,8 @@ enum Class {
 }
 
 /// `api`'s class where its quotas do not decide it; `None`, they do.
-fn class(api: &str, account: &Account) -> Option<Class> {
-	if account.unguarded.iter().any(|u| u == api) {
+fn class(api: &str, hold: &Hold) -> Option<Class> {
+	if hold.unguarded.iter().any(|u| u == api) {
 		Some(Class::Unguarded)
 	} else if FREE.contains(&api) {
 		Some(Class::Free)
@@ -286,27 +311,26 @@ fn print(account: &str, rows: &[Row], acts: &[Act]) {
 	}
 }
 
-/// Every lever's setting, and what of it differs from what was read.
-fn plan(config: &Config, slices: &[Drawn], read: &Read) -> Result<Vec<(Vec<Row>, Vec<Act>)>> {
-	let pacific = TimeZone::get(PACIFIC)?;
-	let today = read.now.to_zoned(pacific).date();
-	// what the guard runs and reads through; capped, zeroed or disabled it would hold nothing
-	let mut inputs: BTreeSet<(&str, &str)> = OWN.iter().map(|api| (read.own.as_str(), *api)).collect();
-	for a in &config.accounts {
-		inputs.insert((a.export()?.0, EXPORT));
-	}
+/// Each account's levers' settings, and what of them differs from what was read.
+fn plan(read: &Read) -> Vec<Result<(Vec<Row>, Vec<Act>)>> {
 	read.accounts
 		.iter()
 		.map(|seen| {
-			let account = config
-				.accounts
-				.iter()
-				.find(|a| a.name == seen.account)
-				.ok_or_else(|| eyre!("{} read but not in config", seen.account))?;
+			let pacific = TimeZone::get(PACIFIC)?;
+			let today = read.now.to_zoned(pacific).date();
+			// what the guard runs and reads through; capped, zeroed or disabled it would hold nothing
+			let mut inputs: BTreeSet<(&str, &str)> = OWN.iter().map(|api| (read.own.as_str(), *api)).collect();
+			for table in &read.exports {
+				inputs.insert((export(table)?.0, EXPORT));
+			}
+			let definition = &seen.definition;
+			let account = &definition.held;
+			let slices = &sa_core::google::drawn(&definition.slices).map_err(|e| eyre!("{}: its slices: {}", seen.account, e.0))?;
+			account.hold.check(slices).map_err(|e| eyre!("{}: {}", seen.account, e.0))?;
 			// a category no slice is, a service no slice draws, is allowed no real money
 			let allow = |c: &str| {
 				if slices.iter().any(|s| s.name == c) {
-					account.allow[c]
+					account.hold.allow[c]
 				} else {
 					Allow { day: 0.0, month: 0.0 }
 				}
@@ -321,7 +345,7 @@ fn plan(config: &Config, slices: &[Drawn], read: &Read) -> Result<Vec<(Vec<Row>,
 			let enabled = |p: &str, api: &str| seen.enabled.get(p).is_some_and(|on| on.iter().any(|a| a == api));
 			let exposed: Vec<String> = inputs
 				.iter()
-				.filter(|(p, api)| seen.projects.contains_key(*p) && enabled(p, api) && !class(api, account).is_some_and(|c| c == Class::Unguarded || c == Class::Free))
+				.filter(|(p, api)| seen.projects.contains_key(*p) && enabled(p, api) && !class(api, &account.hold).is_some_and(|c| c == Class::Unguarded || c == Class::Free))
 				.map(|(p, api)| format!("{api} on {p}"))
 				.collect();
 			ensure!(
@@ -336,7 +360,7 @@ fn plan(config: &Config, slices: &[Drawn], read: &Read) -> Result<Vec<(Vec<Row>,
 				ensure!(seen.projects.contains_key(p), "{}: {p}'s APIs read, but it is not billed here", seen.account);
 				for api in apis {
 					let quoted = seen.quotas.iter().any(|q| &q.project == p && &q.api == api);
-					let c = class(api, account).unwrap_or(match () {
+					let c = class(api, &account.hold).unwrap_or(match () {
 						() if quoted && meters::pace(api).is_some() => Class::Metered,
 						() if quoted => Class::Quotad,
 						() => Class::Unheld,
@@ -697,7 +721,8 @@ impl Google {
 	}
 }
 
-fn read(google: &Google, config: &Config) -> Result<Read> {
+/// Every account of `exports` that reads whole; one that does not is in `failed`.
+fn read(google: &Google, exports: &[String], failed: &mut Vec<eyre::Report>) -> Result<Read> {
 	let now = Timestamp::now();
 	let pacific = TimeZone::get(PACIFIC)?;
 	let month = now.to_zoned(pacific.clone()).strftime("%Y%m").to_string();
@@ -711,10 +736,37 @@ fn read(google: &Google, config: &Config) -> Result<Read> {
 	ensure!(services.len() == CAPPABLE.len(), "the billing catalog lists {services:?} of the cappable services {CAPPABLE:?}");
 
 	let mut accounts = Vec::new();
-	for account in &config.accounts {
-		let (project, dataset, billing) = account.export()?;
-		let table = format!("{project}.{dataset}.gcp_billing_export_v1_{}", billing.replace('-', "_"));
+	for table in exports {
+		match seen(google, table, now, &month, day_began) {
+			Ok(s) => accounts.push(s),
+			Err(e) => failed.push(e.wrap_err(table.clone())),
+		}
+	}
+	Ok(Read {
+		now,
+		own: env::var("GUARD_PROJECT").wrap_err("GUARD_PROJECT")?,
+		services,
+		exports: exports.to_vec(),
+		accounts,
+	})
+}
+
+/// What a tick reads of the account exported to `table`.
+fn seen(google: &Google, table: &str, now: Timestamp, month: &str, day_began: Timestamp) -> Result<Seen> {
+	{
+		let (project, dataset, billing) = export(table)?;
 		let bq = BigQuery::with_token(google.token.clone(), project);
+		let published = bq.query(&format!("SELECT definition, digest FROM `{project}.{dataset}.definition` ORDER BY at DESC LIMIT 1"))?;
+		let [row] = published.as_slice() else {
+			bail!("the conductor has published no definition beside it: set its hold in the admin's meters card");
+		};
+		let definition: Definition = serde_json::from_str(text(&row[0])?).wrap_err("its definition, as published")?;
+		ensure!(
+			definition.digest() == text(&row[1])?,
+			"its definition does not hash to the digest published with it: the conductor's sa_core::google is not the guard's"
+		);
+		ensure!(definition.held.table == table, "its definition is {}'s", definition.held.table);
+		let account = &definition.held;
 
 		let mut projects = BTreeMap::new();
 		for p in google.list(&format!("https://cloudbilling.googleapis.com/v1/billingAccounts/{billing}/projects"), "projectBillingInfo")? {
@@ -818,7 +870,7 @@ fn read(google: &Google, config: &Config) -> Result<Read> {
 				.iter()
 				.map(|s| Ok(text(&s["config"]["name"])?.to_owned()))
 				.collect::<Result<_>>()?;
-			let open: Vec<&String> = apis.iter().filter(|api| class(api, account).is_none()).collect(); // held by their daily quotas, if any
+			let open: Vec<&String> = apis.iter().filter(|api| class(api, &account.hold).is_none()).collect(); // held by their daily quotas, if any
 			if !open.is_empty() {
 				let series = google.list(
 					&format!(
@@ -865,8 +917,9 @@ fn read(google: &Google, config: &Config) -> Result<Read> {
 			enabled.insert(p.clone(), apis);
 		}
 
-		accounts.push(Seen {
+		Ok(Seen {
 			account: account.name.clone(),
+			definition: definition.clone(),
 			billing,
 			usd,
 			projects,
@@ -876,14 +929,8 @@ fn read(google: &Google, config: &Config) -> Result<Read> {
 			drawn,
 			caps,
 			quotas,
-		});
+		})
 	}
-	Ok(Read {
-		now,
-		own: env::var("GUARD_PROJECT").wrap_err("GUARD_PROJECT")?,
-		services,
-		accounts,
-	})
 }
 
 fn urlencode(s: &str) -> String {

@@ -11,8 +11,9 @@ r[google.guarded]
 
 Every API enabled on a project billed to an account in `nix/google.nix` is either held by a lever
 the guard sets before spending happens, or named in that account's `unguarded`. Anything else is
-disabled by the guard. Each account names every slice's real money a day and a month (`allow`);
-one of all zeros spends only free units and credits.
+disabled by the guard. An account's hold, set by an admin, names every slice's real money a day and
+a month (`allow`); one of all zeros spends only free units and credits. An account without an export
+or a hold is used by nothing of ours.
 
 r[google.buy-as-user]
 

@@ -160,14 +160,12 @@ pub fn slices() -> Vec<sa_core::google::Slice> {
 pub fn account(name: &str, places: Option<&str>, browser: Option<&str>) -> sa_places::Account {
 	sa_places::Account {
 		name: name.to_owned(),
-		export: sa_places::Export {
+		export: Some(sa_places::Export {
 			table: format!("{name}.billing.export"),
 			reader: "{}".to_owned(),
 			since: jiff::civil::date(2026, 10, 1),
-		},
+		}),
 		credits: vec![],
-		allow: [(sa_core::meters::SLICE.to_owned(), sa_core::google::Allow { day: 0.0, month: 0.0 })].into(),
-		unguarded: vec![],
 		provides: sa_places::Provides {
 			places: places.map(|k| sa_places::Key { key: k.to_owned() }),
 			browser: browser.map(|k| sa_places::Key { key: k.to_owned() }),
@@ -241,6 +239,8 @@ pub struct Told {
 	pub net: i64,
 	pub through: Timestamp,
 	pub bill: crate::meters::Bill,
+	/// What was published beside its export, oldest first.
+	pub published: std::sync::Mutex<Vec<sa_core::google::Definition>>,
 }
 
 /// A database and a history migrated once per state of migrations/ and history_migrations/, shared by
@@ -313,5 +313,14 @@ impl crate::meters::Reader for Told {
 
 	async fn bill(&self, _: jiff::civil::Date) -> eyre::Result<crate::meters::Bill> {
 		Ok(self.bill.clone())
+	}
+
+	async fn published(&self, _: Timestamp) -> eyre::Result<Option<String>> {
+		Ok(self.published.lock().expect("never poisoned").last().map(sa_core::google::Definition::digest))
+	}
+
+	async fn publish(&self, definition: &sa_core::google::Definition, _: Timestamp) -> eyre::Result<()> {
+		self.published.lock().expect("never poisoned").push(definition.clone());
+		Ok(())
 	}
 }
