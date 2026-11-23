@@ -525,7 +525,7 @@
             });
             meta.description = "what the guard's tick would set now, setting nothing; args go to `guard` (tick, read, plan <read.json>)";
           };
-          # Idempotent: rerun after any change to crates/guard or nix/google.nix, as whoever owns each account's billing (gcloud's active login).
+          # Idempotent: rerun after any change to crates/guard or nix/google.nix, with every account's billing owner among gcloud's logins.
           guard-deploy = {
             type = "app";
             program = lib.getExe (pkgs.writeShellApplication {
@@ -546,6 +546,11 @@
                 # Per account: the billing account's budgets, caps and links; each billed project's quotas, usage and billing link; the export's dataset.
                 for t in $(jq -r '.accounts[].export.table' <<<"$config"); do
                   ds=''${t%.*} project=''${t%%.*} billing=$(sed -E 's/.*_v1_(\w{6})_(\w{6})_(\w{6})$/\1-\2-\3/' <<<"$t")
+                  owner=$(for a in $(gcloud auth list --format 'value(account)'); do
+                    if [ "$(CLOUDSDK_CORE_ACCOUNT=$a gcloud billing accounts describe "$billing" --format 'value(open)' 2>/dev/null)" = True ]; then echo "$a"; break; fi
+                  done)
+                  [ -n "$owner" ] || { echo "guard-deploy: $t: no gcloud login has its billing account $billing open" >&2; exit 1; }
+                  export CLOUDSDK_CORE_ACCOUNT=$owner # not --account: on `gcloud billing accounts` that flag takes the billing account's place
                   gcloud billing accounts add-iam-policy-binding "$billing" --member "serviceAccount:$SA" --role roles/billing.admin >/dev/null
                   for p in $(gcloud billing projects list --billing-account "$billing" --format 'value(projectId)'); do
                     for role in roles/billing.projectManager roles/cloudquotas.admin roles/serviceusage.serviceUsageViewer roles/monitoring.viewer roles/browser; do
@@ -555,14 +560,21 @@
                   gcloud projects add-iam-policy-binding "$project" --member "serviceAccount:$SA" --role roles/bigquery.jobUser --condition None >/dev/null
                   bq show "''${ds/./:}.guard" >/dev/null 2>&1 ||
                     bq mk --table "''${ds/./:}.guard" tick:INTEGER,account:STRING,category:STRING,project:STRING,lever:STRING,allow:FLOAT,real:FLOAT,setting:FLOAT,state:STRING,today:INTEGER,action:STRING,list:STRING
-                  bq add-iam-policy-binding --member "serviceAccount:$SA" --role roles/bigquery.dataEditor "''${ds/./:}" >/dev/null
+                  acl=$(mktemp) # the dataset's access list: its IAM policy "requires allowlisting"
+                  bq show --format=json "''${ds/./:}" | jq --arg sa "$SA" '{access: ((.access // []) + [{role: "WRITER", userByEmail: $sa}] | unique)}' >"$acl"
+                  bq update --source "$acl" "''${ds/./:}" >/dev/null
+                  rm "$acl"
                 done
+                unset CLOUDSDK_CORE_ACCOUNT
 
                 gcloud artifacts repositories describe guard --project "$P" --location "$R" >/dev/null 2>&1 ||
                   gcloud artifacts repositories create guard --project "$P" --location "$R" --repository-format docker
                 image="$R-docker.pkg.dev/$P/guard/guard:$(basename ${guardImage} | cut -c1-32)"
                 skopeo copy --dest-creds "oauth2accesstoken:$(gcloud auth print-access-token)" docker-archive:${guardImage} "docker://$image"
                 gcloud run jobs deploy guard --project "$P" --region "$R" --image "$image" --service-account "$SA" --max-retries 0 --task-timeout 300s
+                GUARD_CONFIG=$config GUARD_PROJECT=$P GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --impersonate-service-account="$SA") ${guard}/bin/guard tick --dry-run
+                read -rp "guard-deploy: the tick above is what goes live, now and every 15 minutes. Go? [y/N] " go
+                [ "$go" = y ] || { echo "guard-deploy: the job is deployed, nothing runs it" >&2; exit 1; }
                 run="https://run.googleapis.com/v2/projects/$P/locations/$R/jobs/guard:run"
                 if gcloud scheduler jobs describe guard --project "$P" --location "$R" >/dev/null 2>&1; then verb=update; else verb=create; fi
                 gcloud scheduler jobs "$verb" http guard --project "$P" --location "$R" --schedule '*/15 * * * *' \

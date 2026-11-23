@@ -10,7 +10,7 @@
       };
       # A credit's balance is the console's reading at `read`, less what the export brought in after it.
       credits = [
-        { id = "Starter:Credit-010027-EEDB26-C25F67"; name = "GCP Free Credit"; read = "2026-11-12T10:00:00Z"; left = 125.25; ends = "2027-01-13"; }
+        { id = "Starter:Credit-010027-EEDB26-C25F67"; name = "GCP Free Credit"; read = "2026-11-23T19:55:00Z"; left = 100.94; ends = "2027-01-13"; }
       ];
       allow = { }; # real money a month per slice, in the account's currency; a slice not named here is allowed none. Credits are always spent.
       # What its keys are for, each slot optional; secrets as `{ env = "…"; }` or `{ file = "…"; }`.
@@ -19,6 +19,28 @@
         browser = { key = { env = "GOOGLE_MAPS_BROWSER_KEY_EVINVEST"; }; }; # Maps JS, referrer-restricted
         # ads = { developer_token = …; client_id = …; client_secret = …; refresh_token = …; customer_id = "…"; };
       };
+    }
+    {
+      name = "v7916"; # v79166789533@gmail.com, its free trial over: reopened as a full account
+      export = {
+        table = "gmp-demo-project-985008120.billing.gcp_billing_export_v1_01AFF0_385455_2AC92F";
+        reader = { file = "~/.config/gcloud/v7916-reader.json"; }; # accounting-reader@gmp-demo-project-985008120
+        since = "2026-11-23";
+      };
+      credits = [ ];
+      allow = { };
+      provides.places = { key = { env = "GOOGLE_MAPS_KEY"; }; }; # Maps Platform Demo API Key: Places, Geocoding, Maps JS, Routes, YouTube
+    }
+    {
+      name = "icos1"; # 1cryptoicos@gmail.com
+      export = {
+        table = "gmp-demo-project-232535659.billing.gcp_billing_export_v1_PENDING"; # its billing account is not opened yet
+        reader = { file = "~/.config/gcloud/icos1-reader.json"; }; # accounting-reader@gmp-demo-project-232535659
+        since = "2026-11-23";
+      };
+      credits = [ ];
+      allow = { };
+      provides.places = { key = { env = "GOOGLE_MAPS_KEY_ICOS1"; }; }; # Maps Platform Demo API Key: Places, Geocoding, Maps JS, Routes
     }
   ];
 
