@@ -106,7 +106,7 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   --port-offset <n>: every port moved by n, beside the stack on the usual ones.
   --from-prod: prod's panel.db, sites_panel.db and review_archive.db from their litestream replicas
   (prod-restore, the keys from ../devops's sops), and review_archive's blobs over ssh (PROD_SSH, rsync into
-  .local-prod-blobs/, which --reset keeps), into a state with none of them; one with all of them keeps its copy.
+  result/prod-blobs/, which --reset keeps), into a state with none of them; one with all of them keeps its copy.
   Whatever the state's conductor holds of the queries cache that prod lacks goes to prod at start and at exit
   (queries-cache-sync).
   Dev sign-in is one user whatever --role (DEV_EMAIL, at the top of the script): prod's, when copied.
@@ -222,6 +222,9 @@ if [ "$fixed" = 1 ]; then
 			if [ -d "$c" ] && { [ -z "$prev" ] || [ "$c" -nt "$prev" ]; }; then prev="$c"; fi
 		done
 		[ -z "$prev" ] || { mkdir -p "$src/frontend/.next" && cp -a "$prev" "$src/frontend/.next/"; }
+		# directories as the checkout's: a build script's rerun-if-changed on one compares its mtime, which checksum-freshness leaves out
+		[ -n "$fixed_rev" ] || (cd "$src" && find . \( -path ./.git -o -path ./frontend/node_modules \) -prune -o -type d -print0) |
+			while IFS= read -rd '' d; do [ ! -d "$root/$d" ] || touch -r "$root/$d" "$src/$d"; done
 		touch "$src/.copied"
 	fi
 fi
@@ -248,7 +251,7 @@ busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 # peers over a state not its own. Each part's environment names its run's state (`export state` below), whose pid
 # file only a live run holds.
 # grep: exit 1 is no part left over, 2 a process of another user's or one gone meanwhile
-for s in $(grep -ahoz "^state=$root/\.local[^/]*$" /proc/[0-9]*/environ 2>/dev/null | tr '\0' '\n' | sort -u || true); do
+for s in $(grep -ahozE "^state=$root/(\.local|result/[^/]+)$" /proc/[0-9]*/environ 2>/dev/null | tr '\0' '\n' | sort -u || true); do
 	s="${s#state=}"
 	! kill -0 "$(cat "$s/pid" 2>/dev/null)" 2>/dev/null || continue
 	mapfile -t left < <(grep -lzx "state=$s" /proc/[0-9]*/environ 2>/dev/null | cut -d/ -f3 || true)
@@ -265,21 +268,48 @@ done
 if [ "$window" = 1 ]; then
 	range="${SA_PORT_RANGE:?$need}"
 	own_port=$((${range#*-} - 1))
-	while busy "$own_port" || busy "$((own_port + 1))" || kill -0 "$(cat "$root/.local-port-$own_port/pid" 2>/dev/null)" 2>/dev/null; do
+	while busy "$own_port" || busy "$((own_port + 1))" || kill -0 "$(cat "$root/result/port-$own_port/pid" 2>/dev/null)" 2>/dev/null; do
 		own_port=$((own_port - 2))
 		[ "$own_port" -ge "${range%-*}" ] || die "--fixed: no two free ports left in SA_PORT_RANGE $range"
 	done
 fi
 # a stack on other ports is another stack: its own databases, and its own review_archive serve.lock
 state="${LOCAL_STACK_DIR:-$root/.local}"
-[ "$offset" = 0 ] || state="${LOCAL_STACK_DIR:-$root/.local-$offset}"
+[ "$offset" = 0 ] || state="${LOCAL_STACK_DIR:-$root/result/offset-$offset}"
 # a conductor on a port of its own beside the usual one: never two on one panel.db
-[ -z "$own_port" ] || state="${LOCAL_STACK_DIR:-$root/.local-port-$own_port}"
+[ -z "$own_port" ] || state="${LOCAL_STACK_DIR:-$root/result/port-$own_port}"
+# What no live run holds goes: a port's state with its next dev dist, and the --fixed copies none serves but the newest, whose
+# Turbopack cache seeds the next copy. Untouched for 10 min: a run starting meanwhile has not written its pid file yet.
+holds() { ps -o args= -p "$(cat "$1/pid" 2>/dev/null)" 2>/dev/null | grep -q local-stack; }
+idle() { [ -z "$(find "$1" -maxdepth 0 -mmin -10)" ]; }
+served=" "
+for s in "$root"/.local/ "$root"/result/*/; do
+	s="${s%/}"
+	if holds "$s"; then
+		[ ! -e "$s/src" ] || served+="$(cat "$s/src") "
+	elif [[ "$s" == "$root"/result/port-* ]] && [ "$s" != "$state" ] && idle "$s"; then
+		say "removing $s: no run holds it"
+		rm -rf "$s" "$root/frontend/.next/port-${s##*port-}"
+	fi
+done
+newest=""
+for c in "$root"/.local/fixed/*/; do
+	if [ -d "$c" ] && { [ -z "$newest" ] || [ "$c" -nt "$newest" ]; }; then newest="$c"; fi
+done
+for c in "$root"/.local/fixed/*/; do
+	[ -d "$c" ] && [ "$c" != "$newest" ] || continue
+	c="${c%/}"
+	if [[ "$served" != *" $c "* ]] && [ "$c" != "$src" ] && idle "$c"; then
+		say "removing $c: no run serves it"
+		rm -rf "$c"
+	fi
+done
 if [ "$reset" = 1 ] && [ -d "$state" ]; then
 	say "--reset: wiping $state"
 	rm -rf "$state"
 fi
 mkdir -p "$state/logs" "$state/secrets"
+touch "$state" # claimed before its pid file, for the sweep above
 export STACK_TIMELINE="$state/timeline.tsv"
 : >"$STACK_TIMELINE"
 # Ignored by its own .gitignore: the repo's is generated, and this is nobody else's business.
@@ -484,7 +514,7 @@ if [ "$fixed" = 1 ] && [ "$from_prod" = 0 ] && [ "$state" != "$root/.local" ] &&
 fi
 # Beside the builds, waited on before the first reader. Under `timed`, so errexit is off: every step checked.
 prod_data() {
-	local cache="$root/.local-prod-blobs" volume c p pids=() failed=0 pairs=()
+	local cache="$root/result/prod-blobs" volume c p pids=() failed=0 pairs=()
 	mkdir -p "$REVIEW_ARCHIVE_DATA_DIR" "$cache"
 	printf '*\n' >"$cache/.gitignore"
 	for c in "${copies[@]}"; do pairs+=("${c#*:}=${c%%:*}"); done

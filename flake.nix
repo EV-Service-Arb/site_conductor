@@ -432,7 +432,7 @@
           config = "tests/e2e";
           env = localEnv;
           runtimeInputs = [ dev pkgs.procps pkgs.gnugrep ];
-          run = stackRun { state = "../.local-port-$FIGMA_STACK_PORT"; } ''exec node_modules/.bin/evinvest-figma-render -c tests/e2e/figma.config.ts --file ${figmaFile} "$@"'';
+          run = stackRun { state = "../result/port-$FIGMA_STACK_PORT"; } ''exec node_modules/.bin/evinvest-figma-render -c tests/e2e/figma.config.ts --file ${figmaFile} "$@"'';
         }).program;
         # The front end's behaviour over the same stack: every spec in frontend/tests/e2e but the renders.
         e2e = js.playwright {
@@ -441,7 +441,7 @@
           config = "tests/e2e";
           env = localEnv;
           runtimeInputs = [ dev pkgs.procps pkgs.gnugrep ];
-          run = stackRun { state = "../.local-port-$E2E_STACK_PORT"; } ''exec playwright test -c tests/e2e "$@"'';
+          run = stackRun { state = "../result/port-$E2E_STACK_PORT"; } ''exec playwright test -c tests/e2e "$@"'';
         };
         # In the devShell, not an app: built in another environment, every crate's fingerprint is stale.
         testTimeline = pkgs.writeShellApplication {

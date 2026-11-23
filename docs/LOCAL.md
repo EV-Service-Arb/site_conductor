@@ -31,7 +31,7 @@ nix run .#local-stack -- --reset --from-prod   # prod's data in place of a fresh
 nix run .#local-stack -- --no-sites    # the conductor and sites_panel, no landings
 nix run .#local-stack -- --role operator
 nix run .#local-stack -- --watch       # every part rebuilt and restarted as its checkout is edited
-nix run .#local-stack -- --port-offset <n>   # every port moved by n: a second stack, in .local-<n>/
+nix run .#local-stack -- --port-offset <n>   # every port moved by n: a second stack, in result/offset-<n>/
 nix run .#local-stack -- --spend-real-quota-i-am-certain   # buy the Google answers the caches lack, on real quota; never in tests
 ```
 
@@ -58,8 +58,9 @@ nix run .#dev -- --fixed [<rev>]   # nothing watched: the conductor as the check
 crates whose sources differ compile: cargo tells sources apart by checksum (`checksum-freshness`, .cargo/config.toml),
 and a build script's `rerun-if-changed` paths stay relative to its package. The front end is the copy's static export.
 The peers run unwatched from their checkouts. Without `--port` it takes the first free pair down from `SA_PORT_RANGE`'s
-top (52899–52900, then 52897–52898, …), with a state of its own (`.local-port-<n>`): it never replaces a watched dev,
-nor one another. Its state starts as a copy of `.local/`'s databases, keys and sessions;
+top (52899–52900, then 52897–52898, …), with a state of its own (`result/port-<n>`): it never replaces a watched dev,
+nor one another. Every run's start removes the `result/port-<n>` no live run holds (its pid file), untouched for 10 min,
+with its `frontend/.next/port-<n>`, and the `.local/fixed/` copies no live run serves but the newest. Its state starts as a copy of `.local/`'s databases, keys and sessions;
 when a migration `.local/panel.db` applied differs in the copy, a fresh state. Once up, it opens through `/auth/login` (dev
 sign-in) in the default browser (`xdg-open`); Ctrl-C stops it.
 
@@ -72,7 +73,7 @@ mounts — `devPeers` in flake.nix — each from its `_.siblings-local.json` che
 is skipped with a warning. `devUsers` in flake.nix gives a user (`id -un`) a `command` for a peer,
 run as is in its checkout in place of the stack's own serve, which must answer on the port its dev
 shell sets and watch by itself. `--port` takes two ports of
-`SA_PORT_RANGE` (docs/port_range.md) and a state of its own, `.local-port-<n>/`: two conductors
+`SA_PORT_RANGE` (docs/port_range.md) and a state of its own, `result/port-<n>/`: two conductors
 never share a `panel.db`. Next runs one `next dev` per `frontend/`: `--port` beside a dev stack of
 the same checkout fails to start its front end; run it from another checkout (a worktree). The concierge and banking bundles come from the platform's origin, so
 they are nobody's peer here.

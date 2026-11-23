@@ -44,7 +44,7 @@ export default stackConfig({
   stack: {
     argv: ["--port", String(E2E), "--role", "admin", "--no-peers"],
     env: { SA_CONDUCTOR_CONFIG: new URL("./conductor.nix", import.meta.url).pathname },
-    state: `${root}.local-port-${E2E}`,
+    state: `${root}result/port-${E2E}`,
     web: `http://localhost:${E2E + 1}`, // `next dev` refuses its dev resources to any other host, so the page never hydrates
     health: `http://127.0.0.1:${E2E}/health`,
     fresh: "watched",

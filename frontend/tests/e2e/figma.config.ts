@@ -7,7 +7,7 @@ export default stackConfig({
   stack: {
     argv: ["--port", String(panel), "--fixed", "--role", "admin"],
     env: {},
-    state: `${root}.local-port-${panel}`,
+    state: `${root}result/port-${panel}`,
     web: `http://localhost:${panel}`, // the sign-in sends the browser back to this origin
     health: `http://127.0.0.1:${panel}/health`,
     fresh: "fixed",
