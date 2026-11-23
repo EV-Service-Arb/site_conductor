@@ -7,6 +7,13 @@ A Google key or credential that bills on us is used only as a slot of an account
 by the guard. A gmail's own (its Maps key, its Business Profile client) bills on that gmail's
 project.
 
+r[google.guarded]
+
+Every API enabled on a project billed to an account in `nix/google.nix` is either held by a lever
+the guard sets before spending happens, or named in that account's `unguarded`. Anything else is
+disabled by the guard. Each account names every slice's real money a day and a month (`allow`);
+one of all zeros spends only free units and credits.
+
 r[google.buy-as-user]
 
 A Places request another service asks the conductor to buy is bought for the person whose User

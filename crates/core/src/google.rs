@@ -39,9 +39,15 @@ pub struct Slice {
 	pub name: String,
 	pub service: String,
 	pub sku: Option<String>,
-	/// APIs of the slice nothing of ours calls: held at no request a day.
-	#[serde(default)]
-	pub closed: Vec<String>,
+}
+
+/// Real money a slice may spend past free units and credits, in the account's currency.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize, schemars::JsonSchema)]
+pub struct Allow {
+	/// A Pacific day: Google's quota day.
+	pub day: f64,
+	/// A Pacific month: Google's billing month.
+	pub month: f64,
 }
 
 /// A [`Slice`], its regexes compiled.
@@ -50,7 +56,6 @@ pub struct Drawn {
 	pub name: String,
 	pub service: Regex,
 	pub sku: Option<Regex>,
-	pub closed: Vec<String>,
 }
 
 impl Drawn {
@@ -59,8 +64,9 @@ impl Drawn {
 	}
 }
 
-/// `slices` compiled, refused when a regex does not compile or an account's `allow` names no slice.
-pub fn drawn<'a>(slices: &[Slice], allows: impl IntoIterator<Item = (&'a str, &'a BTreeMap<String, f64>)>) -> Result<Vec<Drawn>, Invalid> {
+/// `slices` compiled, refused when a regex does not compile, no slice is [`crate::meters::SLICE`] while an account is
+/// listed, or an account's `allow` misses a slice, names one that is not, or holds a day past its month or no amount.
+pub fn drawn<'a>(slices: &[Slice], allows: impl IntoIterator<Item = (&'a str, &'a BTreeMap<String, Allow>)>) -> Result<Vec<Drawn>, Invalid> {
 	let regex = |s: &str| Regex::new(s).map_err(|e| Invalid::new(format!("a slice's regex {s:?}: {e}")));
 	let drawn = slices
 		.iter()
@@ -69,14 +75,24 @@ pub fn drawn<'a>(slices: &[Slice], allows: impl IntoIterator<Item = (&'a str, &'
 				name: s.name.clone(),
 				service: regex(&s.service)?,
 				sku: s.sku.as_deref().map(regex).transpose()?,
-				closed: s.closed.clone(),
 			})
 		})
 		.collect::<Result<Vec<_>, Invalid>>()?;
 	for (account, allow) in allows {
-		for k in allow.keys() {
+		if !drawn.iter().any(|s| s.name == crate::meters::SLICE) {
+			return Err(Invalid::new(format!("no slice is {:?}, which every meter falls in", crate::meters::SLICE)));
+		}
+		for s in &drawn {
+			if !allow.contains_key(&s.name) {
+				return Err(Invalid::new(format!("{account}: `allow` names no {:?}: each slice's day and month, 0 for none", s.name)));
+			}
+		}
+		for (k, a) in allow {
 			if !drawn.iter().any(|s| &s.name == k) {
 				return Err(Invalid::new(format!("{account}: `allow` names {k:?}, which is no slice")));
+			}
+			if !(a.day.is_finite() && a.month.is_finite() && 0.0 <= a.day && a.day <= a.month) {
+				return Err(Invalid::new(format!("{account}: `allow.{k}` is {a:?}: 0 <= day <= month")));
 			}
 		}
 	}
@@ -97,8 +113,10 @@ pub struct Held {
 	/// Usage before this day is not drawn.
 	pub since: Date,
 	pub credits: Vec<Credit>,
-	/// Real money a month per slice, in the account's currency; a slice not named, none.
-	pub allow: BTreeMap<String, f64>,
+	/// Every slice's.
+	pub allow: BTreeMap<String, Allow>,
+	/// APIs the guard leaves alone on its billed projects: spending with no lever but the backstop.
+	pub unguarded: Vec<String>,
 }
 
 /// The definition's secret-free part, hashed: two deploys of it (the conductor's and the guard's)

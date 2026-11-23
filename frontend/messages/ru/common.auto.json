@@ -3803,6 +3803,14 @@
     "en": "More",
     "t": "Ещё"
   },
+  "tokens.meters.allowance": {
+    "en": "today {today} of {day} · this month {month} of {perMonth}",
+    "t": "сегодня {today} из {day} · в этом месяце {month} из {perMonth}"
+  },
+  "tokens.meters.disabled": {
+    "en": "disabled",
+    "t": "отключено"
+  },
   "tokens.meters.near": {
     "en": "{p}% of free",
     "t": "{p}% бесплатных"
@@ -3810,6 +3818,22 @@
   "tokens.meters.never": {
     "en": "never read",
     "t": "никогда не читались"
+  },
+  "tokens.meters.noLever": {
+    "en": "no lever",
+    "t": "нет рычага"
+  },
+  "tokens.meters.otherList": {
+    "en": "holds another nix/google.nix",
+    "t": "находится в другом nix/google.nix"
+  },
+  "tokens.meters.over": {
+    "en": "over",
+    "t": "превышено"
+  },
+  "tokens.meters.requests": {
+    "en": "{n} today",
+    "t": "{n} сегодня"
   },
   "tokens.meters.spent": {
     "en": "{net} of {allow} {currency} net",
@@ -3827,9 +3851,17 @@
     "en": "stops at free",
     "t": "стоп на бесплатных"
   },
+  "tokens.meters.tick": {
+    "en": "guard's tick {at}",
+    "t": "тик стража {at}"
+  },
   "tokens.meters.title": {
     "en": "Vendors this month",
     "t": "Поставщики в этом месяце"
+  },
+  "tokens.meters.unguardedYet": {
+    "en": "{name}: the guard never ticked here",
+    "t": "{name}: страж здесь ещё ни разу не срабатывал"
   },
   "tokens.meters.unread": {
     "en": "{n} not read lately",

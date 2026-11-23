@@ -13,8 +13,10 @@ pub struct Account {
 	pub export: Export,
 	/// Each credit's balance, as the console read it.
 	pub credits: Vec<sa_core::google::Credit>,
-	/// Money a month past its free units and credits per slice, in its currency; a slice not named, none.
-	pub allow: BTreeMap<String, f64>,
+	/// Every slice's real money past its free units and credits, in its currency.
+	pub allow: BTreeMap<String, sa_core::google::Allow>,
+	/// APIs the guard leaves alone (`sa_core::google::Held::unguarded`).
+	pub unguarded: Vec<String>,
 	pub provides: Provides,
 }
 
@@ -27,6 +29,7 @@ impl Account {
 			since: self.export.since,
 			credits: self.credits.clone(),
 			allow: self.allow.clone(),
+			unguarded: self.unguarded.clone(),
 		}
 	}
 }
@@ -93,10 +96,6 @@ impl Accounts {
 		let drawn = sa_core::google::drawn(&slices, accounts.iter().map(|a| (a.name.as_str(), &a.allow))).unwrap_or_else(|e| panic!("the Google accounts' slices: {}", e.0));
 		for (i, a) in accounts.iter().enumerate() {
 			assert!(!a.name.is_empty(), "a Google account without a name");
-			for (slice, allow) in &a.allow {
-				assert!(*allow >= 0.0, "{}'s allow of {slice} is {allow}", a.name);
-				assert!(allow.is_finite(), "{}'s allow of {slice} is {allow}", a.name);
-			}
 			let earlier = &accounts[..i];
 			assert!(earlier.iter().all(|e| e.name != a.name), "the Google account {} is listed twice", a.name);
 			for key in [a.provides.places.as_deref(), a.provides.browser.as_deref()].into_iter().flatten() {

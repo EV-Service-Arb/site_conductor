@@ -275,7 +275,10 @@ impl Reader for Google {
 				let guard = format!("`{}.guard`", table.rsplit_once('.').expect("checked when made: project.dataset.table").0);
 				let rows = self
 					.query(
-						&format!("SELECT tick, category, project, lever, allow, real, setting, state, today, action, list FROM {guard} WHERE tick = (SELECT MAX(tick) FROM {guard})"),
+						&format!(
+							"SELECT tick, category, project, lever, allow_day, allow_month, real_day, real_month, setting, state, today, action, list FROM {guard} \
+							 WHERE tick = (SELECT MAX(tick) FROM {guard})"
+						),
 						json!([]),
 						now,
 					)
@@ -285,16 +288,18 @@ impl Reader for Google {
 						.map(|r| {
 							Ok(Lever {
 								tick: Timestamp::from_second(string(&r[0], "a tick")?.parse().wrap_err("the guard's tick")?)?,
-								slice: string(&r[1], "a slice")?,
+								slice: r[1].as_str().map(str::to_owned),
 								project: r[2].as_str().map(str::to_owned),
 								lever: string(&r[3], "a lever")?,
-								allow: opt_f64(&r[4], "an allow")?,
-								real: opt_f64(&r[5], "real money")?,
-								setting: opt_f64(&r[6], "a setting")?,
-								state: r[7].as_str().map(str::to_owned),
-								today: r[8].as_str().map(str::parse).transpose().wrap_err("the guard's today")?,
-								action: r[9].as_str().map(str::to_owned),
-								list: r[10].as_str().map(str::to_owned),
+								allow_day: opt_f64(&r[4], "a day's allow")?,
+								allow_month: opt_f64(&r[5], "a month's allow")?,
+								real_day: opt_f64(&r[6], "real money today")?,
+								real_month: opt_f64(&r[7], "real money this month")?,
+								setting: opt_f64(&r[8], "a setting")?,
+								state: r[9].as_str().map(str::to_owned),
+								today: r[10].as_str().map(str::parse).transpose().wrap_err("the guard's today")?,
+								action: r[11].as_str().map(str::to_owned),
+								list: r[12].as_str().map(str::to_owned),
 							})
 						})
 						.collect::<eyre::Result<_>>()?,

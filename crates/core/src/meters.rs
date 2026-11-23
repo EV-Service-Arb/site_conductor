@@ -92,12 +92,11 @@ metered! {
 	Google "DCD1-FE97-8C71" "Places API Place Details Photos" on "places.googleapis.com", 1000 free then 7000, Never;
 }
 
-/// How the meters on `api` that only count (a stop at free is the conductor's to hold) pace it a
-/// month: their least free units, and their dearest list price past them (micro-USD); `None`,
-/// nothing of ours counts on it.
+/// How every meter on `api` paces it a month: their least free units, and their dearest list price
+/// past them (micro-USD); `None`, no meter is on it. A request through `api` may be any of its SKUs.
 pub fn pace(api: &str) -> Option<(i64, i64)> {
-	let counted = || ALL.iter().filter(|m| m.api == api && m.stop == Stop::Never);
-	Some((counted().map(|m| m.free).min()?, counted().map(|m| m.price).max()?))
+	let on = || ALL.iter().filter(|m| m.api == api);
+	Some((on().map(|m| m.free).min()?, on().map(|m| m.price).max()?))
 }
 
 impl fmt::Display for Meter {

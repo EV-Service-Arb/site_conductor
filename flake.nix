@@ -553,13 +553,13 @@
                   export CLOUDSDK_CORE_ACCOUNT=$owner # not --account: on `gcloud billing accounts` that flag takes the billing account's place
                   gcloud billing accounts add-iam-policy-binding "$billing" --member "serviceAccount:$SA" --role roles/billing.admin >/dev/null
                   for p in $(gcloud billing projects list --billing-account "$billing" --format 'value(projectId)'); do
-                    for role in roles/billing.projectManager roles/cloudquotas.admin roles/serviceusage.serviceUsageViewer roles/monitoring.viewer roles/browser; do
+                    for role in roles/billing.projectManager roles/cloudquotas.admin roles/serviceusage.serviceUsageAdmin roles/monitoring.viewer roles/browser; do
                       gcloud projects add-iam-policy-binding "$p" --member "serviceAccount:$SA" --role "$role" --condition None >/dev/null
                     done
                   done
                   gcloud projects add-iam-policy-binding "$project" --member "serviceAccount:$SA" --role roles/bigquery.jobUser --condition None >/dev/null
                   bq show "''${ds/./:}.guard" >/dev/null 2>&1 ||
-                    bq mk --table "''${ds/./:}.guard" tick:INTEGER,account:STRING,category:STRING,project:STRING,lever:STRING,allow:FLOAT,real:FLOAT,setting:FLOAT,state:STRING,today:INTEGER,action:STRING,list:STRING
+                    bq mk --table "''${ds/./:}.guard" tick:INTEGER,account:STRING,category:STRING,project:STRING,lever:STRING,allow_day:FLOAT,allow_month:FLOAT,real_day:FLOAT,real_month:FLOAT,setting:FLOAT,state:STRING,today:INTEGER,action:STRING,list:STRING
                   acl=$(mktemp) # the dataset's access list: its IAM policy "requires allowlisting"
                   bq show --format=json "''${ds/./:}" | jq --arg sa "$SA" '{access: ((.access // []) + [{role: "WRITER", userByEmail: $sa}] | unique)}' >"$acl"
                   bq update --source "$acl" "''${ds/./:}" >/dev/null

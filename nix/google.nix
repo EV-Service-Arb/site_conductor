@@ -1,4 +1,4 @@
-# Every Google billing account a key or credential of ours is on (docs/spec/google.md): read off its BigQuery billing export by the conductor's meters, held to `allow` by the guard (crates/guard), and the conductor's config for what it `provides`.
+# Every Google billing account a key or credential of ours is on (docs/spec/google.md): read off its BigQuery billing export by the conductor's meters, held to `allow` and `unguarded` by the guard (crates/guard), and the conductor's config for what it `provides`.
 {
   accounts = [
     {
@@ -12,7 +12,17 @@
       credits = [
         { id = "Starter:Credit-010027-EEDB26-C25F67"; name = "GCP Free Credit"; read = "2026-11-23T19:55:00Z"; left = 100.94; ends = "2027-01-13"; }
       ];
-      allow = { }; # real money a month per slice, in the account's currency; a slice not named here is allowed none. Credits are always spent.
+      # Real money per slice past free units and credits, in the account's currency, a Pacific day's and month's; every slice named, 0 for none. Credits are always spent.
+      allow = { "video generation" = { day = 0; month = 0; }; LLM = { day = 0; month = 0; }; maps = { day = 0; month = 0; }; };
+      # APIs on its billed projects the guard leaves alone: no lever but the backstop. Filled from its dry run (`nix run .#guard`), never guessed.
+      unguarded = [
+        # what the guard runs and reads through on its own project
+        "artifactregistry.googleapis.com"
+        "bigquery.googleapis.com"
+        "cloudscheduler.googleapis.com"
+        "monitoring.googleapis.com"
+        "run.googleapis.com"
+      ];
       # What its keys are for, each slot optional; secrets as `{ env = "…"; }` or `{ file = "…"; }`.
       provides = {
         places = { key = { env = "GOOGLE_MAPS_KEY_EVINVEST"; }; }; # Places, Geocoding
@@ -28,7 +38,8 @@
         since = "2026-11-23";
       };
       credits = [ ];
-      allow = { };
+      allow = { "video generation" = { day = 0; month = 0; }; LLM = { day = 0; month = 0; }; maps = { day = 0; month = 0; }; };
+      unguarded = [ ];
       provides.places = { key = { env = "GOOGLE_MAPS_KEY"; }; }; # Maps Platform Demo API Key: Places, Geocoding, Maps JS, Routes, YouTube
     }
     {
@@ -39,7 +50,8 @@
         since = "2026-11-23";
       };
       credits = [ ];
-      allow = { };
+      allow = { "video generation" = { day = 0; month = 0; }; LLM = { day = 0; month = 0; }; maps = { day = 0; month = 0; }; };
+      unguarded = [ ];
       provides.places = { key = { env = "GOOGLE_MAPS_KEY_ICOS1"; }; }; # Maps Platform Demo API Key: Places, Geocoding, Maps JS, Routes
     }
   ];
@@ -48,11 +60,7 @@
   slices = [
     { name = "video generation"; service = "^Vertex AI$"; sku = "(?i)veo|omni"; }
     { name = "LLM"; service = "^Vertex AI$|^Gemini API$"; }
-    # Maps takes no spend cap: the guard holds its APIs to daily quotas, off sa_core::meters (their free units and list prices).
-    {
-      name = "maps";
-      service = "(?i)maps|places|geocoding|directions|routes|distance matrix|street view";
-      closed = [ "routes.googleapis.com" "static-maps-backend.googleapis.com" ]; # nothing of ours calls them: no request a day
-    }
+    # Maps takes no spend cap: the guard holds its metered APIs to daily quotas, off sa_core::meters (their free units and list prices), and every other one with daily quotas at none.
+    { name = "maps"; service = "(?i)maps|places|geocoding|directions|routes|distance matrix|street view"; }
   ];
 }

@@ -1,89 +1,118 @@
 == credits left, nothing allowed: Vertex in use takes every credit; nothing capped yet
-a	Cloud Run functions	p	cap: Cloud Run functions	allow -	real -	set 0.00	is -
-a	LLM	p	cap: Gemini API	allow -	real -	set 0.00	is -
-a	video generation	p	cap: Vertex AI	allow -	real -	set 100.00	is -
-a	LLM	p	cap: Vertex AI	allow -	real -	set 100.00	is -
-a	Cloud Run	q	cap: Cloud Run	allow -	real -	set 0.00	is -
-a	Cloud Run functions	q	cap: Cloud Run functions	allow -	real -	set 0.00	is -
-a	LLM	q	cap: Gemini API	allow -	real -	set 0.00	is -
-a	video generation	q	cap: Vertex AI	allow -	real -	set 0.00	is -
-a	LLM	q	cap: Vertex AI	allow -	real -	set 0.00	is -
-a	LLM	-	real money	allow 0.00	real 0.00	set -	is within
-a	maps	-	real money	allow 0.00	real 0.00	set -	is within
-a	video generation	-	real money	allow 0.00	real 0.00	set -	is within
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "29E7-DA93-CA13", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "AEFD-7695-64FA", amount: 0.0 }
+a	-	p	unguarded: bigquery.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	free: iam.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	q	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	video generation	p	cap: Vertex AI	allow -/-	real -/-	set 100.00	is -
+a	LLM	p	cap: Vertex AI	allow -/-	real -/-	set 100.00	is -
+a	video generation	q	cap: Vertex AI	allow -/-	real -/-	set 0.00	is -
+a	LLM	q	cap: Vertex AI	allow -/-	real -/-	set 0.00	is -
+a	Cloud Run functions	q	cap: Cloud Run functions	allow -/-	real -/-	set 0.00	is -
+a	LLM	q	cap: Gemini API	allow -/-	real -/-	set 0.00	is -
+a	LLM	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	maps	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	video generation	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
 a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "C7E2-9256-1C43", amount: 100.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "152E-C115-5142", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 0.0 }
 a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "29E7-DA93-CA13", amount: 0.0 }
 a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "AEFD-7695-64FA", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 0.0 }
 == credits ending tomorrow count as gone: caps fall to what was spent
-a	Cloud Run functions	p	cap: Cloud Run functions	allow -	real -	set 0.00	is -
-a	LLM	p	cap: Gemini API	allow -	real -	set 0.00	is -
-a	video generation	p	cap: Vertex AI	allow -	real -	set 40.00	is CONFIGURED
-a	LLM	p	cap: Vertex AI	allow -	real -	set 40.00	is CONFIGURED
-a	Cloud Run	q	cap: Cloud Run	allow -	real -	set 0.00	is -
-a	Cloud Run functions	q	cap: Cloud Run functions	allow -	real -	set 0.00	is -
-a	LLM	q	cap: Gemini API	allow -	real -	set 0.00	is -
-a	video generation	q	cap: Vertex AI	allow -	real -	set 0.00	is -
-a	LLM	q	cap: Vertex AI	allow -	real -	set 0.00	is -
-a	LLM	-	real money	allow 0.00	real 0.00	set -	is within
-a	maps	-	real money	allow 0.00	real 0.00	set -	is within
-a	video generation	-	real money	allow 0.00	real 0.00	set -	is within
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "29E7-DA93-CA13", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "AEFD-7695-64FA", amount: 0.0 }
+a	-	p	unguarded: bigquery.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	free: iam.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	q	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	video generation	p	cap: Vertex AI	allow -/-	real -/-	set 40.00	is CONFIGURED
+a	LLM	p	cap: Vertex AI	allow -/-	real -/-	set 40.00	is CONFIGURED
+a	video generation	q	cap: Vertex AI	allow -/-	real -/-	set 0.00	is -
+a	LLM	q	cap: Vertex AI	allow -/-	real -/-	set 0.00	is -
+a	Cloud Run functions	q	cap: Cloud Run functions	allow -/-	real -/-	set 0.00	is -
+a	LLM	q	cap: Gemini API	allow -/-	real -/-	set 0.00	is -
+a	LLM	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	maps	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	video generation	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
 a	Set { name: "billingAccounts/x/budgets/v", amount: 40.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "152E-C115-5142", amount: 0.0 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 0.0 }
 a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "29E7-DA93-CA13", amount: 0.0 }
 a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "AEFD-7695-64FA", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 0.0 }
 == an enforced cap whose allowance was raised is lifted, then set
-a	Cloud Run functions	p	cap: Cloud Run functions	allow -	real -	set 0.00	is -
-a	LLM	p	cap: Gemini API	allow -	real -	set 0.00	is -
-a	video generation	p	cap: Vertex AI	allow -	real -	set 45.00	is ENFORCED
-a	LLM	p	cap: Vertex AI	allow -	real -	set 45.00	is ENFORCED
-a	Cloud Run	q	cap: Cloud Run	allow -	real -	set 0.00	is -
-a	Cloud Run functions	q	cap: Cloud Run functions	allow -	real -	set 0.00	is -
-a	LLM	q	cap: Gemini API	allow -	real -	set 0.00	is -
-a	video generation	q	cap: Vertex AI	allow -	real -	set 5.00	is -
-a	LLM	q	cap: Vertex AI	allow -	real -	set 5.00	is -
-a	LLM	-	real money	allow 0.00	real 0.00	set -	is within
-a	maps	-	real money	allow 0.00	real 0.00	set -	is within
-a	video generation	-	real money	allow 10.00	real 0.05	set -	is within
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "29E7-DA93-CA13", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "AEFD-7695-64FA", amount: 0.0 }
+a	-	p	unguarded: bigquery.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	free: iam.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	q	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	video generation	p	cap: Vertex AI	allow -/-	real -/-	set 44.97	is ENFORCED
+a	LLM	p	cap: Vertex AI	allow -/-	real -/-	set 44.97	is ENFORCED
+a	video generation	q	cap: Vertex AI	allow -/-	real -/-	set 4.97	is -
+a	LLM	q	cap: Vertex AI	allow -/-	real -/-	set 4.97	is -
+a	Cloud Run functions	q	cap: Cloud Run functions	allow -/-	real -/-	set 0.00	is -
+a	LLM	q	cap: Gemini API	allow -/-	real -/-	set 0.00	is -
+a	LLM	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	maps	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	video generation	-	real money	allow 10.00/10.00	real 0.00/0.05	set -	is within
 a	Lift { name: "billingAccounts/x/budgets/v" }
-a	Set { name: "billingAccounts/x/budgets/v", amount: 45.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "152E-C115-5142", amount: 0.0 }
+a	Set { name: "billingAccounts/x/budgets/v", amount: 44.97 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 4.97 }
 a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "29E7-DA93-CA13", amount: 0.0 }
 a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "AEFD-7695-64FA", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 5.0 }
-== maps: the meters' free units and what 10 buys, a day; an API nothing calls, none; real money past the allowance unlinks
-a	Cloud Run functions	p	cap: Cloud Run functions	allow -	real -	set 0.00	is -
-a	LLM	p	cap: Gemini API	allow -	real -	set 0.00	is -
-a	video generation	p	cap: Vertex AI	allow -	real -	set 0.00	is -
-a	LLM	p	cap: Vertex AI	allow -	real -	set 0.00	is -
-a	Cloud Run	q	cap: Cloud Run	allow -	real -	set 0.00	is -
-a	Cloud Run functions	q	cap: Cloud Run functions	allow -	real -	set 0.00	is -
-a	LLM	q	cap: Gemini API	allow -	real -	set 0.00	is -
-a	video generation	q	cap: Vertex AI	allow -	real -	set 0.00	is -
-a	LLM	q	cap: Vertex AI	allow -	real -	set 0.00	is -
-a	maps	q	quota: geocoding-backend.googleapis.com GeocodingPerDay	allow -	real -	set 394.00	is -1
-a	maps	q	quota: routes.googleapis.com ComputeRoutesPerDay	allow -	real -	set 0.00	is 32
-a	BigQuery	-	real money	allow 0.00	real 0.01	set -	is within
-a	LLM	-	real money	allow 0.00	real 0.00	set -	is within
-a	maps	-	real money	allow 10.00	real 10.50	set -	is over
-a	video generation	-	real money	allow 0.00	real 0.00	set -	is within
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "29E7-DA93-CA13", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "AEFD-7695-64FA", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "C7E2-9256-1C43", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "152E-C115-5142", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "29E7-DA93-CA13", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "AEFD-7695-64FA", amount: 0.0 }
-a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 0.0 }
-a	Quota { project: "q", api: "geocoding-backend.googleapis.com", id: "GeocodingPerDay", value: 394 }
+== a metered API at allow 0 holds every SKU through it in its free units: the least-free paces it; an unpriced quota'd API, 0
+a	-	p	unguarded: bigquery.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	maps	q	quota: maps-backend.googleapis.com MapLoadsPerDay	allow -/-	real -/-	set 161.00	is -1
+a	maps	q	quota: places.googleapis.com SearchTextRequestPerDay	allow -/-	real -/-	set 16.00	is -1
+a	maps	q	quota: places.googleapis.com GetPlaceRequestPerDay	allow -/-	real -/-	set 16.00	is 50
+a	-	q	quota: routes.googleapis.com ComputeRoutesPerDay	allow -/-	real -/-	set 0.00	is 32
+a	LLM	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	maps	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	video generation	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	Quota { project: "q", api: "maps-backend.googleapis.com", id: "MapLoadsPerDay", value: 161 }
+a	Quota { project: "q", api: "places.googleapis.com", id: "SearchTextRequestPerDay", value: 16 }
+a	Quota { project: "q", api: "places.googleapis.com", id: "GetPlaceRequestPerDay", value: 16 }
 a	Quota { project: "q", api: "routes.googleapis.com", id: "ComputeRoutesPerDay", value: 0 }
+== a day's allowance below its month's: the cap and the quota hold what is left of the day
+a	-	p	unguarded: bigquery.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	video generation	p	cap: Vertex AI	allow -/-	real -/-	set 0.25	is -
+a	LLM	p	cap: Vertex AI	allow -/-	real -/-	set 0.25	is -
+a	video generation	q	cap: Vertex AI	allow -/-	real -/-	set 20.25	is -
+a	LLM	q	cap: Vertex AI	allow -/-	real -/-	set 20.25	is -
+a	maps	q	quota: places.googleapis.com SearchTextRequestPerDay	allow -/-	real -/-	set 53.00	is -1
+a	LLM	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	maps	-	real money	allow 1.00/30.00	real 0.40/0.40	set -	is within
+a	video generation	-	real money	allow 2.00/10.00	real 1.50/3.00	set -	is within
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "p", number: 1, service: "C7E2-9256-1C43", amount: 0.25 }
+a	Create { billing: "000000-AAAAAA-BBBBBB", project: "q", number: 2, service: "C7E2-9256-1C43", amount: 20.25 }
+a	Quota { project: "q", api: "places.googleapis.com", id: "SearchTextRequestPerDay", value: 53 }
+== the backstop: real money past a slice's month, or its day, unlinks the projects it spent in
+a	-	p	unguarded: bigquery.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	BigQuery	-	real money	allow 0.00/0.00	real 0.01/0.01	set -	is within
+a	LLM	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	maps	-	real money	allow 10.00/10.00	real 0.00/10.50	set -	is over
+a	video generation	-	real money	allow 1.00/100.00	real 1.20/1.20	set -	is over
 a	Unlink { project: "q" }
+== an enabled API no class holds is disabled; Google's free ones are let be
+a	-	p	unguarded: bigquery.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	free: iam.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	q	free: serviceusage.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	q	disable: weather.googleapis.com	allow -/-	real -/-	set -	is -
+a	LLM	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	maps	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	video generation	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	Disable { project: "q", api: "weather.googleapis.com" }
+== the same API named in unguarded is left alone, its quotas too
+a	-	p	unguarded: bigquery.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	free: iam.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	p	unguarded: run.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	q	free: serviceusage.googleapis.com	allow -/-	real -/-	set -	is -
+a	-	q	unguarded: weather.googleapis.com	allow -/-	real -/-	set -	is -
+a	LLM	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	maps	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+a	video generation	-	real money	allow 0.00/0.00	real 0.00/0.00	set -	is within
+== the guard's own Cloud Run not in unguarded: refused, nothing set
+Error: a: the guard runs or reads through run.googleapis.com on p, which it must never cap, zero or disable: name each in the account's `unguarded`
+== BigQuery on an export's project not in unguarded: refused, nothing set
+Error: a: the guard runs or reads through bigquery.googleapis.com on p, which it must never cap, zero or disable: name each in the account's `unguarded`
+== a slice missing from allow: the config refused
+Error: nix/google.nix: a: `allow` names no "LLM": each slice's day and month, 0 for none
 == a credit drawn that nix/google.nix does not name stops the tick
 Error: a: the export draws on credits ["c2"] with no `credits` entry in nix/google.nix

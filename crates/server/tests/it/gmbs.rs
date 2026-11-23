@@ -109,7 +109,7 @@ async fn panel(db: &TestDb, base: Option<&str>) -> Panel {
 	};
 	let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 	let accounts = base.map(|_| vec![sa_panel::testing::account("house", Some("k"), None)]).unwrap_or_default();
-	let p = panel_on(store, key, google, sa_places::Accounts::new(accounts, vec![]));
+	let p = panel_on(store, key, google, sa_places::Accounts::new(accounts, sa_panel::testing::slices()));
 	// what a point costs is tests/connections.rs's
 	sa_panel::testing::priced(&p, &[PlacesRequest::Details, PlacesRequest::Search, PlacesRequest::Autocomplete].map(|r| (Item::Places(r), 0))).await;
 	p
@@ -423,7 +423,7 @@ async fn the_map_is_told_only_when_configured() {
 		let key = DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap();
 		let store = db.store().await;
 		let keyless = Google::try_new(Keys::new(vec![]), Arc::new(sa_places::InOrder), Arc::new(store.clone())).unwrap();
-		let app = app(panel_on(store, key, keyless, sa_places::Accounts::new(accounts, vec![])), admin());
+		let app = app(panel_on(store, key, keyless, sa_places::Accounts::new(accounts, sa_panel::testing::slices())), admin());
 		let mut b = Browser::default();
 		b.sign_in(&app).await;
 		assert_eq!(call(&mut b, &app, Method::GET, "/api/v1/map", None).await, want);

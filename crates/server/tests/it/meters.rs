@@ -51,7 +51,6 @@ impl World {
 			name: sa_core::meters::SLICE.to_owned(),
 			service: "(?i)maps|places|geocoding|street view".to_owned(),
 			sku: None,
-			closed: vec![],
 		};
 		let panel = panel_on(store, key, keyless, Accounts::new(accounts, vec![maps]));
 		let empty = Export {
@@ -163,10 +162,10 @@ impl World {
 	}
 }
 
-/// An account with both keys, `allow` a month past its free units.
+/// An account with both keys, `allow` a day and a month past its free units.
 fn both(name: &str, allow: f64) -> Account {
 	Account {
-		allow: [("maps".to_owned(), allow)].into(),
+		allow: [("maps".to_owned(), sa_core::google::Allow { day: allow, month: allow })].into(),
 		..account(name, Some(&format!("places-{name}")), Some(&format!("browser-{name}")))
 	}
 }
@@ -348,11 +347,13 @@ fn bill(day: &str, credit_micros: i64, guard: Option<Vec<Lever>>) -> Bill {
 fn real_money(list: &str) -> Lever {
 	Lever {
 		tick: Timestamp::now(),
-		slice: sa_core::meters::SLICE.to_owned(),
+		slice: Some(sa_core::meters::SLICE.to_owned()),
 		project: None,
 		lever: "real money".to_owned(),
-		allow: Some(0.0),
-		real: Some(0.0),
+		allow_day: Some(0.0),
+		allow_month: Some(0.0),
+		real_day: Some(0.0),
+		real_month: Some(0.0),
 		setting: None,
 		state: Some("within".to_owned()),
 		today: None,
@@ -401,7 +402,18 @@ async fn an_accounts_bill_is_read_whole_by_slice_with_its_credits_and_the_guards
 		"before a read: {never}"
 	);
 
-	sync(&w, bill("2026-11-10", -7_000_000, Some(vec![real_money(&digest)]))).await;
+	let unguarded = Lever {
+		slice: None,
+		project: Some("p".to_owned()),
+		lever: "unguarded: bigquery.googleapis.com".to_owned(),
+		allow_day: None,
+		allow_month: None,
+		real_day: None,
+		real_month: None,
+		state: None,
+		..real_money(&digest)
+	};
+	sync(&w, bill("2026-11-10", -7_000_000, Some(vec![real_money(&digest), unguarded]))).await;
 	let a = read(&mut w).await;
 	assert_eq!(
 		(a["credits"][0]["left"].as_f64(), a["credits"][0]["binds"].as_str()),
@@ -409,6 +421,11 @@ async fn an_accounts_bill_is_read_whole_by_slice_with_its_credits_and_the_guards
 		"less what was drawn since the console's reading: {a}"
 	);
 	assert_eq!((&a["allowances"][0]["slice"], &a["guard"]["holds_this_list"]), (&json!("maps"), &json!(true)), "{a}");
+	assert_eq!(
+		(&a["guard"]["unguarded"], &a["guard"]["disabled"], &a["allowances"][0]["levers"]),
+		(&json!([{ "project": "p", "api": "bigquery.googleapis.com" }]), &json!([]), &json!([])),
+		"an API the guard leaves alone is the account's, not a slice's lever: {a}"
+	);
 	let window = format!(
 		"/api/v1/admin/meters/bill?from={}&to={}",
 		(now - SignedDuration::from_hours(24 * 60)).as_millisecond(),

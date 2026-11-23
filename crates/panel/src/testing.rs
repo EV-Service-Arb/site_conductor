@@ -147,6 +147,15 @@ pub fn panel_on(store: Store, key: DataKey, google: sa_places::Google, accounts:
 	Panel::new(store, key, renewal, google, Arc::new(accounts))
 }
 
+/// What every [`account`] names its `allow` of: the meters' slice alone.
+pub fn slices() -> Vec<sa_core::google::Slice> {
+	vec![sa_core::google::Slice {
+		name: sa_core::meters::SLICE.to_owned(),
+		service: "(?i)maps|places|geocoding".to_owned(),
+		sku: None,
+	}]
+}
+
 /// An account of `name` with only the keys given, free units only, its export never read.
 pub fn account(name: &str, places: Option<&str>, browser: Option<&str>) -> sa_places::Account {
 	sa_places::Account {
@@ -157,7 +166,8 @@ pub fn account(name: &str, places: Option<&str>, browser: Option<&str>) -> sa_pl
 			since: jiff::civil::date(2026, 10, 1),
 		},
 		credits: vec![],
-		allow: Default::default(),
+		allow: [(sa_core::meters::SLICE.to_owned(), sa_core::google::Allow { day: 0.0, month: 0.0 })].into(),
+		unguarded: vec![],
 		provides: sa_places::Provides {
 			places: places.map(|k| sa_places::Key { key: k.to_owned() }),
 			browser: browser.map(|k| sa_places::Key { key: k.to_owned() }),

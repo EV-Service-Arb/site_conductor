@@ -100,7 +100,7 @@ impl World {
 			store,
 			DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
 			google,
-			sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some(SHARED), Some("browser-key"))], vec![]),
+			sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some(SHARED), Some("browser-key"))], sa_panel::testing::slices()),
 		);
 		let empty = Export {
 			people: vec![],
