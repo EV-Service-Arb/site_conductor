@@ -1,6 +1,6 @@
 [package]
 name = "sa_guard"
-description = "the guard: holds each slice's real money on Google to its allow in nix/google.nix, and the meters' APIs to their daily pace, from Cloud Run"
+description = "the guard: holds every enabled API of each billed project in nix/google.nix by a lever set before it spends, or leaves it to the account's unguarded, from Cloud Run"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

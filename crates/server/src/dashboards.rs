@@ -28,13 +28,15 @@ const CREDITS: Table = (
 
 /// Each slice's allowance and levers, as the guard last held them.
 const ALLOWANCES: Table = (
-	r##"$map(accounts, function($a) { $map($a.allowances, function($s) { {"account": $a.name, "slice": $s.slice, "allowed": $s.allowed, "real used": $s.real, "headroom": $s.headroom, "is": $s.state, "levers": $join($map($s.levers, function($l) { ($l.project ? $l.project & " " : "") & $l.lever & " = " & $string($l.setting) & " (" & ($l.state ? $l.state : "new") & ")" }), "; "), "guard's tick": $a.guard.tick, "holds this list": $string($a.guard.holds_this_list)} }) })"##,
+	r##"$map(accounts, function($a) { $map($a.allowances, function($s) { {"account": $a.name, "slice": $s.slice, "a day": $s.day, "a month": $s.month, "real today": $s.real_today, "real this month": $s.real_month, "left today": $s.headroom, "is": $s.state, "levers": $join($map($s.levers, function($l) { ($l.project ? $l.project & " " : "") & $l.lever & " = " & $string($l.setting) & " (" & ($l.state ? $l.state : "new") & ")" }), "; "), "guard's tick": $a.guard.tick, "holds this list": $string($a.guard.holds_this_list)} }) })"##,
 	&[
 		("account", Column::String),
 		("slice", Column::String),
-		("allowed", Column::Number),
-		("real used", Column::Number),
-		("headroom", Column::Number),
+		("a day", Column::Number),
+		("a month", Column::Number),
+		("real today", Column::Number),
+		("real this month", Column::Number),
+		("left today", Column::Number),
 		("is", Column::String),
 		("levers", Column::String),
 		("guard's tick", Column::Timestamp),

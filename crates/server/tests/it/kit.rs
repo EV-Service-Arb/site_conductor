@@ -158,7 +158,7 @@ pub(super) async fn kit(db: &TestDb) -> Kit {
 		store,
 		DataKey::from_hex(&DataKey::generate_hex().unwrap()).unwrap(),
 		google,
-		sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)], vec![]),
+		sa_places::Accounts::new(vec![sa_panel::testing::account("house", Some("k"), None)], sa_panel::testing::slices()),
 	);
 	let now = Timestamp::now();
 	panel

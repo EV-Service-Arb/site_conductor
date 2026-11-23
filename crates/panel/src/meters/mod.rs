@@ -103,12 +103,15 @@ pub struct Tier {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Lever {
 	pub tick: Timestamp,
-	pub slice: String,
+	/// `None` for an API no slice holds: free, unguarded, disabled, or held at no request.
+	pub slice: Option<String>,
 	pub project: Option<String>,
-	/// `cap: <service>`, `quota: <api> <id>`, or `real money`.
+	/// `cap: <service>`, `quota: <api> <id>`, `free: <api>`, `unguarded: <api>`, `disable: <api>`, or `real money`.
 	pub lever: String,
-	pub allow: Option<f64>,
-	pub real: Option<f64>,
+	pub allow_day: Option<f64>,
+	pub allow_month: Option<f64>,
+	pub real_day: Option<f64>,
+	pub real_month: Option<f64>,
 	pub setting: Option<f64>,
 	pub state: Option<String>,
 	/// Requests since the quota day began.
@@ -171,9 +174,9 @@ impl Gauge {
 }
 
 /// What `account` may spend a month past its free units and credits on what is metered here: all
-/// of it falls in [`sa_core::meters::SLICE`].
+/// of it falls in [`sa_core::meters::SLICE`]. Its day is the guard's to hold.
 pub fn allowance(account: &Account) -> f64 {
-	account.allow.get(sa_core::meters::SLICE).copied().unwrap_or(0.0) // a slice not named is allowed none, as the guard reads it
+	account.allow[sa_core::meters::SLICE].month // sa_core::google::drawn refuses an account short of a slice, and a list without this one
 }
 
 /// The conductor's [`sa_places::Rank`]: each account by its `standing` on the meter of the

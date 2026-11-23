@@ -3805,20 +3805,38 @@ export interface components {
         MeterAllowance: {
             /**
              * Format: double
-             * @description Real money a month, past credits and free tiers.
+             * @description Real money a Pacific day, past credits and free tiers.
              */
-            allowed: number;
-            /** Format: double */
+            day: number;
+            /**
+             * Format: double
+             * @description What it may still spend today.
+             */
             headroom: number;
             levers: components["schemas"]["MeterLever"][];
             /**
              * Format: double
-             * @description What it spent of that this month.
+             * @description The same, a Pacific month.
              */
-            real: number;
+            month: number;
+            /**
+             * Format: double
+             * @description What it spent of the month's.
+             */
+            real_month: number;
+            /**
+             * Format: double
+             * @description What it spent of the day's.
+             */
+            real_today: number;
             slice: string;
             /** @description `within` or `over`. */
             state: string;
+        };
+        /** @description An API on one of an account's billed projects. */
+        MeterApi: {
+            api: string;
+            project: string;
         };
         /** @description A credit's balance, in its account's currency. */
         MeterCredit: {
@@ -3848,10 +3866,14 @@ export interface components {
         };
         /** @description The guard's last tick on an account. */
         MeterGuard: {
+            /** @description APIs it disabled, nothing holding them. */
+            disabled: components["schemas"]["MeterApi"][];
             /** @description Whether it held the definition this conductor runs (`sa_core::google::digest`). */
             holds_this_list: boolean;
             /** @description RFC 3339. */
             tick: string;
+            /** @description The account's `unguarded` APIs on: spending with no lever but the backstop. */
+            unguarded: components["schemas"]["MeterApi"][];
         };
         /** @description One lever the guard set. */
         MeterLever: {
@@ -5302,6 +5324,7 @@ export type MentionKind = components['schemas']['MentionKind'];
 export type MeterAccount = components['schemas']['MeterAccount'];
 export type MeterAccountUse = components['schemas']['MeterAccountUse'];
 export type MeterAllowance = components['schemas']['MeterAllowance'];
+export type MeterApi = components['schemas']['MeterApi'];
 export type MeterCredit = components['schemas']['MeterCredit'];
 export type MeterGuard = components['schemas']['MeterGuard'];
 export type MeterLever = components['schemas']['MeterLever'];

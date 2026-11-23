@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use eyre::{Result, ensure, eyre};
 use jiff::civil::Date;
 use regex::Regex;
-use sa_core::google::{Credit, Drawn, Held, Slice};
+use sa_core::google::{Allow, Credit, Drawn, Held, Slice};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -30,6 +30,7 @@ impl Config {
 				since: a.export.since,
 				credits: a.credits.clone(),
 				allow: a.allow.clone(),
+				unguarded: a.unguarded.clone(),
 			})
 			.collect();
 		sa_core::google::digest(&held, &self.slices)
@@ -41,7 +42,8 @@ pub struct Account {
 	pub name: String,
 	pub export: Export,
 	pub credits: Vec<Credit>,
-	pub allow: BTreeMap<String, f64>, // real money per slice per month, in the account's currency
+	pub allow: BTreeMap<String, Allow>,
+	pub unguarded: Vec<String>,
 }
 impl Account {
 	/// `<project>.<dataset>.gcp_billing_export_v1_<billing account>`, split.

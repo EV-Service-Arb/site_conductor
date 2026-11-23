@@ -31025,12 +31025,13 @@
         "description": "A slice's allowance as the guard held it.",
         "type": "object",
         "properties": {
-          "allowed": {
-            "description": "Real money a month, past credits and free tiers.",
+          "day": {
+            "description": "Real money a Pacific day, past credits and free tiers.",
             "type": "number",
             "format": "double"
           },
           "headroom": {
+            "description": "What it may still spend today.",
             "type": "number",
             "format": "double"
           },
@@ -31040,8 +31041,18 @@
               "$ref": "#/components/schemas/MeterLever"
             }
           },
-          "real": {
-            "description": "What it spent of that this month.",
+          "month": {
+            "description": "The same, a Pacific month.",
+            "type": "number",
+            "format": "double"
+          },
+          "real_month": {
+            "description": "What it spent of the month's.",
+            "type": "number",
+            "format": "double"
+          },
+          "real_today": {
+            "description": "What it spent of the day's.",
             "type": "number",
             "format": "double"
           },
@@ -31055,11 +31066,29 @@
         },
         "required": [
           "slice",
-          "allowed",
-          "real",
+          "day",
+          "month",
+          "real_today",
+          "real_month",
           "headroom",
           "state",
           "levers"
+        ]
+      },
+      "MeterApi": {
+        "description": "An API on one of an account's billed projects.",
+        "type": "object",
+        "properties": {
+          "api": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "api"
         ]
       },
       "MeterCredit": {
@@ -31121,6 +31150,13 @@
         "description": "The guard's last tick on an account.",
         "type": "object",
         "properties": {
+          "disabled": {
+            "description": "APIs it disabled, nothing holding them.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeterApi"
+            }
+          },
           "holds_this_list": {
             "description": "Whether it held the definition this conductor runs (`sa_core::google::digest`).",
             "type": "boolean"
@@ -31128,11 +31164,20 @@
           "tick": {
             "description": "RFC 3339.",
             "type": "string"
+          },
+          "unguarded": {
+            "description": "The account's `unguarded` APIs on: spending with no lever but the backstop.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MeterApi"
+            }
           }
         },
         "required": [
           "tick",
-          "holds_this_list"
+          "holds_this_list",
+          "unguarded",
+          "disabled"
         ]
       },
       "MeterLever": {

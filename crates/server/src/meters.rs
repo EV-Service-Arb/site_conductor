@@ -206,10 +206,15 @@ pub struct CreditDto {
 #[schemars(rename = "MeterAllowance")]
 pub struct AllowanceDto {
 	pub slice: String,
-	/// Real money a month, past credits and free tiers.
-	pub allowed: f64,
-	/// What it spent of that this month.
-	pub real: f64,
+	/// Real money a Pacific day, past credits and free tiers.
+	pub day: f64,
+	/// The same, a Pacific month.
+	pub month: f64,
+	/// What it spent of the day's.
+	pub real_today: f64,
+	/// What it spent of the month's.
+	pub real_month: f64,
+	/// What it may still spend today.
 	pub headroom: f64,
 	/// `within` or `over`.
 	pub state: String,
@@ -238,6 +243,18 @@ pub struct GuardDto {
 	pub tick: String,
 	/// Whether it held the definition this conductor runs (`sa_core::google::digest`).
 	pub holds_this_list: bool,
+	/// The account's `unguarded` APIs on: spending with no lever but the backstop.
+	pub unguarded: Vec<ApiDto>,
+	/// APIs it disabled, nothing holding them.
+	pub disabled: Vec<ApiDto>,
+}
+
+/// An API on one of an account's billed projects.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MeterApi")]
+pub struct ApiDto {
+	pub project: String,
+	pub api: String,
 }
 
 /// A day's use of one SKU on an account, in its currency.
@@ -482,13 +499,17 @@ fn standing(account: &sa_places::Account, bill: &Bill, read_at: Timestamp, diges
 		.iter()
 		.filter(|l| l.lever == "real money")
 		.map(|m| {
-			let (allowed, real) = (m.allow.expect("the guard writes a slice's allow with its real money"), m.real.expect("and its real money"));
-			AllowanceDto {
-				slice: m.slice.clone(),
-				allowed,
-				real,
-				headroom: allowed - real,
-				state: m.state.clone().expect("and whether it is within"),
+			let got = |v: Option<f64>, what: &str| v.ok_or_else(|| eyre::eyre!("the guard's tick holds a slice's real money with no {what}: a tick from before day allowances"));
+			let (day, month) = (got(m.allow_day, "day's allow")?, got(m.allow_month, "month's allow")?);
+			let (real_today, real_month) = (got(m.real_day, "real money today")?, got(m.real_month, "real money this month")?);
+			Ok(AllowanceDto {
+				slice: m.slice.clone().ok_or_else(|| eyre::eyre!("the guard's tick holds real money of no slice"))?,
+				day,
+				month,
+				real_today,
+				real_month,
+				headroom: (day - real_today).min(month - real_month),
+				state: m.state.clone().ok_or_else(|| eyre::eyre!("the guard's tick holds real money not told within or over"))?,
 				levers: levers
 					.iter()
 					.filter(|l| l.slice == m.slice && l.lever != "real money")
@@ -501,13 +522,30 @@ fn standing(account: &sa_places::Account, bill: &Bill, read_at: Timestamp, diges
 						action: l.action.clone(),
 					})
 					.collect(),
-			}
+			})
 		})
-		.collect();
-	let guard = levers.first().map(|l| GuardDto {
-		tick: l.tick.to_string(),
-		holds_this_list: l.list.as_deref() == Some(digest),
-	});
+		.collect::<eyre::Result<_>>()?;
+	let apis = |prefix: &str| -> eyre::Result<Vec<ApiDto>> {
+		levers
+			.iter()
+			.filter_map(|l| l.lever.strip_prefix(prefix).map(|api| (l, api)))
+			.map(|(l, api)| {
+				Ok(ApiDto {
+					api: api.to_owned(),
+					project: l.project.clone().ok_or_else(|| eyre::eyre!("the guard's tick holds {} on no project", l.lever))?,
+				})
+			})
+			.collect()
+	};
+	let guard = match levers.first() {
+		None => None,
+		Some(l) => Some(GuardDto {
+			tick: l.tick.to_string(),
+			holds_this_list: l.list.as_deref() == Some(digest),
+			unguarded: apis("unguarded: ")?,
+			disabled: apis("disable: ")?,
+		}),
+	};
 	Ok((credits, unnamed, allowances, guard))
 }
 
