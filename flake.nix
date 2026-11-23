@@ -194,7 +194,7 @@
         # nix/google.nix as of the commit it is built from, which is what it holds the accounts to.
         guardProject = "gen-lang-client-0759123990"; # where the guard runs, and evinvest's export lives
         guardRegion = "europe-west1";
-        guardSa = "guard@${guardProject}.iam.gserviceaccount.com";
+        guardSa = "sa-guard@${guardProject}.iam.gserviceaccount.com"; # an account id is 6 to 30 characters
         guard = rustPlatform.buildRustPackage {
           pname = "guard";
           inherit cargoLock;
@@ -538,7 +538,7 @@
                   billingbudgets.googleapis.com cloudbilling.googleapis.com cloudquotas.googleapis.com monitoring.googleapis.com \
                   serviceusage.googleapis.com cloudresourcemanager.googleapis.com bigquery.googleapis.com iamcredentials.googleapis.com
                 gcloud iam service-accounts describe "$SA" --project "$P" >/dev/null 2>&1 ||
-                  gcloud iam service-accounts create guard --project "$P" --display-name "holds real money to nix/google.nix's allow"
+                  gcloud iam service-accounts create sa-guard --project "$P" --display-name "holds real money to nix/google.nix's allow"
                 me=$(gcloud config get account)
                 gcloud iam service-accounts add-iam-policy-binding "$SA" --project "$P" --member "user:$me" --role roles/iam.serviceAccountTokenCreator >/dev/null # `nix run .#guard`
                 gcloud projects add-iam-policy-binding "$P" --member "serviceAccount:$SA" --role roles/run.invoker --condition None >/dev/null # Scheduler starts the job as the guard
