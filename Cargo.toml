@@ -99,10 +99,6 @@ unused_features = "allow"
 [workspace.lints.cargo]
 non_kebab_case_bins = "allow"
 
-# allocative 0.3.4 implements Allocative for both Infallible and `!`, which nightly-2026-09-24 makes one type; 0.3.6+ does not build under starlark_map 0.13. Only that impl is removed.
-[patch.crates-io]
-allocative = { path = "vendor/allocative" }
-
 # the sandbox's Starlark evaluates two orders of magnitude slower unoptimized, past what its tests can wait
 [profile.dev.package.starlark]
 opt-level = 3
