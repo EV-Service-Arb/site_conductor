@@ -133,10 +133,11 @@
           };
         };
         js = v_flakes.js { inherit pkgs; packages = [ "frontend" ]; };
+        oldestSupportedVersion = "nightly-2026-06-29";
         github = v_flakes.github {
           inherit pkgs pname rs js;
           enable = true;
-          lastSupportedVersion = "nightly-2026-06-29";
+          inherit oldestSupportedVersion;
           containerRelease = { registry = "ghcr.io/ev-service-arb"; };
           figma = { on = "publish"; }; # the render needs .local's data, the peers and a browser key, which only a developer's machine has
           jobs.default = true;
@@ -152,7 +153,7 @@
           inherit pkgs;
           pname = "site_conductor"; # CI keys the badge gist by the repo name, not the binary's
           defaults = true;
-          lastSupportedVersion = "nightly-1.98";
+          inherit oldestSupportedVersion;
           rootDir = ./.;
           badges = [ "msrv" "loc" "ci" ];
         };
