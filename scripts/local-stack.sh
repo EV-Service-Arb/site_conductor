@@ -16,7 +16,7 @@
 #                                          serving stopped and replaced; the conductor on n
 #   nix run .#dev -- --fixed [<rev>]       (or --frozen) the same unwatched, the conductor as this checkout is now, or at <rev>;
 #                                          beside the watched one, on the first free pair down from SA_PORT_RANGE's top;
-#                                          on a copy of .local's state, opened in the default browser
+#                                          on a copy of .local's state; -o (--open) opens it in the default browser
 #
 # The conductor and its front end come from `nix build .#bin` / `.#frontend` of this checkout,
 # unless PANEL_BIN / PANEL_WEB_DIR name others (PANEL_BIN=target/debug/panel for a cargo build);
@@ -50,6 +50,7 @@ watch=0
 spend_flag=""
 dev=0
 no_peers=0
+open=0
 fixed=0
 fixed_rev=""
 own_port=""
@@ -65,6 +66,7 @@ while [ $# -gt 0 ]; do
 	--from-prod) from_prod=1 ;;
 	--dev) dev=1 ;;
 	--no-peers) no_peers=1 ;;
+	-o | --open) open=1 ;;
 	--fixed | --frozen)
 		fixed=1
 		if [ $# -gt 1 ] && [[ "$2" != -* ]]; then
@@ -96,7 +98,7 @@ while [ $# -gt 0 ]; do
 	-h | --help)
 		cat <<'EOF'
 local-stack [--reset] [--no-sites] [--watch] [--role admin|operator] [--port-offset <n>] [--from-prod] [--spend-real-quota-i-am-certain]
-dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [--fixed|--frozen [<rev>]]
+dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [--fixed|--frozen [<rev>]] [-o|--open]
 
   The conductor (dev sign-in, its Grafana at /grafana/), sites_panel, review_archive, aquafix,
   vifnet and debouchage, wired together, each on the port its dev shell sets. State in .local/
@@ -120,7 +122,8 @@ dev [--port <n>] [--reset] [--role admin|operator] [--from-prod] [--no-peers] [-
   as it is now, or at <rev> (a commit, a tag), into this checkout's build dir: only what differs compiles. Without --port,
   on the first free pair down from SA_PORT_RANGE's top, beside a watched dev and other --fixed runs, never replacing them.
   On a copy of .local's state (its sessions too; a fresh one when the copy's conductor does not migrate it). Without
-  --port and --port-offset, opened in the default browser (xdg-open), and at exit .local takes back what it did (docs/LOCAL.md).
+  --port and --port-offset, at exit .local takes back what it did (docs/LOCAL.md).
+  -o, --open: once up, opened signed in, in the default browser (xdg-open).
 EOF
 		exit 0
 		;;
@@ -153,11 +156,11 @@ fi
 	echo "--port is dev's: local-stack moves every port with --port-offset" >&2
 	exit 2
 }
-# --fixed as a person runs it, opened in their browser; with --port or --port-offset, a harness's, on the ports it gave
-window=0
-[ "$fixed" = 0 ] || [ -n "$own_port" ] || [ "$offset" != 0 ] || window=1
-[ "$window" = 0 ] || command -v xdg-open >/dev/null || {
-	echo "--fixed opens the conductor with xdg-open: not on PATH" >&2
+# --fixed as a person runs it; with --port or --port-offset, a harness's, on the ports it gave
+person=0
+[ "$fixed" = 0 ] || [ -n "$own_port" ] || [ "$offset" != 0 ] || person=1
+[ "$open" = 0 ] || command -v xdg-open >/dev/null || {
+	echo "--open opens the conductor with xdg-open: not on PATH" >&2
 	exit 1
 }
 
@@ -264,8 +267,8 @@ for s in $(grep -ahozE "^state=$root/(\.local|result/[^/]+)$" /proc/[0-9]*/envir
 	done
 	kill -KILL "${left[@]}" 2>/dev/null || true # gone by now, mostly
 done
-# --fixed beside the watched dev, never on its ports: in a window, the first free pair down from the range's top, one not claimed by a starting run's pid
-if [ "$window" = 1 ]; then
+# --fixed beside the watched dev, never on its ports: a person's, the first free pair down from the range's top, one not claimed by a starting run's pid
+if [ "$person" = 1 ]; then
 	range="${SA_PORT_RANGE:?$need}"
 	own_port=$((${range#*-} - 1))
 	while busy "$own_port" || busy "$((own_port + 1))" || kill -0 "$(cat "$root/result/port-$own_port/pid" 2>/dev/null)" 2>/dev/null; do
@@ -339,7 +342,7 @@ fi
 url="http://localhost:$PANEL_PORT"
 [ "$watch" = 0 ] || url="http://localhost:$WEB_DEV_PORT"
 opens=""
-[ "$window" = 0 ] || opens=" (opened in the browser once up)"
+[ "$open" = 0 ] || opens=" (opened in the browser once up)"
 printf '%s\033[1;34m▶ %s%s\033[0m\n' "$clr" "$url" "$opens" >&2
 BROWSERS_PORT=$((BROWSERS_PORT + offset)) # a sibling's, as the others are
 SITES_PORT="$(shell_port "$SITES_DIR" PANEL_BIND)"
@@ -916,9 +919,9 @@ stop_all() {
 	done
 	[ "$alive" = 0 ] || kill -KILL ${pids[@]+"${pids[@]}"} 2>/dev/null
 	[ "$run_panel" = 0 ] || sync_queries
-	[ "$copied" = 0 ] || [ "$window" = 0 ] || sync_local
+	[ "$copied" = 0 ] || [ "$person" = 0 ] || sync_local
 }
-# A window's --fixed gives .local back what it did: its databases whole while they are at this checkout's migrations
+# A person's --fixed gives .local back what it did: its databases whole while they are at this checkout's migrations
 # (the watched dev's) and nothing wrote or serves .local since the copy; else the answers .local's queries cache lacks.
 sync_local() {
 	local pair f v db index
@@ -1230,7 +1233,7 @@ if [ "$sites" = 1 ]; then
 fi
 
 # dev sign-in's own session: the browser's localhost cookie may be any other stack's
-[ "$window" = 0 ] || xdg-open "$public_origin/auth/login?return_to=/" >"$state/logs/browser.log" 2>&1
+[ "$open" = 0 ] || xdg-open "$public_origin/auth/login?return_to=/" >"$state/logs/browser.log" 2>&1
 [ -z "$ticker_pid" ] || { kill "$ticker_pid"; printf '%s' "$clr" >&2; }
 
 {

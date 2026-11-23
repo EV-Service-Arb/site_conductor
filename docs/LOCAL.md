@@ -62,10 +62,10 @@ top (52899–52900, then 52897–52898, …), with a state of its own (`result/p
 nor one another. Every run's start removes the `result/port-<n>` no live run holds (its pid file), untouched for 10 min,
 with its `frontend/.next/port-<n>`, and the `.local/fixed/` copies no live run serves but the newest. Its state starts as a copy of `.local/`'s databases, keys and sessions;
 one its conductor does not migrate (a migration applied otherwise, rows a migration refuses) is dropped for a fresh state.
-`.local/` is the one state a person's runs share: at exit a windowed run (no `--port`) gives it back its databases
+`.local/` is the one state a person's runs share: at exit a run without `--port` gives it back its databases
 whole while they are at the checkout's migrations and nothing wrote or serves `.local/` since the copy, else only the
-queries cache's answers it lacks; a copy at other migrations gives nothing back. Once up, it opens through `/auth/login` (dev
-sign-in) in the default browser (`xdg-open`); Ctrl-C stops it.
+queries cache's answers it lacks; a copy at other migrations gives nothing back. Ctrl-C stops it. With `-o`/`--open` (any dev or stack run), once up it
+opens through `/auth/login` (dev sign-in) in the default browser (`xdg-open`).
 
 A conductor or its `next dev` already listening on their ports (another run's, another
 checkout's) is stopped, together with the run that started it and whatever else that run served,
