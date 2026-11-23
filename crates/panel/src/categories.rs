@@ -141,7 +141,7 @@ impl Version {
 	pub fn category(&self, placed: gmaps_optimal_placement_core::Country) -> eyre::Result<Category> {
 		// a gcid a refresh of Google's list dropped: its rows need migrating to what Google replaced it with
 		let trade = GoogleCategory::find(self.country, &self.trade).wrap_err_with(|| format!("version {}", self.id))?;
-		Ok(self.body.category(trade, self.country, placed).wrap_err_with(|| format!("version {}", self.id))?)
+		self.body.category(trade, self.country, placed).wrap_err_with(|| format!("version {}", self.id))
 	}
 }
 
