@@ -23,7 +23,7 @@ landings ─HMAC▶ conductor /api/kit/v1: the review kit, answered here
 conductor ◀── pulls (Conductor) ── sites /api/conductor/{changes, notifications, sources/received,
                                                           internal-reads, places}
 conductor ◀── pulls (Conductor) ── review_archive /api/conductor/{charges, notifications,
-                                                                   captures/<sha>.png}
+                                                                   captures/<sha>.png, gmbs/<id>/gone}
 conductor ─── pushes (Conductor) ─▶ review_archive /api/conductor/gmbs   GMBs, balances, the cursor
 conductor ── GET <origin>/.well-known/sa-site, public :443 ──────▶ each site key's landing
 landings ──────────────────────── direct, in-cluster ────────────▶ sites /api/internal

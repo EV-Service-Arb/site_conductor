@@ -2,12 +2,14 @@
 //! what comes back from it.
 
 use axum::{
-	Router,
+	Json, Router,
 	http::{Method, StatusCode, header},
+	routing::get,
 };
 use sa_auth::{Keys, Principal, Service, Signer};
+use sa_core::feeds::GoneReview;
 use sa_panel::testing::{TestDb, admin, panel};
-use sa_server::testing::{Browser, Log, SEED, upstream};
+use sa_server::testing::{Browser, Log, SEED, services, upstream};
 
 async fn setup(db: &TestDb) -> (Router, Log) {
 	let (base, seen) = upstream(Router::new()).await;
@@ -166,4 +168,37 @@ async fn the_sites_bundle_and_the_booking_hooks_pass_without_a_session() {
 	}
 	assert_eq!(b.send(&app, Method::GET, "/mfe/sites/%2e%2e/api/v1/leads", &[], false).await.0, StatusCode::BAD_REQUEST);
 	assert!(seen.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn the_gone_reviews_of_a_gbp_the_archive_tracks_are_read_as_the_conductor() {
+	let t = |s: &str| s.parse::<jiff::Timestamp>().unwrap();
+	let review = GoneReview {
+		review_id: "r1".into(),
+		author: "Jane".into(),
+		author_url: None,
+		rating: Some(5),
+		text: None,
+		published_raw: Some("a week ago".into()),
+		published_est: Some(t("2026-11-01T00:00:00Z")),
+		first_seen: t("2026-11-02T00:00:00Z"),
+		gone_at: t("2026-11-20T00:00:00Z"),
+		captured: true,
+		replied: false,
+		reinstatement_requested_at: None,
+	};
+	let answer = Json(vec![review.clone()]);
+	let (base, seen) = upstream(
+		Router::new()
+			.route("/api/conductor/gmbs/7/gone", get(move || async move { answer }))
+			.route("/api/conductor/gmbs/8/gone", get(|| async { StatusCode::NOT_FOUND }))
+			.route("/api/conductor/gmbs/9/gone", get(|| async { StatusCode::INTERNAL_SERVER_ERROR })),
+	)
+	.await;
+	let services = services(&base.parse().unwrap());
+
+	assert_eq!(services.gone(7).await.unwrap(), Some(vec![review]));
+	assert_eq!(seen.lock().unwrap().pop().unwrap().assertion(Service::ReviewArchive, None).principal, Principal::Conductor);
+	assert_eq!(services.gone(8).await.unwrap(), None);
+	assert!(services.gone(9).await.is_err());
 }

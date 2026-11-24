@@ -8,6 +8,7 @@
 //! GET  USAGE?after&limit        usage::UsagePage                                 review_archive
 //! GET  REVIEWS?after&limit      ReviewPage                                       review_archive
 //! PUT  GMBS                     gbp::Snapshot                                    review_archive
+//! GET  GONE                     Vec<GoneReview>, 404: it tracks no such GBP      review_archive
 //! GET  CAPTURES/<sha>.png       a note's photo                                   review_archive
 //! GET  PLACES                   Places                                           sites
 //! GET  SOURCES_RECEIVED         Received                                         sites
@@ -25,10 +26,14 @@ pub const CHARGES: &str = "/api/conductor/charges";
 pub const USAGE: &str = "/api/conductor/usage";
 pub const REVIEWS: &str = "/api/conductor/reviews";
 pub const GMBS: &str = "/api/conductor/gmbs";
+pub const GONE: &str = "/api/conductor/gmbs/{gmb}/gone";
 pub const CAPTURES: &str = "/api/conductor/captures";
 pub const PLACES: &str = "/api/conductor/places";
 pub const SOURCES_RECEIVED: &str = "/api/conductor/sources/received";
 pub const INTERNAL_READS: &str = "/api/conductor/internal-reads";
+
+/// The most [`GONE`] answers.
+pub const GONE_MAX: u32 = 100;
 
 /// Each source key's last event's arrival.
 pub type Received = BTreeMap<String, Timestamp>;
@@ -91,6 +96,31 @@ pub struct ReviewPage {
 	pub reviews: Vec<Review>,
 	/// The last `seq` of the page; `after` for an empty one.
 	pub next: i64,
+}
+
+/// A review of a GBP its last covering walk did not list, newest gone first.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct GoneReview {
+	/// Google's id of the review.
+	pub review_id: String,
+	pub author: String,
+	/// The author's Google profile.
+	pub author_url: Option<String>,
+	/// 1 to 5.
+	pub rating: Option<u8>,
+	pub text: Option<String>,
+	/// Google's date as it printed it, relative to when it was read.
+	pub published_raw: Option<String>,
+	/// What `published_raw` was estimated to be.
+	pub published_est: Option<Timestamp>,
+	pub first_seen: Timestamp,
+	pub gone_at: Timestamp,
+	pub captured: bool,
+	/// By the owner.
+	pub replied: bool,
+	/// The open reinstatement request's.
+	pub reinstatement_requested_at: Option<Timestamp>,
 }
 
 /// A line of a service's change feed.
