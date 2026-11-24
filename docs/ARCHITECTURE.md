@@ -572,7 +572,9 @@ PUT    /sources/{key_id}/origin             sources:manage, fresh
 POST   /access/requests
 GET    /access/requests/mine
 GET    /alerts
-GET    /alerts/inbox{,/{id}{,/photo}}
+GET    /alerts/inbox
+GET    /alerts/inbox/{id}
+GET    /alerts/inbox/{id}/photo
 POST   /alerts/inbox/read
 POST   /alerts/inbox/{id}/press                  fresh
 PUT    /alerts/rules/{rule}                      the caller's tier for it
