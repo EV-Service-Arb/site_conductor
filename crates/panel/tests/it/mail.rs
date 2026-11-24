@@ -3,6 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use jiff::{SignedDuration, Timestamp};
+use sa_alerts::Tier;
 use sa_core::{
 	gbp::Country,
 	mail::{Kind, Method, Outcome, Reading, State, Topic, Why, attempt},
@@ -221,7 +222,9 @@ fn ours(at: &str, thread: u64, subject: &str, to: &str, refs: &[&str], text: &st
 }
 
 fn rejected(of: &str, listing: &str) -> String {
-	format!("Your verification failed. Submit a new video.\n\nYour verification video{of} didn’t meet\nall of the requirements.\n\nSubmit new video  \n<https://business.google.com/verify/l/{listing}?trk=https%3A%2F%2Fc.gle%2FAbc>\n\nNo view of surrounding area\n")
+	format!(
+		"Your verification failed. Submit a new video.\n\nYour verification video{of} didn’t meet\nall of the requirements.\n\nSubmit new video  \n<https://business.google.com/verify/l/{listing}?trk=https%3A%2F%2Fc.gle%2FAbc>\n\nNo view of surrounding area\n"
+	)
 }
 
 #[tokio::test]
@@ -231,15 +234,23 @@ async fn rejected_videos_are_attempts_of_the_gbp_named_or_known_by_its_link() {
 	// Gmail threads the notices of every profile together
 	for (at, text) in [
 		("2026-10-05T09:00:00Z", rejected("", "15597583944401176782")),
-		("2026-10-06T09:00:00Z", rejected(" for Plomberie Dupont -  \nLyon, Est (at 9 Av. Basse, 69003 Lyon)", "15597583944401176782")),
+		(
+			"2026-10-06T09:00:00Z",
+			rejected(" for Plomberie Dupont -  \nLyon, Est (at 9 Av. Basse, 69003 Lyon)", "15597583944401176782"),
+		),
 		("2026-10-07T09:00:00Z", rejected("", "00284230971258484020")),
 	] {
 		w.arrives(notice(at, 0xaa, REJECTED, &text)).await;
 		w.reads(now, Kind::VideoRejected, |r| r.reasons = vec!["No view of surrounding area".into()]).await;
 	}
-	w.arrives(ours("2026-10-07T10:00:00Z", 0xaa, &format!("Re: {REJECTED}"), NOTICE, &["m2@mail"], "We need a live call")).await;
+	w.arrives(ours("2026-10-07T10:00:00Z", 0xaa, &format!("Re: {REJECTED}"), NOTICE, &["m2@mail"], "We need a live call"))
+		.await;
 	let cases = w.cases(now).await;
-	assert_eq!(cases.iter().map(|c| c.gmb).collect::<Vec<_>>(), [Some(w.est), Some(w.est), None], "by its link, by its name, unknown yet");
+	assert_eq!(
+		cases.iter().map(|c| c.gmb).collect::<Vec<_>>(),
+		[Some(w.est), Some(w.est), None],
+		"by its link, by its name, unknown yet"
+	);
 	assert_eq!(cases[1].messages.len(), 2, "our answer is with what it answers");
 	let rejection = || State::NeedsYou {
 		why: Why::Kind { kind: Kind::VideoRejected },
@@ -257,8 +268,13 @@ async fn rejected_videos_are_attempts_of_the_gbp_named_or_known_by_its_link() {
 		.collect();
 	assert_eq!(attempts, [(Method::Video, Outcome::Rejected); 2]);
 
-	w.arrives(notice("2026-10-08T09:00:00Z", 0xab, "Your profile", "Plomberie Dupont - Lyon <https://business.google.com/n/77/profile?trk=x>\nverify <https://business.google.com/settings>"))
-		.await;
+	w.arrives(notice(
+		"2026-10-08T09:00:00Z",
+		0xab,
+		"Your profile",
+		"Plomberie Dupont - Lyon <https://business.google.com/n/77/profile?trk=x>\nverify <https://business.google.com/settings>",
+	))
+	.await;
 	w.reads(now, Kind::ChangedByGoogle, |r| r.gmb = Some(w.est)).await;
 	assert_eq!(w.cases(now).await[3].gmb, Some(w.lyon), "what it names goes before what its reader saw");
 	let third = w.cases(now).await[2].id;
@@ -275,13 +291,14 @@ async fn rejected_videos_are_attempts_of_the_gbp_named_or_known_by_its_link() {
 async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 	let w = World::new().await;
 	let request = "[1-1234000056789] Your Request to Google";
-	w.arrives(support("2026-10-01T09:00:00Z", 1, request, "To continue, follow the on-screen prompts. You can reply to this email.")).await;
-	assert_eq!(
-		w.only("2026-10-01T09:01:00Z").await.state,
-		State::NeedsYou {
-			why: Why::Unread { error: None }
-		}
-	);
+	w.arrives(support(
+		"2026-10-01T09:00:00Z",
+		1,
+		request,
+		"To continue, follow the on-screen prompts. You can reply to this email.",
+	))
+	.await;
+	assert_eq!(w.only("2026-10-01T09:01:00Z").await.state, State::NeedsYou { why: Why::Unread { error: None } });
 	w.reads("2026-10-01T09:01:00Z", Kind::SelfServe, |_| {}).await;
 	let case = w.only("2026-10-01T09:02:00Z").await;
 	assert!(case.due);
@@ -289,15 +306,19 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 	assert_eq!(w.only("2026-10-01T09:03:00Z").await.state, State::ReplyReady, "automatic replies are off by default");
 	w.p.send_held_mail(t("2026-10-01T12:00:00Z")).await.unwrap();
 	assert!(w.sent().is_empty(), "nothing goes without its operator");
-	w.p.send_mail_draft(w.owner, w.owner, draft, "Please enable the live call.", vec![], t("2026-10-01T12:00:00Z")).await.unwrap().unwrap();
+	w.p.send_mail_draft(w.owner, w.owner, draft, "Please enable the live call.", vec![], t("2026-10-01T12:00:00Z"))
+		.await
+		.unwrap()
+		.unwrap();
 	let [sent] = <[Outgoing; 1]>::try_from(w.sent()).unwrap();
-	assert_eq!((sent.to.as_str(), sent.subject.as_str(), sent.body.as_str()), (SUPPORT, "Re: [1-1234000056789] Your Request to Google", "Please enable the live call."));
+	assert_eq!(
+		(sent.to.as_str(), sent.subject.as_str(), sent.body.as_str()),
+		(SUPPORT, "Re: [1-1234000056789] Your Request to Google", "Please enable the live call.")
+	);
 	assert_eq!((sent.in_reply_to.as_deref(), sent.references), (Some("m1@mail"), vec!["m1@mail".to_owned()]));
 	assert_eq!(
 		w.only("2026-10-01T12:01:00Z").await.state,
-		State::Waiting {
-			until: t("2026-10-03T12:00:00Z")
-		},
+		State::Waiting { until: t("2026-10-03T12:00:00Z") },
 		"sent, and not in the inbox yet"
 	);
 
@@ -307,19 +328,25 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 	let brief = w.p.mail_case(w.owner, case.id, t("2026-10-01T12:02:00Z")).await.unwrap().unwrap();
 	assert_eq!(brief.texts[1].as_str(), "Please enable the live call.", "its quote is dropped");
 
-	w.arrives(support("2026-10-02T09:00:00Z", 1, request, "I'm routing your query to a specialist. You should hear from us in 24-48Hrs.")).await;
+	w.arrives(support(
+		"2026-10-02T09:00:00Z",
+		1,
+		request,
+		"I'm routing your query to a specialist. You should hear from us in 24-48Hrs.",
+	))
+	.await;
 	w.reads("2026-10-02T09:01:00Z", Kind::Routed, |r| r.answer_within_hours = Some(48)).await;
-	assert_eq!(
-		w.only("2026-10-02T09:02:00Z").await.state,
-		State::Waiting {
-			until: t("2026-10-04T09:00:00Z")
-		}
-	);
+	assert_eq!(w.only("2026-10-02T09:02:00Z").await.state, State::Waiting { until: t("2026-10-04T09:00:00Z") });
 	assert!(w.only("2026-10-04T09:01:00Z").await.due, "silent past its word");
 
 	let followed = "Follow up to Business Profile Query [1-1234000056789] ";
-	w.arrives(support("2026-10-03T09:00:00Z", 2, followed, "This email is in reference to “Plomberie\nDupont - Lyon, Est, 9 Av. Basse”. Please share a picture of the permanent signage."))
-		.await;
+	w.arrives(support(
+		"2026-10-03T09:00:00Z",
+		2,
+		followed,
+		"This email is in reference to “Plomberie\nDupont - Lyon, Est, 9 Av. Basse”. Please share a picture of the permanent signage.",
+	))
+	.await;
 	w.reads("2026-10-03T09:01:00Z", Kind::Asks, |r| r.asks = vec!["a picture of the permanent signage".into()]).await;
 	let case = w.only("2026-10-03T09:02:00Z").await;
 	assert_eq!((case.gmb, case.topic, case.due), (Some(w.est), Topic::Verification, true), "one case over two threads");
@@ -350,7 +377,8 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 	w.p.send_mail_draft(w.owner, w.owner, draft, "Attached.", vec![sign], at).await.unwrap().unwrap();
 	assert_eq!(w.sent()[1].files.len(), 1);
 
-	w.arrives(support("2026-10-06T09:00:00Z", 2, followed, "I've provided you with an option for Live video call.")).await;
+	w.arrives(support("2026-10-06T09:00:00Z", 2, followed, "I've provided you with an option for Live video call."))
+		.await;
 	w.reads("2026-10-06T09:01:00Z", Kind::CallOffered, |_| {}).await;
 	assert_eq!(
 		w.only("2026-10-06T09:02:00Z").await.state,
@@ -359,10 +387,12 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 		}
 	);
 	// the rejection of a video meanwhile is the conversation's to settle
-	w.arrives(notice("2026-10-06T10:00:00Z", 9, REJECTED, &rejected(" for Plomberie Dupont - Lyon, Est", "1559"))).await;
+	w.arrives(notice("2026-10-06T10:00:00Z", 9, REJECTED, &rejected(" for Plomberie Dupont - Lyon, Est", "1559")))
+		.await;
 	w.reads("2026-10-06T10:01:00Z", Kind::VideoRejected, |_| {}).await;
 	assert_eq!(w.cases("2026-10-06T10:02:00Z").await[1].state, State::Quiet);
-	w.arrives(notice("2026-10-07T10:00:00Z", 10, "Your profile is verified", "Plomberie Dupont - Lyon, Est is verified")).await;
+	w.arrives(notice("2026-10-07T10:00:00Z", 10, "Your profile is verified", "Plomberie Dupont - Lyon, Est is verified"))
+		.await;
 	w.reads("2026-10-07T10:01:00Z", Kind::Verified, |_| {}).await;
 	let states: Vec<_> = w.cases("2026-10-07T10:02:00Z").await.into_iter().map(|c| c.state).collect();
 	assert_eq!(states, [State::Done, State::Done, State::Done]);
@@ -372,10 +402,7 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 async fn a_switched_on_reply_is_held_then_goes_unless_another_message_comes() {
 	let w = World::new().await;
 	let request = "[1-1234000056789] Your Request to Google";
-	assert!(matches!(
-		w.p.set_mail_auto(w.owner, w.gmail, Topic::Suspension, true).await.unwrap(),
-		Err(Refused::Invalid(_))
-	));
+	assert!(matches!(w.p.set_mail_auto(w.owner, w.gmail, Topic::Suspension, true).await.unwrap(), Err(Refused::Invalid(_))));
 	w.p.set_mail_auto(w.owner, w.gmail, Topic::Verification, true).await.unwrap().unwrap();
 	assert_eq!(w.p.mail_auto(w.owner).await.unwrap(), [(w.gmail, Topic::Verification)]);
 	w.arrives(support("2026-10-01T09:00:00Z", 1, request, "Follow the prompts.")).await;
@@ -394,7 +421,8 @@ async fn a_switched_on_reply_is_held_then_goes_unless_another_message_comes() {
 	let case = w.only("2026-10-02T09:02:00Z").await;
 	let held = w.drafts(&case, &[], false, "2026-10-02T09:05:00Z").await;
 	// its operator answered in Gmail meanwhile
-	w.arrives(ours("2026-10-02T09:10:00Z", 1, &format!("Re: {request}"), SUPPORT, &["m2@mail"], "We need the live call")).await;
+	w.arrives(ours("2026-10-02T09:10:00Z", 1, &format!("Re: {request}"), SUPPORT, &["m2@mail"], "We need the live call"))
+		.await;
 	assert_eq!(w.p.send_held_mail(t("2026-10-02T10:00:00Z")).await.unwrap(), 0);
 	assert_eq!(w.sent().len(), 1, "superseded");
 	assert!(matches!(
@@ -430,17 +458,24 @@ async fn a_look_alike_is_an_impersonation_and_is_never_answered() {
 		..support("2026-10-01T10:05:00Z", 4, "Verify now", "Plomberie Dupont - Lyon: pay here")
 	})
 	.await;
+	// From the gmail itself, which did not send it
+	w.arrives(Mail {
+		counterparts: vec!["a@gmail.com".into()],
+		sent: false,
+		..ours("2026-10-01T10:10:00Z", 1, &format!("Re: {request}"), SUPPORT, &["m1@mail"], "Never mind, close it")
+	})
+	.await;
 	let now = "2026-10-01T11:00:00Z";
 	let cases = w.cases(now).await;
-	assert_eq!(cases.len(), 3, "it joins no case, whatever it carries");
+	assert_eq!((cases.len(), cases[0].messages.len()), (3, 1), "it joins no case, whatever it carries");
 	assert_eq!(cases[0].state, State::ReplyDue, "nor quiets one");
 	for c in &cases[1..] {
 		let read = c.messages[0].said.reading.as_ref().unwrap();
-		assert_eq!((read.kind, c.messages[0].read_by, c.gmb, &c.state, c.due), (Kind::Impersonation, Some(ReadBy::Rule), None, &State::Quiet, false));
-		let written = Written::Reply {
-			body: "x".into(),
-			needs: vec![],
-		};
+		assert_eq!(
+			(read.kind, c.messages[0].read_by, c.gmb, &c.state, c.due),
+			(Kind::Impersonation, Some(ReadBy::Rule), None, &State::Quiet, false)
+		);
+		let written = Written::Reply { body: "x".into(), needs: vec![] };
 		w.p.draft_mail(w.owner, c.id, c.last().said.id, written, true, t(now)).await.unwrap().unwrap();
 		let draft = w.cases(now).await.into_iter().find(|x| x.id == c.id).unwrap().draft.unwrap().id;
 		assert!(matches!(
@@ -488,7 +523,10 @@ async fn a_draft_left_sending_is_never_tried_again_and_one_refused_may_be() {
 			}
 		}
 	);
-	assert!(matches!(send("2026-10-01T09:05:00Z").await.unwrap(), Err(Refused::Unavailable(_))), "tried again, its end unknown");
+	assert!(
+		matches!(send("2026-10-01T09:05:00Z").await.unwrap(), Err(Refused::Unavailable(_))),
+		"tried again, its end unknown"
+	);
 	assert_eq!(w.sent().len(), 2);
 	assert!(matches!(send("2026-10-01T09:06:00Z").await.unwrap(), Err(Refused::Conflict(_))), "and never after");
 	assert!(matches!(w.p.edit_mail_draft(w.owner, w.owner, draft, "y").await.unwrap(), Err(Refused::Conflict(_))));
@@ -507,12 +545,14 @@ async fn a_turn_to_a_person_is_told_once_to_the_owners_of_the_gbp_else_of_the_gm
 	let now = t("2026-10-05T10:00:00Z");
 	let pool = w.db.pool().await;
 	w.p.alerts_access_seen(w.owner, &sa_panel::testing::operator(), "owner", now).await.unwrap();
-	sqlx::query("INSERT INTO alert_destinations (id, user_id, method, private, urgent, important, info, filter, created_at) \
-		 VALUES (1, $1, 'telegram', 1, 'now', 'now', 'off', '{\"gmails\":[],\"trades\":[],\"brands\":[],\"gmbs\":[]}', 0)")
-		.bind(w.owner)
-		.execute(&pool)
-		.await
-		.unwrap();
+	sqlx::query(
+		"INSERT INTO alert_destinations (id, user_id, method, private, urgent, important, info, filter, created_at) \
+		 VALUES (1, $1, 'telegram', 1, 'now', 'now', 'off', '{\"gmails\":[],\"trades\":[],\"brands\":[],\"gmbs\":[]}', 0)",
+	)
+	.bind(w.owner)
+	.execute(&pool)
+	.await
+	.unwrap();
 	sqlx::query("INSERT INTO telegram_destinations (destination_id, kind, chat_id) VALUES (1, 'private', 42)")
 		.execute(&pool)
 		.await
@@ -527,16 +567,14 @@ async fn a_turn_to_a_person_is_told_once_to_the_owners_of_the_gbp_else_of_the_gm
 	assert_eq!(tell("2026-10-05T10:00:00Z").await, 0, "a reply is being written");
 	let case = w.cases("2026-10-05T10:00:00Z").await.remove(1);
 	assert_eq!(case.gmb, None, "it names none: the gmail's owners are told");
-	let written = || Written::Reply {
-		body: "x".into(),
-		needs: vec![],
-	};
+	let written = || Written::Reply { body: "x".into(), needs: vec![] };
 	w.p.draft_mail(w.owner, case.id, case.last().said.id, written(), false, now).await.unwrap().unwrap();
 	assert_eq!(tell("2026-10-05T10:01:00Z").await, 1);
 	assert_eq!(tell("2026-10-05T10:02:00Z").await, 0, "once");
 	w.p.draft_mail(w.owner, case.id, case.last().said.id, written(), true, now).await.unwrap().unwrap();
 	assert_eq!(tell("2026-10-05T10:03:00Z").await, 0, "nor again for a rewrite");
-	w.arrives(notice("2026-10-05T11:00:00Z", 8, "your profile has been suspended", "Plomberie Dupont - Lyon, Est is suspended")).await;
+	w.arrives(notice("2026-10-05T11:00:00Z", 8, "your profile has been suspended", "Plomberie Dupont - Lyon, Est is suspended"))
+		.await;
 	w.reads("2026-10-05T11:01:00Z", Kind::Suspended, |_| {}).await;
 	assert_eq!(tell("2026-10-05T11:02:00Z").await, 0, "its owner's access is an hour old");
 	w.p.alerts_access_seen(w.owner, &sa_panel::testing::operator(), "owner", t("2026-10-05T11:02:00Z")).await.unwrap();
@@ -552,21 +590,108 @@ async fn a_turn_to_a_person_is_told_once_to_the_owners_of_the_gbp_else_of_the_gm
 	w.arrives(support("2026-10-05T11:40:00Z", 1, "[1-1234000056789] Your Request", "Follow the prompts again.")).await;
 	w.reads("2026-10-05T11:41:00Z", Kind::SelfServe, |_| {}).await;
 	let case = w.cases("2026-10-05T11:41:00Z").await.into_iter().find(|c| c.id == case.id).unwrap();
-	w.p.draft_mail(w.owner, case.id, case.last().said.id, written(), false, t("2026-10-05T11:42:00Z")).await.unwrap().unwrap();
+	w.p.draft_mail(w.owner, case.id, case.last().said.id, written(), false, t("2026-10-05T11:42:00Z"))
+		.await
+		.unwrap()
+		.unwrap();
 	let before = inbox().await.len();
 	tell("2026-10-05T11:43:00Z").await;
 	tell("2026-10-05T11:44:00Z").await;
 	let after = inbox().await;
 	assert_eq!(after.len(), before + 1, "a held draft, once");
 	assert!(after[0].text.text.contains("a reply goes by itself 2026-10-05 11:57 UTC"), "{}", after[0].text.text);
+	assert_eq!(after[0].tier, Tier::Important, "its quarter of an hour runs");
 	assert_eq!(after[0].link, Some(format!("/email?case={}", case.id)));
+
+	w.arrives(support("2026-10-05T11:50:00Z", 1, "[1-1234000056789] Your Request", "A specialist answers in 24-48Hrs."))
+		.await;
+	w.reads("2026-10-05T11:51:00Z", Kind::Routed, |r| r.answer_within_hours = Some(48)).await;
+	tell("2026-10-05T11:52:00Z").await;
+	tell("2026-10-05T11:53:00Z").await;
+	let routed = inbox().await;
+	assert_eq!((routed.len(), routed[0].tier), (after.len() + 1, Tier::Info), "passed on, once");
+	assert!(
+		routed[0].text.text.contains("passed on to a specialist, an answer by 2026-10-07 11:50 UTC"),
+		"{}",
+		routed[0].text.text
+	);
+}
+
+#[tokio::test]
+async fn by_itself_goes_what_presses_never_what_google_asked_for() {
+	let w = World::new().await;
+	let request = "[1-1234000056789] Your Request to Google";
+	w.p.set_mail_auto(w.owner, w.gmail, Topic::Verification, true).await.unwrap().unwrap();
+	let send = async |at: &str| w.p.send_held_mail(t(at)).await.unwrap();
+
+	w.arrives(support("2026-10-01T09:00:00Z", 1, request, "How many people work there?")).await;
+	w.reads("2026-10-01T09:01:00Z", Kind::Asks, |r| r.asks = vec!["how many people work there".into()]).await;
+	let case = w.only("2026-10-01T09:02:00Z").await;
+	assert!(case.due, "a reply is written all the same");
+	let draft = w.drafts(&case, &[], false, "2026-10-01T09:03:00Z").await;
+	assert_eq!(
+		w.only("2026-10-01T10:00:00Z").await.state,
+		State::NeedsYou {
+			why: Why::Kind { kind: Kind::Asks }
+		}
+	);
+	assert_eq!(send("2026-10-01T10:00:00Z").await, 0, "lacking nothing, and still its operator's");
+	w.p.send_mail_draft(w.owner, w.owner, draft, "Two.", vec![], t("2026-10-01T10:00:00Z")).await.unwrap().unwrap();
+
+	w.arrives(support("2026-10-01T11:00:00Z", 1, request, "A specialist answers in 24-48Hrs.")).await;
+	w.reads("2026-10-01T11:01:00Z", Kind::Routed, |r| r.answer_within_hours = Some(48)).await;
+	assert!(!w.only("2026-10-03T10:59:00Z").await.due, "its 48 hours are waited out");
+	let case = w.only("2026-10-03T11:00:00Z").await;
+	assert!(case.due);
+	w.drafts(&case, &[], false, "2026-10-03T11:00:00Z").await;
+	assert_eq!(send("2026-10-03T11:15:00Z").await, 1, "silent past them: pressed by itself");
+	w.arrives(ours("2026-10-03T11:15:00Z", 1, &format!("Re: {request}"), SUPPORT, &["m2@mail"], "The call is needed."))
+		.await;
+	assert_eq!(w.only("2026-10-05T11:14:00Z").await.state, State::Waiting { until: t("2026-10-05T11:15:00Z") });
+	let silent = w.only("2026-10-05T11:16:00Z").await;
+	assert_eq!((silent.state, silent.due), (State::NeedsYou { why: Why::AskedOften }, false), "once");
+}
+
+#[tokio::test]
+async fn a_case_is_not_pressed_once_its_gbp_is_verified_nor_when_it_is_old() {
+	let w = World::new().await;
+	let request = "[1-1234000056789] Your Request to Google";
+	w.arrives(support("2026-10-01T09:00:00Z", 1, request, "Plomberie Dupont - Lyon: follow the prompts.")).await;
+	w.arrives(notice("2026-10-01T10:00:00Z", 2, REJECTED, &rejected(" for Plomberie Dupont - Lyon, Est", "15"))).await;
+	for m in w.p.unread_mail(w.owner, t("2026-10-01T11:00:00Z")).await.unwrap() {
+		let kind = if m.from == SUPPORT { Kind::SelfServe } else { Kind::VideoRejected };
+		let reading = Reading {
+			topic: Topic::Verification,
+			kind,
+			gmb: None,
+			summary: "said".into(),
+			asks: vec![],
+			reasons: vec![],
+			deadline: None,
+			answer_within_hours: None,
+		};
+		w.p.mail_read(m.mail, reading, &m.gmbs, t("2026-10-01T11:00:00Z")).await.unwrap();
+	}
+	assert!(w.cases("2026-10-02T09:00:00Z").await[0].due);
+	let old = w.cases("2026-10-23T09:00:00Z").await;
+	assert_eq!((&old[0].state, old[0].due), (&State::Quiet, false), "first read long after");
+	for gmb in [w.lyon, w.est] {
+		w.p.advance(Some(Spender::new(w.owner)), gmb, sa_core::gbp::State::Verified, None).await.unwrap().unwrap();
+	}
+	let settled = w.cases("2026-10-02T09:00:00Z").await;
+	assert!(settled.iter().all(|c| c.state == State::Done && !c.due), "{settled:#?}");
 }
 
 #[tokio::test]
 async fn a_persons_mail_is_theirs_alone_corrected_by_them_and_gone_with_its_gmail() {
 	let w = World::new().await;
-	w.arrives(notice("2026-10-01T09:00:00Z", 1, "Jean invited you to manage Plomberie Dupont - Lyon", "Jean invited a@gmail.com to manage it"))
-		.await;
+	w.arrives(notice(
+		"2026-10-01T09:00:00Z",
+		1,
+		"Jean invited you to manage Plomberie Dupont - Lyon",
+		"Jean invited a@gmail.com to manage it",
+	))
+	.await;
 	w.arrives(Mail {
 		counterparts: vec!["Google Calendar <calendar-notification@google.com>".into()],
 		from: Some("calendar-notification@google.com".into()),
@@ -575,7 +700,11 @@ async fn a_persons_mail_is_theirs_alone_corrected_by_them_and_gone_with_its_gmai
 	.await;
 	let now = "2026-10-01T10:00:00Z";
 	let case = w.only(now).await;
-	assert_eq!(case.messages[0].said.reading.as_ref().unwrap().kind, Kind::Invited, "by rule; the calendar's is kept nowhere but the log");
+	assert_eq!(
+		case.messages[0].said.reading.as_ref().unwrap().kind,
+		Kind::Invited,
+		"by rule; the calendar's is kept nowhere but the log"
+	);
 	assert_eq!((case.gmb, &case.state), (Some(w.lyon), &State::Quiet));
 
 	let other = Uuid::now_v7();
@@ -610,9 +739,7 @@ async fn a_persons_mail_is_theirs_alone_corrected_by_them_and_gone_with_its_gmai
 	assert_eq!(
 		case.state,
 		State::NeedsYou {
-			why: Why::Kind {
-				kind: Kind::OwnershipRequested
-			}
+			why: Why::Kind { kind: Kind::OwnershipRequested }
 		}
 	);
 	let wrong = ReadingEdit {

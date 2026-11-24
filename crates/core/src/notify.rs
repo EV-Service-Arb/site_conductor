@@ -122,7 +122,7 @@ pub enum Note {
 		name: String,
 		need: String,
 	},
-	/// A case of Google's mail turned to a person, or its reply is about to go.
+	/// A case of Google's mail turned to a person or to a specialist of Google's, or its reply is about to go.
 	GoogleMail {
 		state: State,
 		/// Google's last word, once read.
@@ -207,10 +207,15 @@ impl Note {
 					(State::Sending { at }, false) => format!("✉️ Google: a reply goes by itself {}", minute(*at)),
 					(State::NeedsYou { why: Why::Needs { needs } }, true) => format!("✉️ Google: для ответа нужно: {}", one_line(&needs.join("; "), MAX_SUMMARY)),
 					(State::NeedsYou { why: Why::Needs { needs } }, false) => format!("✉️ Google: the reply needs: {}", one_line(&needs.join("; "), MAX_SUMMARY)),
+					(State::Waiting { until }, true) => format!("✉️ Google: передали специалисту, ответ до {}", minute(*until)),
+					(State::Waiting { until }, false) => format!("✉️ Google: passed on to a specialist, an answer by {}", minute(*until)),
 					(_, true) => "✉️ Google: нужны вы".to_owned(),
 					(_, false) => "✉️ Google needs you".to_owned(),
 				});
-				let of: Vec<String> = [kind.map(|k| kind_name(k, locale).to_owned()), gmb.as_deref().map(|g| one_line(g, MAX_NAME))].into_iter().flatten().collect();
+				let of: Vec<String> = [kind.map(|k| kind_name(k, locale).to_owned()), gmb.as_deref().map(|g| one_line(g, MAX_NAME))]
+					.into_iter()
+					.flatten()
+					.collect();
 				if !of.is_empty() {
 					out.push(&format!("\n{}", of.join(" · ")));
 				}
@@ -280,12 +285,7 @@ impl Rendered {
 		let from = self.text[..=end].encode_utf16().count();
 		let rest = Self {
 			text: self.text[end + 1..].to_owned(),
-			entities: self
-				.entities
-				.iter()
-				.filter(|e| offset(e) >= from)
-				.map(|e| at_offset(e, offset(e) - from))
-				.collect(),
+			entities: self.entities.iter().filter(|e| offset(e) >= from).map(|e| at_offset(e, offset(e) - from)).collect(),
 		};
 		(self.before(end), rest)
 	}

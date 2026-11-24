@@ -67,7 +67,7 @@ pub struct Mail {
 	pub refs: Vec<String>,
 	/// Proved Google's ([`sa_core::mail::authentic`]).
 	pub authentic: bool,
-	/// From the account itself.
+	/// The account sent it: Gmail's word, not its From's.
 	pub sent: bool,
 	/// Its text, as far as it was read.
 	pub text: String,

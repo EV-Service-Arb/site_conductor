@@ -178,11 +178,7 @@ pub(crate) async fn holds(conn: &mut SqliteConnection, gmail: i64) -> eyre::Resu
 	let mut held: Vec<Holds> = Vec::new();
 	for (case, Json(numbers), thread, message_id, sent, from) in rows {
 		if held.last().is_none_or(|h| h.case != case) {
-			held.push(Holds {
-				case,
-				numbers,
-				..Holds::default()
-			});
+			held.push(Holds { case, numbers, ..Holds::default() });
 		}
 		let h = held.last_mut().expect("pushed for its first message");
 		if sent || from.is_some_and(|f| Sender::of(&f) == Sender::Support) {
@@ -303,6 +299,20 @@ pub(crate) async fn text(conn: &mut SqliteConnection, mail: i64) -> eyre::Result
 		.await
 		.wrap_err("loading a message's text")?;
 	Ok(Sealed { blob, data_key_fp })
+}
+
+/// When each of the owner's GBPs was moved to verified, or added so, and from suspended or not.
+pub(crate) async fn verified(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<(i64, Timestamp, bool)>> {
+	let rows: Vec<(i64, i64, bool)> = sqlx::query_as(
+		"SELECT e.gmb_id, e.at, coalesce(e.data ->> 'from' = 'suspended', 0) FROM gmb_events e JOIN gmbs b ON b.id = e.gmb_id \
+		 WHERE b.owner = $1 AND b.removed_at IS NULL AND ((e.kind = 'state' AND e.data ->> 'to' = 'verified') OR (e.kind = 'added' AND e.data ->> 'state' = 'verified')) \
+		 ORDER BY e.id",
+	)
+	.bind(owner)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing when a person's GBPs were verified")?;
+	rows.into_iter().map(|(gmb, at, reinstated)| Ok((gmb, from_db(at)?, reinstated))).collect()
 }
 
 /// Whoever has mail kept, in a gmail not removed.
@@ -466,13 +476,12 @@ pub(crate) async fn decide(conn: &mut SqliteConnection, id: i64, d: &Decided<'_>
 
 /// The topics whose replies go by themselves, per gmail of the owner's not removed.
 pub(crate) async fn auto(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<(i64, Topic)>> {
-	let rows: Vec<(i64, String)> = sqlx::query_as(
-		"SELECT a.gmail_id, a.topic FROM gmail_mail_auto a JOIN gmails g ON g.id = a.gmail_id WHERE g.owner = $1 AND g.removed_at IS NULL ORDER BY a.gmail_id, a.topic",
-	)
-	.bind(owner)
-	.fetch_all(&mut *conn)
-	.await
-	.wrap_err("listing the topics answered automatically")?;
+	let rows: Vec<(i64, String)> =
+		sqlx::query_as("SELECT a.gmail_id, a.topic FROM gmail_mail_auto a JOIN gmails g ON g.id = a.gmail_id WHERE g.owner = $1 AND g.removed_at IS NULL ORDER BY a.gmail_id, a.topic")
+			.bind(owner)
+			.fetch_all(&mut *conn)
+			.await
+			.wrap_err("listing the topics answered automatically")?;
 	rows.into_iter().map(|(g, t)| Ok((g, t.parse().wrap_err("a stored topic")?))).collect()
 }
 

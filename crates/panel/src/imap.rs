@@ -33,8 +33,9 @@ const READ_WITHIN: Duration = Duration::from_secs(60);
 /// What of a message is fetched: its headers and the start of its text.
 const BODY_MAX: usize = 32 * 1024;
 const LITERAL_MAX: usize = 4 * BODY_MAX;
-/// Gmail's search for mail with Google: from or to any google.com address, its promotions left out.
-const WITH_GOOGLE: &str = "{from:google.com to:google.com} -category:promotions";
+/// Gmail's search for mail with Google: from or to any google.com address, its promotions left out, and what
+/// is not sent yet.
+const WITH_GOOGLE: &str = "{from:google.com to:google.com} -category:promotions -in:drafts";
 
 /// Gmail over IMAP: its All Mail searched with Gmail's own syntax, read only.
 pub struct Gmail;
@@ -78,13 +79,7 @@ async fn read(account: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre
 		Some(c) if c.validity == validity => c.uid + 1,
 		_ => 1,
 	};
-	let found = s.ok(&format!("UID SEARCH UID {from}:* X-GM-RAW {}", quoted(WITH_GOOGLE)), "SEARCH").await?;
-	let mut uids = found
-		.iter()
-		.filter_map(|u| u.text.strip_prefix("SEARCH"))
-		.flat_map(str::split_whitespace)
-		.map(|n| n.parse::<u32>().wrap_err_with(|| format!("a UID {n:?}")))
-		.collect::<eyre::Result<Vec<_>>>()?;
+	let mut uids = s.search(&format!("UID {from}:* X-GM-RAW {}", quoted(WITH_GOOGLE))).await?;
 	// `n:*` past the last UID is the last one
 	uids.retain(|&u| u >= from);
 	uids.sort_unstable();
@@ -92,11 +87,12 @@ async fn read(account: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre
 	let mut mails = Vec::new();
 	if !uids.is_empty() {
 		let set = uids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
+		let sent = s.search(&format!(r#"UID {set} X-GM-LABELS "\\Sent""#)).await?;
 		let fetched = s
 			.ok(&format!("UID FETCH {set} (UID X-GM-MSGID X-GM-THRID INTERNALDATE BODY.PEEK[]<0.{BODY_MAX}>)"), "FETCH")
 			.await?;
 		for u in fetched.iter().filter(|u| u.text.contains("X-GM-THRID")) {
-			mails.push(mail(u, username)?);
+			mails.push(mail(u, &sent)?);
 		}
 		mails.sort_by_key(|m| m.uid);
 	}
@@ -186,6 +182,17 @@ impl Session {
 		Ok(untagged)
 	}
 
+	/// The UIDs `criteria` finds.
+	async fn search(&mut self, criteria: &str) -> eyre::Result<Vec<u32>> {
+		let found = self.ok(&format!("UID SEARCH {criteria}"), "SEARCH").await?;
+		found
+			.iter()
+			.filter_map(|u| u.text.strip_prefix("SEARCH"))
+			.flat_map(str::split_whitespace)
+			.map(|n| n.parse().wrap_err_with(|| format!("a UID {n:?}")))
+			.collect()
+	}
+
 	/// A response's lines and the literals between them.
 	async fn response(&mut self, verb: &str) -> eyre::Result<(String, Vec<Vec<u8>>)> {
 		let (mut text, mut literals) = (String::new(), Vec::new());
@@ -242,8 +249,8 @@ fn all_mail(u: &Untagged) -> Option<String> {
 	Some(rest.strip_suffix('"')?.rsplit_once(" \"")?.1.replace("\\\"", "\"").replace("\\\\", "\\"))
 }
 
-/// A message of a FETCH response; `username`'s own is one sent.
-fn mail(u: &Untagged, username: &str) -> eyre::Result<Mail> {
+/// A message of a FETCH response, `sent` the UIDs of those the account sent: a From alone anyone can write.
+fn mail(u: &Untagged, sent: &[u32]) -> eyre::Result<Mail> {
 	let text = &u.text;
 	let number = |key: &str| -> eyre::Result<u64> {
 		let mut words = text.split([' ', '(', ')']);
@@ -276,7 +283,7 @@ fn mail(u: &Untagged, username: &str) -> eyre::Result<Mail> {
 		(None, None) => None,
 	};
 	let from = parsed.from().and_then(|a| a.first());
-	let sent = from.and_then(|a| a.address()).is_some_and(|e| e.eq_ignore_ascii_case(username));
+	let sent = sent.contains(&uid);
 	let counterparts = match (sent, parsed.to()) {
 		(true, Some(to)) => to.mailboxes().filter_map(named).collect(),
 		// a message to nobody named: undisclosed recipients

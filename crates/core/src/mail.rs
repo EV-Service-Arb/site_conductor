@@ -7,7 +7,7 @@ use jiff::{SignedDuration, Timestamp};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-/// Google asked again after this long without an answer.
+/// Google is asked again after this long without an answer, if it gave no other term.
 pub const RE_ASK: SignedDuration = SignedDuration::from_hours(48);
 /// Ours in a case since Google last gave something new; past it a person decides.
 pub const MAX_ASKS: usize = 6;
@@ -39,9 +39,7 @@ pub enum Topic {
 }
 
 /// What a message of Google's says.
-#[derive(
-	Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, schemars::JsonSchema, strum::EnumMessage, strum::EnumString, strum::IntoStaticStr, strum::VariantArray,
-)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, schemars::JsonSchema, strum::EnumMessage, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[schemars(rename = "MailKind")]
@@ -81,7 +79,7 @@ pub enum Kind {
 	ReinstatementDone,
 	/// Support sees the reviews live already.
 	ReviewsLiveAlready,
-	/// Support has no record of the reviews, or needs to be told which.
+	/// Support has no record of the reviews.
 	ReviewsNoData,
 	/// Is the business still open: inactivity, removed or revoked unless answered.
 	StillActive,
@@ -106,9 +104,9 @@ pub enum Kind {
 	Duplicate,
 	/// A request was received, nothing more.
 	Acknowledged,
-	/// Handed to a specialist or another team.
+	/// Handed to a specialist or another team, who answers.
 	Routed,
-	/// Asks for documents, photos, changes or answers before going on.
+	/// Asks for documents, photos, changes or answers before going on: which profile, which reviews.
 	Asks,
 	/// The case is closed: it accepts no reply, or a survey follows it.
 	Closed,
@@ -125,14 +123,8 @@ impl Kind {
 	/// The topic it is always of; `None`, the message's own.
 	pub fn topic(self) -> Option<Topic> {
 		Some(match self {
-			Self::VideoRejected
-			| Self::VideoInReview
-			| Self::Verified
-			| Self::ReverificationRequired
-			| Self::SelfServe
-			| Self::CallOffered
-			| Self::CallFailed
-			| Self::OptionsExhausted => Topic::Verification,
+			Self::VideoRejected | Self::VideoInReview | Self::Verified | Self::ReverificationRequired | Self::SelfServe | Self::CallOffered | Self::CallFailed | Self::OptionsExhausted =>
+				Topic::Verification,
 			Self::Suspended | Self::AccountRestricted | Self::AppealReceived | Self::AppealApproved | Self::AppealDenied => Topic::Suspension,
 			Self::ReviewsPaused
 			| Self::ReviewsRestricted
@@ -153,7 +145,7 @@ impl Kind {
 	/// Whose turn it leaves.
 	fn turn(self) -> Turn {
 		match self {
-			Self::SelfServe | Self::OptionsExhausted | Self::ReinstatementRefused | Self::ReviewsNoData | Self::Asks => Turn::Reply,
+			Self::SelfServe | Self::OptionsExhausted | Self::ReinstatementRefused | Self::ReviewsNoData | Self::Asks | Self::Unclear => Turn::Reply,
 			Self::Acknowledged | Self::Routed => Turn::Google,
 			Self::Verified | Self::AppealApproved | Self::RestrictionLifted | Self::ReinstatementDone | Self::Closed => Turn::Nobody { resolved: true },
 			Self::VideoInReview
@@ -183,8 +175,7 @@ impl Kind {
 			| Self::ManagementRequested
 			| Self::EditSuggested
 			| Self::PolicyWarning
-			| Self::Duplicate
-			| Self::Unclear => Turn::Operator,
+			| Self::Duplicate => Turn::Operator,
 		}
 	}
 
@@ -336,7 +327,8 @@ pub fn listing(text: &str) -> Option<String> {
 
 /// A message's own words: quoted history, forwards and tracking links dropped.
 pub fn trimmed(raw: &str) -> String {
-	static FORWARD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(Forwarded Conversation|-{3,} ?(Forwarded message|Original Message|Message transféré|Message d'origine) ?-{3,})$").expect("a constant"));
+	static FORWARD: LazyLock<Regex> =
+		LazyLock::new(|| Regex::new(r"^(Forwarded Conversation|-{3,} ?(Forwarded message|Original Message|Message transféré|Message d'origine) ?-{3,})$").expect("a constant"));
 	static TRACKED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s?<https?://c\.gle/[^>]*>|(business\.google\.com/[^\s?>]*)\?[^\s>]*").expect("a constant"));
 	static BLANKS: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n{3,}").expect("a constant"));
 	let lines: Vec<&str> = raw.lines().map(str::trim_end).collect();
@@ -492,7 +484,7 @@ pub struct Case<'a> {
 	pub draft: Option<&'a Draft>,
 	/// The message a person marked it done at.
 	pub done: Option<i64>,
-	/// Google's readings on its GBP in its other cases.
+	/// Google's readings on its GBP in its other cases, and the GBP's moves to verified as such.
 	pub elsewhere: &'a [(Timestamp, Topic, Kind)],
 	/// Another case, open, asks Google to verify its GBP.
 	pub asked_elsewhere: bool,
@@ -503,7 +495,13 @@ pub struct Case<'a> {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, strum::EnumDiscriminants, schemars::JsonSchema)]
 #[serde(tag = "is", rename_all = "snake_case")]
 #[schemars(rename = "MailState")]
-#[strum_discriminants(doc = "A case's state, by its name.", name(Standing), derive(Deserialize, schemars::JsonSchema), serde(rename_all = "snake_case"), schemars(rename = "MailStanding"))]
+#[strum_discriminants(
+	doc = "A case's state, by its name.",
+	name(Standing),
+	derive(Deserialize, schemars::JsonSchema),
+	serde(rename_all = "snake_case"),
+	schemars(rename = "MailStanding")
+)]
 pub enum State {
 	NeedsYou {
 		why: Why,
@@ -530,13 +528,13 @@ pub enum State {
 #[serde(tag = "code", rename_all = "snake_case")]
 #[schemars(rename = "MailWhy")]
 pub enum Why {
-	/// What Google said is the operator's to act on.
+	/// What Google said is the operator's to act on; `asks`, with the reply its draft has ready.
 	Kind { kind: Kind },
 	/// A date Google set runs.
 	Deadline { at: Timestamp },
 	/// The draft lacks what only the operator has.
 	Needs { needs: Vec<String> },
-	/// Google answers nothing new, however often asked.
+	/// Google answers nothing new, however often asked, or is silent past its word and asked again.
 	AskedOften,
 	/// Google is silent, and nothing here takes a reply.
 	Unanswered,
@@ -563,11 +561,17 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	let draft = c.draft.filter(|d| d.answers == last.id);
 	let needs = |why| State::NeedsYou { why };
 	if let Some(Draft {
-		state: DraftState::Sending, send_at, ..
+		state: DraftState::Sending,
+		send_at,
+		..
 	}) = draft
 	{
 		let at = send_at.expect("a draft is sending since a moment");
-		return if now.duration_since(at) < SENDING_FOR { State::Sending { at } } else { needs(Why::MayHaveGoneOut) };
+		return if now.duration_since(at) < SENDING_FOR {
+			State::Sending { at }
+		} else {
+			needs(Why::MayHaveGoneOut)
+		};
 	}
 	let sent_at = draft.filter(|d| d.state == DraftState::Sent).map(|d| d.sent_at.expect("a sent draft went out at a moment"));
 	if now.duration_since(sent_at.unwrap_or(last.at)) > QUIET_AFTER {
@@ -583,20 +587,29 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	if over {
 		return State::Done;
 	}
+	// what Google asks is the operator's to give or to confirm
+	let asks = last.reading.as_ref().is_some_and(|r| r.kind == Kind::Asks);
 	match draft {
-		Some(Draft { state: DraftState::Held, send_at, .. }) => {
+		Some(Draft {
+			state: DraftState::Held, send_at, ..
+		}) if !asks => {
 			return State::Sending {
 				at: send_at.expect("a held draft goes at a moment"),
 			};
 		}
 		Some(Draft {
-			state: DraftState::Proposed, needs: lacks, ..
+			state: DraftState::Proposed | DraftState::Held,
+			needs: lacks,
+			..
 		}) =>
-			return match lacks.is_empty() {
-				true => State::ReplyReady,
-				false => needs(Why::Needs { needs: lacks.clone() }),
+			return match (lacks.is_empty(), asks) {
+				(true, false) => State::ReplyReady,
+				(true, true) => needs(Why::Kind { kind: Kind::Asks }),
+				(false, _) => needs(Why::Needs { needs: lacks.clone() }),
 			},
-		Some(Draft { state: DraftState::Failed, error, .. }) => {
+		Some(Draft {
+			state: DraftState::Failed, error, ..
+		}) => {
 			return needs(Why::Failed {
 				error: error.clone().expect("a failed draft says why"),
 			});
@@ -610,10 +623,18 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	}
 	let ours = sent_at.or_else(|| heard.iter().rev().find(|m| m.sent).map(|m| m.at));
 	let silence = || {
-		let promised = google.and_then(|m| Some(m.at + SignedDuration::from_hours(i64::from(m.reading.as_ref()?.answer_within_hours?))));
+		let promised = google.map(|m| {
+			let hours = m.reading.as_ref().and_then(|r| r.answer_within_hours);
+			m.at + hours.map_or(RE_ASK, |h| SignedDuration::from_hours(i64::from(h)))
+		});
 		// a promise made before we asked again does not answer what we asked since
-		let until = promised.into_iter().chain(ours.map(|at| at + RE_ASK)).max().unwrap_or(last.at + RE_ASK);
-		if now < until { State::Waiting { until } } else { reply(c, &heard, true) }
+		let until = promised.into_iter().chain(ours.map(|at| at + RE_ASK)).max().expect("what is heard is Google's or ours");
+		let pressed = said.is_some_and(|r| r.kind == Kind::Routed) && (last.sent || sent_at.is_some());
+		match (now < until, pressed) {
+			(true, _) => State::Waiting { until },
+			(false, true) => needs(Why::AskedOften),
+			(false, false) => reply(c, &heard, true),
+		}
 	};
 	if last.sent || sent_at.is_some() {
 		return silence();
@@ -647,7 +668,7 @@ pub fn counterpart<'a>(messages: impl DoubleEndedIterator<Item = &'a Message>) -
 pub fn asked<'a>(messages: impl DoubleEndedIterator<Item = &'a Message>) -> usize {
 	messages
 		.rev()
-		.take_while(|m| m.sent || !m.reading.as_ref().is_some_and(|r| matches!(r.kind.turn(), Turn::Operator | Turn::Nobody { resolved: true }) && r.kind != Kind::Unclear))
+		.take_while(|m| m.sent || !m.reading.as_ref().is_some_and(|r| matches!(r.kind.turn(), Turn::Operator | Turn::Nobody { resolved: true })))
 		.filter(|m| m.sent && !m.noreply)
 		.count()
 }
@@ -815,13 +836,20 @@ mod tests {
 		assert_eq!(notice("Marie left a review for Plomberie Dupont"), Ruled::Reads(Kind::Noise));
 		assert_eq!(notice("Action required: Submit a new verification video"), Ruled::Model);
 		assert_eq!(ruled(Some(SUPPORT), SUPPORT, true, "[1-1234000056789] Your Request to Google"), Ruled::Model);
-		assert_eq!(ruled(Some("noreply@google.com"), "Google", true, "You can no longer manage x"), Ruled::Model, "a notice's alone are fixed");
+		assert_eq!(
+			ruled(Some("noreply@google.com"), "Google", true, "You can no longer manage x"),
+			Ruled::Model,
+			"a notice's alone are fixed"
+		);
 		assert_eq!(ruled(Some("calendar-notification@google.com"), "Google Calendar", true, "Invitation"), Ruled::Not);
 		assert_eq!(ruled(Some("no-reply@accounts.google.com"), "Google", false, "Security alert"), Ruled::Not);
 		assert_eq!(ruled(Some("jean@plomberie.fr"), "Jean <jean@plomberie.fr>", false, "cc a Googler"), Ruled::Not);
 		let look_alike = Ruled::Reads(Kind::Impersonation);
 		assert_eq!(ruled(Some(SUPPORT), SUPPORT, false, "[1-1234000056789] Your Request"), look_alike);
-		assert_eq!(ruled(Some("support@gbp-verify.io"), "Google Business Profile <support@gbp-verify.io>", false, "Verify now"), look_alike);
+		assert_eq!(
+			ruled(Some("support@gbp-verify.io"), "Google Business Profile <support@gbp-verify.io>", false, "Verify now"),
+			look_alike
+		);
 		assert_eq!(ruled(Some("businessprofile-noreply@google.com.verify.io"), "Support", false, "Verify now"), look_alike);
 
 		assert!(repliable(Sender::Support, "If you have any additional questions, you can reply to this email."));
@@ -858,11 +886,17 @@ mod tests {
 			"answered between the lines"
 		);
 		assert_eq!(trimmed("Seen.\n\nOn Tue, Oct 6, 2026 Jean <j@x.fr> wrote:\n\nquoted without marks\n"), "Seen.");
-		assert_eq!(trimmed("On Monday our client wrote:\nhello"), "On Monday our client wrote:\nhello", "no date, no address: a sentence");
+		assert_eq!(
+			trimmed("On Monday our client wrote:\nhello"),
+			"On Monday our client wrote:\nhello",
+			"no date, no address: a sentence"
+		);
 		assert_eq!(trimmed("See below\n\n---------- Forwarded message ---------\nFrom: x\n"), "See below");
 		assert_eq!(trimmed("Forwarded Conversation\nSubject: x\n"), "");
 		assert_eq!(
-			trimmed("\n\n\nYour verification failed.\n\nSubmit new video  \n<https://business.google.com/verify/l/00123?trk=https%3A%2F%2Fc.gle%2FAbc>\n\n\n\nVisit the Help Center  \n<https://c.gle/Abc-def>  \nto learn more"),
+			trimmed(
+				"\n\n\nYour verification failed.\n\nSubmit new video  \n<https://business.google.com/verify/l/00123?trk=https%3A%2F%2Fc.gle%2FAbc>\n\n\n\nVisit the Help Center  \n<https://c.gle/Abc-def>  \nto learn more"
+			),
 			"Your verification failed.\n\nSubmit new video\n<https://business.google.com/verify/l/00123>\n\nVisit the Help Center\nto learn more"
 		);
 	}
@@ -892,7 +926,11 @@ mod tests {
 			gbp(3, "A", None),
 		];
 		let one = |text: &str| named(text, &gbps).into_iter().collect::<Vec<_>>();
-		assert_eq!(one("Your verification video for Plomberie Dupont -  \nLyon, Est (at 9 Av. Basse) didn’t"), [2], "wrapped, the longest");
+		assert_eq!(
+			one("Your verification video for Plomberie Dupont -  \nLyon, Est (at 9 Av. Basse) didn’t"),
+			[2],
+			"wrapped, the longest"
+		);
 		assert_eq!(one("PLOMBERIE DUPONT - LYON, your profile"), [1]);
 		assert_eq!(one("Plomberie Dupont - Lyon and Plomberie Dupont - Lyon, Est"), [1, 2], "a digest names both");
 		assert_eq!(one("the shop at 9 Av. Basse, 69003"), [2], "by its address, unnamed");
@@ -1028,16 +1066,44 @@ mod tests {
 		m.push(routed);
 		assert_eq!(state(&case(&m), now), State::Waiting { until: t("2026-10-08T12:00:00Z") }, "the specialist's hours");
 		assert_eq!(state(&case(&m), t("2026-10-08T13:00:00Z")), State::ReplyDue, "silent past them");
+		let pressed = [m.clone(), vec![ours(4, "2026-10-08T13:00:00Z")]].concat();
+		assert_eq!(state(&case(&pressed), t("2026-10-10T12:00:00Z")), State::Waiting { until: t("2026-10-10T13:00:00Z") });
+		assert_eq!(state(&case(&pressed), t("2026-10-10T13:00:00Z")), needs(Why::AskedOften), "a specialist is pressed once");
+		let untold = [
+			google(1, "2026-10-05T09:00:00Z", Kind::SelfServe),
+			ours(2, "2026-10-05T10:00:00Z"),
+			google(3, "2026-10-06T10:00:00Z", Kind::Routed),
+		];
+		assert_eq!(
+			state(&case(&untold), now),
+			State::Waiting { until: t("2026-10-08T10:00:00Z") },
+			"its own two days, whenever we wrote"
+		);
 		m.push(google(4, "2026-10-06T09:00:00Z", Kind::Asks));
 		assert_eq!(state(&case(&m), now), State::ReplyDue);
 		let lacking = draft(DraftState::Proposed, 4, &["a photo of the signage"]);
 		let with = |d: &Draft| state(&Case { draft: Some(d), ..case(&m) }, now);
-		assert_eq!(with(&lacking), needs(Why::Needs { needs: vec!["a photo of the signage".into()] }));
-		assert_eq!(with(&draft(DraftState::Proposed, 4, &[])), State::ReplyReady);
+		assert_eq!(
+			with(&lacking),
+			needs(Why::Needs {
+				needs: vec!["a photo of the signage".into()]
+			})
+		);
+		let asks = || needs(Why::Kind { kind: Kind::Asks });
+		assert_eq!(with(&draft(DraftState::Proposed, 4, &[])), asks(), "what Google asks is confirmed by its operator");
+		assert_eq!(with(&draft(DraftState::Held, 4, &[])), asks(), "read as a question since");
 		assert_eq!(with(&draft(DraftState::Proposed, 1, &[])), State::ReplyDue, "another message's draft");
-		assert_eq!(with(&draft(DraftState::Held, 4, &[])), State::Sending { at: t("2026-10-06T10:00:00Z") });
+		let deflected = [m[0].clone()];
+		let pressing = |d: &Draft| state(&Case { draft: Some(d), ..case(&deflected) }, now);
+		assert_eq!(pressing(&draft(DraftState::Proposed, 1, &[])), State::ReplyReady);
+		assert_eq!(pressing(&draft(DraftState::Held, 1, &[])), State::Sending { at: t("2026-10-06T10:00:00Z") });
+		assert_eq!(state(&case(&[google(1, "2026-10-06T09:00:00Z", Kind::Unclear)]), now), State::ReplyDue, "unclear: pressed");
 		assert_eq!(with(&draft(DraftState::Sending, 4, &[])), needs(Why::MayHaveGoneOut), "cut off half an hour ago");
-		assert_eq!(with(&draft(DraftState::Sent, 4, &[])), State::Waiting { until: t("2026-10-08T10:00:00Z") }, "not yet in the inbox");
+		assert_eq!(
+			with(&draft(DraftState::Sent, 4, &[])),
+			State::Waiting { until: t("2026-10-08T10:00:00Z") },
+			"not yet in the inbox"
+		);
 		assert_eq!(with(&draft(DraftState::Failed, 4, &[])), needs(Why::Failed { error: "550 no".into() }));
 		assert_eq!(with(&draft(DraftState::Dismissed, 4, &[])), State::ReplyDue);
 		m.push(google(5, "2026-10-06T10:00:00Z", Kind::CallOffered));
@@ -1045,7 +1111,11 @@ mod tests {
 		let later = [(t("2026-10-06T10:10:00Z"), Topic::Verification, Kind::CallFailed)];
 		assert_eq!(state(&Case { elsewhere: &later, ..case(&m) }, now), State::Done, "the call was held");
 		assert_eq!(state(&Case { done: Some(5), ..case(&m) }, now), State::Done);
-		assert_eq!(state(&Case { done: Some(4), ..case(&m) }, now), needs(Why::Kind { kind: Kind::CallOffered }), "Google spoke since");
+		assert_eq!(
+			state(&Case { done: Some(4), ..case(&m) }, now),
+			needs(Why::Kind { kind: Kind::CallOffered }),
+			"Google spoke since"
+		);
 		assert_eq!(state(&case(&m), t("2026-11-20T00:00:00Z")), State::Quiet);
 		m.push(google(6, "2026-10-06T10:20:00Z", Kind::Closed));
 		assert_eq!(state(&case(&m), now), State::Done);
@@ -1099,21 +1169,23 @@ mod tests {
 		let now = t("2026-10-06T10:30:00Z");
 		let m = [notice(1, "2026-10-05T09:00:00Z", Kind::VideoRejected)];
 		assert_eq!(state(&case(&m), now), needs(Why::Kind { kind: Kind::VideoRejected }));
-		assert_eq!(
+		assert_eq!(state(&Case { asked_elsewhere: true, ..case(&m) }, now), State::Quiet, "a conversation asks for its verification");
+		let on = |at: &str, topic, kind| {
 			state(
 				&Case {
-					asked_elsewhere: true,
+					elsewhere: &[(t(at), topic, kind)],
 					..case(&m)
 				},
-				now
-			),
-			State::Quiet,
-			"a conversation asks for its verification"
-		);
-		let on = |at: &str, topic, kind| state(&Case { elsewhere: &[(t(at), topic, kind)], ..case(&m) }, now);
+				now,
+			)
+		};
 		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Verification, Kind::Verified), State::Done);
 		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Verification, Kind::VideoRejected), State::Done, "the newer one stands");
-		assert_eq!(on("2026-10-04T09:00:00Z", Topic::Verification, Kind::Verified), needs(Why::Kind { kind: Kind::VideoRejected }), "older");
+		assert_eq!(
+			on("2026-10-04T09:00:00Z", Topic::Verification, Kind::Verified),
+			needs(Why::Kind { kind: Kind::VideoRejected }),
+			"older"
+		);
 		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Access, Kind::Invited), needs(Why::Kind { kind: Kind::VideoRejected }));
 		let edit = [notice(1, "2026-10-05T09:00:00Z", Kind::EditSuggested)];
 		let later = [(t("2026-10-06T09:00:00Z"), Topic::Profile, Kind::EditSuggested)];
@@ -1127,7 +1199,11 @@ mod tests {
 			noreply: true,
 			..ours(2, "2026-10-05T10:00:00Z")
 		};
-		assert_eq!(state(&case(&[m[0].clone(), to_noreply.clone()]), now), needs(Why::Kind { kind: Kind::VideoRejected }), "nobody read ours");
+		assert_eq!(
+			state(&case(&[m[0].clone(), to_noreply.clone()]), now),
+			needs(Why::Kind { kind: Kind::VideoRejected }),
+			"nobody read ours"
+		);
 		assert_eq!(state(&case(&[to_noreply]), now), State::Quiet);
 		for k in [Kind::Noise, Kind::Impersonation, Kind::AccessGranted] {
 			assert_eq!(state(&case(&[notice(1, "2026-10-06T09:00:00Z", k)]), now), State::Quiet);

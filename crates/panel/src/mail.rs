@@ -24,7 +24,6 @@ use sqlx::SqliteConnection;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-pub use crate::{smtp::Gmail, store::mail::ReadBy};
 use crate::{
 	Panel, Refused,
 	alerts::{Body, Telling, derived_event_id},
@@ -36,6 +35,7 @@ use crate::{
 		mail::{self as db, Decided, DraftRow, MailRow, NewDraft, NewMail},
 	},
 };
+pub use crate::{smtp::Gmail, store::mail::ReadBy};
 
 /// The ports a gmail's mail is read and sent on.
 pub const PORTS: [u16; 2] = [crate::imap::PORT, crate::smtp::PORT];
@@ -323,7 +323,11 @@ impl Panel {
 		let mut record: Vec<(Timestamp, Reading)> = cases
 			.iter()
 			.filter(|c| c.id != id)
-			.flat_map(|c| c.messages.iter().filter_map(|m| (case.gmb.is_some() && m.gmb.or(c.gmb) == case.gmb).then(|| m.said.reading.clone().map(|r| (m.said.at, r)))?))
+			.flat_map(|c| {
+				c.messages
+					.iter()
+					.filter_map(|m| (case.gmb.is_some() && m.gmb.or(c.gmb) == case.gmb).then(|| m.said.reading.clone().map(|r| (m.said.at, r)))?)
+			})
 			.collect();
 		record.sort_by_key(|(at, _)| *at);
 		let mut texts = Vec::new();
@@ -458,7 +462,10 @@ impl Panel {
 				before: c.messages[..at]
 					.iter()
 					.filter_map(|b| match &b.said.reading {
-						Some(r) => Some((b.said.at, false, r.summary.clone())),
+						Some(r) => {
+							let topic: &str = r.topic.into();
+							Some((b.said.at, false, format!("{topic}: {}", r.summary)))
+						}
 						None => b.said.sent.then(|| (b.said.at, true, b.subject.clone().unwrap_or_default())), // a message may have no subject
 					})
 					.collect(),
@@ -498,7 +505,7 @@ impl Panel {
 	}
 
 	/// A reply to the person's case `id`, written of its messages up to `answers`; it goes by itself only when
-	/// none asked for it, its topic is switched on there and it lacks nothing. `None`: another message came
+	/// none asked for it, Google asks nothing, its topic is switched on there and it lacks nothing. `None`: another message came
 	/// meanwhile.
 	pub async fn draft_mail(&self, owner: Uuid, id: i64, answers: i64, written: Written, asked_for: bool, now: Timestamp) -> eyre::Result<Option<()>> {
 		let mut tx = self.store.begin_write().await?;
@@ -508,7 +515,8 @@ impl Panel {
 		if case.last().said.id != answers || (!asked_for && !case.due) {
 			return Ok(None);
 		}
-		let auto = !asked_for && db::auto(&mut tx, owner).await?.contains(&(case.gmail, case.topic));
+		let asks = case.last().said.reading.as_ref().is_some_and(|r| r.kind == Kind::Asks);
+		let auto = !asked_for && !asks && db::auto(&mut tx, owner).await?.contains(&(case.gmail, case.topic));
 		let (body, needs, state, error) = match written {
 			Written::Reply { body, needs } if auto && needs.is_empty() => (body, needs, DraftState::Held, None),
 			Written::Reply { body, needs } => (body, needs, DraftState::Proposed, None),
@@ -715,7 +723,14 @@ impl Panel {
 		};
 		db::decide(&mut tx, id, &after).await?;
 		tx.commit().await.wrap_err("committing a draft's send")?;
-		tracing::info!(draft = id, case = d.case, gmail_id = case.gmail, person = person.is_some(), sent = sent.is_ok(), "a reply to Google");
+		tracing::info!(
+			draft = id,
+			case = d.case,
+			gmail_id = case.gmail,
+			person = person.is_some(),
+			sent = sent.is_ok(),
+			"a reply to Google"
+		);
 		Ok(answer)
 	}
 
@@ -740,6 +755,7 @@ impl Panel {
 					State::NeedsYou { .. } => "needs_you",
 					State::ReplyReady => "reply_ready",
 					State::Sending { .. } if c.draft.as_ref().is_some_and(|d| d.reply.state == DraftState::Held) => "held",
+					State::Waiting { .. } if last.said.reading.as_ref().is_some_and(|r| r.kind == Kind::Routed) => "routed",
 					State::Sending { .. } | State::ReplyDue | State::Waiting { .. } | State::Done | State::Quiet => continue,
 				};
 				if now.duration_since(at) > TELL_WITHIN {
@@ -764,7 +780,7 @@ impl Panel {
 					gmbs,
 					tier: match read.map(|r| r.kind) {
 						Some(Kind::Suspended | Kind::AccountRestricted | Kind::AccessLost) => Some(Tier::Urgent),
-						_ if turn == "held" => Some(Tier::Info),
+						_ if turn == "routed" => Some(Tier::Info),
 						_ => None,
 					},
 					link: Some(format!("/email?case={}", c.id)),
@@ -825,11 +841,20 @@ impl Panel {
 				},
 			));
 		}
-		let mut elsewhere: HashMap<i64, Vec<(i64, Timestamp, Topic, Kind)>> = HashMap::new();
+		// of no case, the GBP's own
+		type Read = (Option<i64>, Timestamp, Topic, Kind);
+		let mut elsewhere: HashMap<i64, Vec<Read>> = HashMap::new();
+		for (gmb, at, reinstated) in db::verified(conn, owner).await? {
+			let (topic, kind) = match reinstated {
+				true => (Topic::Suspension, Kind::AppealApproved),
+				false => (Topic::Verification, Kind::Verified),
+			};
+			elsewhere.entry(gmb).or_default().push((None, at, topic, kind));
+		}
 		for (_, c) in &cases {
 			for m in &c.messages {
 				if let (Some(gmb), Some(r)) = (m.gmb.or(c.gmb), &m.said.reading) {
-					elsewhere.entry(gmb).or_default().push((c.id, m.said.at, r.topic, r.kind));
+					elsewhere.entry(gmb).or_default().push((Some(c.id), m.said.at, r.topic, r.kind));
 				}
 			}
 		}
@@ -840,7 +865,7 @@ impl Panel {
 				.and_then(|g| elsewhere.get(&g))
 				.into_iter()
 				.flatten()
-				.filter(|(case, ..)| *case != c.id)
+				.filter(|(case, ..)| *case != Some(c.id))
 				.map(|(_, at, topic, kind)| (*at, *topic, *kind))
 				.collect();
 			rules::state(
