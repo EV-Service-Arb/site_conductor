@@ -55,8 +55,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          itself), `deliver` (the outbox sent), `telegram` (links, chats, buttons), `live` (the in-process bus), `gmbs`,
                          `connections` (a gmail's inbox, Maps key and Business Profile client and grant; who pays a Places request), `inbox` (its mail
                          with Google followed into its GBPs' logs; the Mailbox port), `mail` (that mail as
-                         cases, their readings and drafts; the Smtp port), `claude` (a person's own
-                         Claude),
+                         cases, their readings and drafts; the Smtp port), `own_models` (a person's own
+                         Claude and OpenAI key),
                          `browsers` (a gmail's browser: its proxy checked and sealed, Multilogin and
                          GoLogin, a launch),
                          `tokens` (the ledger, review_archive's charges, the snapshot), `street_view`
@@ -137,8 +137,9 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          the app with the caller's credentials, as their own request would
   src/execute.rs         `execute`, `poll`: the sessions, each a worker of this binary, driven in `serve`; a
                          cell's calls relayed as its caller's, held as the level holds them
-  src/claude.rs          the Claude API; /api/v1/me/claude: a person's own Claude, connected
-  src/ask.rs             the in-page assistant's loop (`POST /assistant/chats/{id}/ask`): Claude with
+  src/model.rs           whom an answer is asked of (`ask_llm`), on whose account; what is said when none answers
+  src/claude.rs          /api/v1/me/claude: a person's own Claude, connected; src/openai.rs: their OpenAI key
+  src/ask.rs             the in-page assistant's loop (`POST /assistant/chats/{id}/ask`): a model with
                          `search`/`call`/`execute`/`poll`, `open` (a view) and `run` (a binding); what the
                          level holds is proposed, the user confirms it, and a cell waiting on it goes on
   src/areas.rs           /api/v1/areas, and the cities and localities they are drawn from
@@ -191,7 +192,7 @@ POST /auth/logout    CSRF; every session of the user is closed
   `sa:admin:sources:manage` for the source keys, `sa:admin:tokens:grant` for everyone's tokens,
   `sa:placement:study:read` / `:spend` for placement's studies and pulls,
   `sa:own:payments` / `:credentials` for what only the caller's own sign-in does (claiming,
-  spending settings and the wallet; their Claude, linking Telegram, authorizing an MCP client),
+  spending settings and the wallet; their own models, linking Telegram, authorizing an MCP client),
   `sa:placement:library:curate` for the standard library's ranks, none for the rest (the caller's
   own gmails, GMBs, categories, tokens, alerts, chats and review kit, and the library). Each fresh
   `GetMe` upserts the user (`users`: id, email, name), whom tokens and gmails belong to.
@@ -568,6 +569,9 @@ GET    /me/claude                           own:credentials
 POST   /me/claude/connect                   own:credentials
 PUT    /me/claude                           own:credentials
 DELETE /me/claude                           own:credentials
+GET    /me/openai                           own:credentials
+PUT    /me/openai                           own:credentials
+DELETE /me/openai                           own:credentials
 GET    /openapi.json
 GET    /live                                socket
 GET    /sources                             sources:manage
@@ -718,13 +722,24 @@ POST   /assistant/chats/{id}/act
 ```
 
 An id in a path that is not the caller's is a 404.
-**The assistant** answers on the conductor (`ask.rs`) on the asker's own Claude if they connected
-one (`claude.rs`: `claude setup-token`'s OAuth PKCE, the code pasted back from Anthropic's page,
-the token proved, then sealed), else on the panel's (`CLAUDE_CODE_OAUTH_TOKEN`), chosen once per
-answer; their own refused (401) stops the answer and is marked, never the panel's in its place.
-On the panel's, each round is charged at the `claude` items' prices (per million tokens), none
-starting once their balance is spent. Each answer carries its `cost`: the model's tokens, whose
-Claude, the tokens charged. Its
+**The assistant** answers on the conductor (`ask.rs`) through `ask_llm`, on the asker's own models if they
+connected any (`claude.rs`: `claude setup-token`'s OAuth PKCE, the code pasted back from Anthropic's
+page; `openai.rs`: a key pasted; each proved, then sealed), else on the panel's
+(`CLAUDE_CODE_OAUTH_TOKEN`, `PANEL_OPENAI_KEY`): an offer, and never one for the other.
+
+```text
+the first step  theirs: Claude ─▶ OpenAI    ours: Claude ─▶ OpenAI     the next when one fails
+every other     whoever gave the first, alone: its failure ends the answer, the rounds done kept
+```
+
+A `Provider` (`sa_core::prices`) is asked for one model, its items the model's: no model without a price is
+asked. On the panel's, each round is charged at the items' prices (per million tokens) of the model that
+answered, none starting once the balance is spent. Each answer carries its `cost`: the model, its tokens,
+whose account, the tokens charged, and what they list for at the provider, if known. However the loop
+ends, the answer is written: `stopped` says why and what to do, `connect` that connecting helps. A person's
+credential refused is marked. A failed account is an error event if it is ours, a warning if theirs
+(`ask_llm`'s; ours at its limit the conductor's, once until it answers), and mail, which asks by
+itself, lets it rest a quarter of an hour. Its
 calls take the `/api/v1` gate on the asker's own session, never a side door to `Panel`. An
 answer's action is a view (`href`), an operation of the catalog (`call`: its id and arguments, run
 when the person confirms it) or a binding of the page's keymap (`binding`), nothing else; the page
@@ -949,7 +964,7 @@ a map, before it is built ─ POST /map/load        a panorama ─ POST /map/str
 review_archive's walk steps ─ GET /api/conductor/usage ┐ followed every 10 s, a page, its charges
 the runner's phone minutes, browser starts ─ GET /usage ┘ and its cursor in one write (`sa_core::usage`)
 the model's tokens, by kind ─ each round of POST /assistant/chats/{id}/ask, each message of Google's
-                              read or answered, its model the key, on whose Claude it ran
+                              read or answered, its deployment the key, on whose account it ran
 ```
 
 **Street View is bought before it opens.** Google bills each panorama opened on a browser key
@@ -1210,8 +1225,8 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
 - **The GBP** of a message: by hand, else the one it names, else the one its profile link is known by
   (the latest mail that named a GBP beside it), else what its reader saw. A profile has a link for its
   verification and another for its page.
-- **The model** runs on the gmail's owner's own Claude, else the panel's, charged to them; without
-  either or a balance, mail waits and its case says so. The writer's facts are the case, Google's other
+- **The model** runs on the gmail's owner's own models, else the panel's, charged to them; without
+  any that answers or a balance, mail waits and its case says why. The writer's facts are the case, Google's other
   readings of the GBP, the GBP, and, of a case about reviews, those review_archive sees gone (a full page
   of them is no count); what it lacks is a need, and a draft with one never goes by itself. Where the
   archive does not track the GBP the list is a need; while it does not answer, the reply waits.
@@ -1465,17 +1480,19 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   listener, on GETs, for that query's life. The public listener never takes a token.
 - **A source is only ever revoked.** `sources` refuses DELETE and any UPDATE but of `revoked_at`
   and a site's `origin` set once from NULL (only a `site` has one); a key id is never reused.
-- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, alerts' notes and destinations' addresses, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, the bodies of its mail with Google and of the replies to it (what they were read as is in the clear), and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
+- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, alerts' notes and destinations' addresses, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, the bodies of its mail with Google and of the replies to it (what they were read as is in the clear), and a person's Claude token and OpenAI key are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
 - **No price beside its use.** What a person is charged is an item of `sa_core::prices` at its
-  cost times its multiplier, both the admin's; no price is written where it is spent.
+  cost times its multiplier, both the admin's; no price is written where it is spent. What a model's tokens
+  list for at its provider is told beside the answer, unknown where not known, and never charged.
 - **A use is counted once, where it happens**: a Google answer bought in the write that keeps it, a
-  service's through its feed, taken only from where its cursor stands.
+  service's through its feed, taken only from where its cursor stands, a model's as it answers, by the
+  model that did, whether or not the answer served.
 - **No buy on credit.** A Places request on the shared keys, a Street View panorama, a map, a
   browser's start or a study's pull for a person is charged at its price, and refused before it is
   sent when their balance is below it; a pull buys no search past what the balance affords. Their
-  own keys and the queries cache cost nothing. A round of the assistant on the panel's Claude, or a message of Google's read or answered on it, starts
+  own keys and the queries cache cost nothing. A round of the assistant on the panel's models, or a message of Google's read or answered on them, starts
   only on a balance above 0, a cloud phone on one minute's; their cost, known once done, is charged
   up to what they hold, and a phone runs no longer than its launch's balance affords.
 - **No Street View past the free ones.** No panorama opens on a browser key but one
@@ -1493,7 +1510,8 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   stands.
 - **A Google answer is paid for once.** Every billed answer, from any service or machine, is
   looked up in the queries cache before it is bought, claimed while it is bought and kept after;
-  a place a search returned is not asked about again. Placement's requests sit in their own scheme.
+  a place a search returned is not asked about again. Placement's requests sit in their own scheme. A key is
+  of the request's body with its objects' keys sorted.
 - **A gmail's browser is driven only through the conductor**, its devtools no one else's, a phone's
   viewer only through it; the runner holds none of the conductor's secrets: a launch brings a token
   for that run alone (GoLogin's 3 minutes, Multilogin's 3 hours) and the proxy.
@@ -1518,9 +1536,9 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
   `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `SMTP_PASSWORD`, `GOLOGIN_TOKEN`,
-  `MULTILOGIN_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`), through
+  `MULTILOGIN_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`, `PANEL_OPENAI_KEY`), through
   `ev_lib::settings`, and the Google accounts' keys and readers, which the config file names
-  (`{ env = "…" }`); a person's (a gmail's IMAP password, its Maps key, its proxy, its Business Profile client and grant, their Claude token) through the API, sealed at
+  (`{ env = "…" }`); a person's (a gmail's IMAP password, its Maps key, its proxy, its Business Profile client and grant, their Claude token and OpenAI key) through the API, sealed at
   once; with `APP_ENV=production` the database, the data key, the four sign-in
   variables, the forward's four and `TOKENS_START_CAP_MULTIPLE` are required at boot
   (`panel --print-required-vars` lists them), and `serve` a Google account in the config file.

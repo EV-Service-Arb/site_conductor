@@ -18,6 +18,7 @@
       "GOLOGIN_TOKEN"
       "MULTILOGIN_TOKEN"
       "CLAUDE_CODE_OAUTH_TOKEN"
+      "PANEL_OPENAI_KEY"
     ];
     # TELEGRAM_BOT_TOKEN needs the forward (it sends sites' notes).
     optionalEnv = [
@@ -39,8 +40,10 @@
       "GOLOGIN_TOKEN"
       "MULTILOGIN_TOKEN"
       "PANEL_BROWSERS_URL"
-      # the in-page assistant's model (a Claude subscription); unset, asking it answers 503
+      # the in-page assistant's models: a Claude subscription, and an OpenAI key asked when that does not
+      # answer; unset, only people's own answer
       "CLAUDE_CODE_OAUTH_TOKEN"
+      "PANEL_OPENAI_KEY"
     ];
     ingress = {
       # in-cluster only, by service DNS: the landings' and bots' ingest, the landings' review kit
@@ -55,13 +58,14 @@
       # concierge's gRPC, at the address it names
       grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
       # the Bot API; the Places API (the accounts' Places keys); GoLogin's (GOLOGIN_TOKEN) and
-      # Multilogin's (MULTILOGIN_TOKEN) APIs; the Claude API (CLAUDE_CODE_OAUTH_TOKEN)
+      # Multilogin's (MULTILOGIN_TOKEN) APIs; the Claude API (CLAUDE_CODE_OAUTH_TOKEN) and its sign-in;
+      # OpenAI's (PANEL_OPENAI_KEY, and people's own keys)
       # alerts: the mail relay, Discord, Slack; a push service or a person's own webhook, any https host
       # the meters' baseline: each account's billing export, its service account's token
       # a gmail's inbox, at whatever public host its owner set (crates/panel/src/imap.rs); its replies
       # to Google, over smtp.gmail.com (crates/panel/src/smtp.rs)
       ports = [ 993 465 ];
-      hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "bigquery.googleapis.com:443" "oauth2.googleapis.com:443" "api.anthropic.com:443" "discord.com:443" "hooks.slack.com:443" "smtp.gmail.com:587" ];
+      hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "bigquery.googleapis.com:443" "oauth2.googleapis.com:443" "api.anthropic.com:443" "platform.claude.com:443" "api.openai.com:443" "discord.com:443" "hooks.slack.com:443" "smtp.gmail.com:587" ];
     };
   };
 

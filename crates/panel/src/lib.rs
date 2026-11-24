@@ -6,7 +6,8 @@
 //! follow; [`access`] the access requests; [`gmbs`] people's gmails and the GMBs they manage;
 //! [`connections`] a gmail's inbox and Maps key, and who pays for a Places request; [`inbox`] its mail
 //! with Google followed into its GBPs' logs; [`mail`] that mail as cases, read and answered; [`browsers`]
-//! a gmail's antidetect browser; [`claude`] a person's own Claude, which their assistant runs on;
+//! a gmail's antidetect browser; [`own_models`] a person's own Claude
+//! and OpenAI key, which their assistant runs on;
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: what is told, to whom, when; [`deliver`] what it owes their destinations sent;
 //! [`telegram`] the bot; [`live`] the bus that tells the server's sockets what changed;
@@ -23,7 +24,6 @@ pub mod brands;
 pub mod browsers;
 mod business;
 pub mod categories;
-pub mod claude;
 pub mod connections;
 pub mod deliver;
 pub mod gmbs;
@@ -38,6 +38,7 @@ pub mod mail;
 pub mod meters;
 pub mod oauth;
 mod own_alerts;
+pub mod own_models;
 pub mod placement;
 pub mod seal;
 pub mod session;

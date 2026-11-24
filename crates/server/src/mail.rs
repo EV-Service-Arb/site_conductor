@@ -1,9 +1,10 @@
 //! Google's mail (`sa_panel::mail`): the caller's cases, their readings and drafts; and in `serve` each
-//! person's mail read, answered, sent when held and told of ([`run`]). The model runs on the person's own
-//! Claude, else the panel's, charged to them.
+//! person's mail read, answered, sent when held and told of ([`run`]). It runs on the person's own models,
+//! else the panel's, charged to them.
 
 use std::time::Duration;
 
+use ask_llm::{Conversation, Role, Stop, ThinkingLevel};
 use axum::{
 	Extension, Json,
 	extract::{DefaultBodyLimit, State},
@@ -27,19 +28,17 @@ use sa_panel::{
 	mail::{Brief, ByHand, Case, CaseEdit, Draft, FILES_MAX, File, Kept, ReadBy, ReadingEdit, Unread, Written},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use strum::{EnumMessage, VariantArray};
 use tokio::sync::watch;
 use uuid::Uuid;
-use zeroize::Zeroizing;
 
 use crate::{
 	api::{ApiResult, Code, Id},
-	ask::{answered_by, tokens},
-	claude::{MODEL, Model, SUBSCRIPTION},
 	forward::Services,
 	gmbs::present,
 	http::{ApiRoute, ApiState, FRESH, Flags, SLOW, USER},
+	model::{Model, tried},
 	signin::{Caller, Freshness},
 };
 
@@ -794,112 +793,48 @@ struct Asked<'a> {
 	/// Its charges' key.
 	key: &'a str,
 	label: &'static str,
-	effort: &'static str,
+	effort: ThinkingLevel,
 	system: String,
 	mail: String,
 	shape: &'a [(&'static str, Value)],
 }
 
-/// An answer's properties, in the order the model writes them.
-struct Properties<'a>(&'a [(&'static str, Value)]);
-
-impl Serialize for Properties<'_> {
-	fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-		s.collect_map(self.0.iter().map(|(name, of)| (name, of)))
-	}
-}
-
-#[derive(Serialize)]
-struct Shape<'a> {
-	r#type: &'static str,
-	properties: Properties<'a>,
-	required: Vec<&'static str>,
-	#[serde(rename = "additionalProperties")]
-	others: bool,
-}
-
-#[derive(Serialize)]
-struct Format<'a> {
-	r#type: &'static str,
-	schema: Shape<'a>,
-}
-
-#[derive(Serialize)]
-struct Output<'a> {
-	effort: &'static str,
-	format: Format<'a>,
-}
-
-#[derive(Serialize)]
-struct Request<'a> {
-	model: &'static str,
-	max_tokens: u32,
-	fallbacks: &'static str,
-	output_config: Output<'a>,
-	system: Value,
-	messages: Value,
-}
-
-/// The model's answer, as `a.schema` shapes it, on `by`'s own Claude, else the panel's, charged to them.
+/// The model's answer, of `a.shape`, on `by`'s own models, else the panel's, charged to them.
 // structured outputs: the model refuses a forced tool
 async fn answered<T: serde::de::DeserializeOwned>(panel: &Panel, model: &Model, by: Spender<ModelTokens>, a: Asked<'_>) -> Result<T, Unanswered> {
-	let owner = by.user();
-	let refused = || "Your Claude connection was refused: reconnect it, or disconnect it to read mail on the panel's.".to_owned();
-	let (token, bill): (Zeroizing<String>, Bill) = match panel.claude(owner).await? {
-		Some(c) if c.checked.error.is_some() => return Err(Unanswered::Stuck(refused())),
-		Some(_) => match panel.claude_token(owner).await? {
-			Some(own) => (own, Bill::Theirs),
-			None => return Err(Unanswered::Stuck("Your Claude was just disconnected.".to_owned())),
-		},
-		None => match model.owner() {
-			Some(ours) => (ours.clone(), Bill::Ours),
-			None => return Err(Unanswered::Stuck("No Claude to read mail with: connect yours.".to_owned())),
-		},
-	};
-	let mut tab = match bill {
+	let chain = model.chain(panel, by.user()).await?.awake().map_err(Unanswered::Stuck)?;
+	let mut tab = match chain.bill {
 		Bill::Theirs => None,
 		Bill::Ours => Some(panel.model_tab(by, a.key, a.label, Timestamp::now()).await?.map_err(Unanswered::Stuck)?),
 	};
-	let body = Request {
-		model: MODEL,
-		max_tokens: 8000,
-		fallbacks: "default",
-		output_config: Output {
-			effort: a.effort,
-			format: Format {
-				r#type: "json_schema",
-				schema: Shape {
-					r#type: "object",
-					properties: Properties(a.shape),
-					required: a.shape.iter().map(|(name, _)| *name).collect(),
-					others: false,
-				},
-			},
-		},
-		system: json!([{ "type": "text", "text": SUBSCRIPTION }, { "type": "text", "text": a.system }]),
-		messages: json!([{ "role": "user", "content": a.mail }]),
-	};
-	let reply = match model.answer(&token, &body).await {
-		Ok(Ok(reply)) => reply,
-		Ok(Err(said)) if bill == Bill::Theirs => {
-			panel.claude_refused(owner, said, Timestamp::now()).await?;
-			return Err(Unanswered::Stuck(refused()));
-		}
-		Ok(Err(said)) => return Err(Unanswered::Stuck(format!("the panel's Claude refused its token: {said}"))),
-		Err(r) => {
-			let why = json!(r)["error"].as_str().expect("a refusal says why").to_owned();
-			return Err(match r.code() {
-				Code::BadRequest => Unanswered::Unread(why), // this mail's alone
-				_ => Unanswered::Stuck(why),
+	let mut asked = Conversation::new_with_system(a.system);
+	asked.add(Role::User, a.mail);
+	let schema = json!({
+		"type": "object",
+		"properties": a.shape.iter().map(|(name, of)| ((*name).to_owned(), of.clone())).collect::<Map<_, _>>(), // in their order: the model writes them so
+		"required": a.shape.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+		"additionalProperties": false,
+	});
+	// a step, not a conversation: it says who answered, and what failed before
+	let step = match chain.client().max_tokens(8000).thinking(a.effort).json_schema(schema).step(&asked, &[]).await {
+		Ok(step) => step,
+		Err(e) => {
+			let failed = chain.failed(by, &tried(e)?, tab.as_mut()).await?;
+			return Err(match failed.request {
+				true => Unanswered::Unread(failed.said),
+				false => Unanswered::Stuck(failed.said),
 			});
 		}
 	};
-	panel.model_used(by, answered_by(&reply)?, &tokens(&reply)?, tab.as_mut(), Timestamp::now()).await?;
-	if reply["stop_reason"] != "end_turn" {
-		return Err(Unanswered::Unread(format!("the model stopped for {}", reply["stop_reason"])));
+	chain.failed(by, &step.failed, tab.as_mut()).await?;
+	chain.used(by, chain.provider(&step), &step, tab.as_mut()).await?;
+	match &step.stop {
+		Stop::End => {}
+		Stop::MaxTokens => return Err(Unanswered::Unread("the model's answer was cut short".to_owned())),
+		Stop::Refused => return Err(Unanswered::Unread("the model declined".to_owned())),
+		_ => return Err(Unanswered::Unread("the model asked for what it was not given".to_owned())),
 	}
-	let said: String = reply["content"].as_array().into_iter().flatten().filter_map(|b| b["text"].as_str()).collect();
-	serde_json::from_str(&said).map_err(|e| Unanswered::Unread(format!("the model's answer does not read: {e}")))
+	serde_json::from_str(&step.text).map_err(|e| Unanswered::Unread(format!("the model's answer does not read: {e}")))
 }
 
 fn names<T: VariantArray + Copy + Into<&'static str>>() -> Vec<&'static str> {
@@ -967,7 +902,7 @@ answer_within_hours: only when it says within how long Google answers, the longe
 	let asked = Asked {
 		key: &format!("mail:{}", m.mail),
 		label: "Google's mail read",
-		effort: "low",
+		effort: ThinkingLevel::Low,
 		system,
 		mail,
 		shape: &shape,
@@ -1131,7 +1066,7 @@ Answer with body and needs, nothing null; or, when no reply serves the goal, bod
 	let asked = Asked {
 		key: &format!("mail-case:{}", b.case.id),
 		label: "A reply to Google written",
-		effort: "medium",
+		effort: ThinkingLevel::Medium,
 		system,
 		mail,
 		shape: &shape,
