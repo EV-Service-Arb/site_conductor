@@ -21,6 +21,17 @@ export function age(iso: string, locale: Locale): string {
   return new Intl.NumberFormat(locale, { style: "unit", unit, unitDisplay: "narrow" }).format(n);
 }
 
+const SIX_DAYS = 6 * 24 * 60 * MINUTE;
+
+/** "14:32" today, "Thu 10:30" within six days, "Nov 26" beyond. */
+export function when(iso: string, locale: Locale, now: Date): string {
+  const at = new Date(iso);
+  const time = { hour: "2-digit", minute: "2-digit" } as const;
+  if (at.toDateString() === now.toDateString()) return at.toLocaleTimeString(locale, time);
+  if (Math.abs(at.getTime() - now.getTime()) < SIX_DAYS) return at.toLocaleString(locale, { weekday: "short", ...time });
+  return at.toLocaleDateString(locale, { month: "short", day: "numeric", ...(at.getFullYear() !== now.getFullYear() && { year: "numeric" }) });
+}
+
 /** "2 hours ago". */
 export function ago(iso: string, locale: Locale): string {
   const { unit, n } = step(iso);

@@ -1,11 +1,12 @@
 "use client";
 
 import { useResource } from "@evinvest/api/react";
-import { Badge, Button, Card, CardContent, Planned, Skeleton, Switch, cn } from "@evinvest/uikit";
+import { Badge, Button, Card, CardContent, Planned, Skeleton, cn } from "@evinvest/uikit";
 import { Check, ExternalLink, Fingerprint, ImageIcon, Mail, ShieldCheck, Sparkles, X } from "lucide-react";
 
 import { type Listed, browser as browserKeys, openWindow, photoSrc, useBrands, useGmbTags, windowKeys } from "@/entities/gmb";
 import { startWith } from "@/features/assistant";
+import { AutoLink } from "@/features/auto-mail";
 import { api } from "@/shared/api";
 import { mustHaveValues } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
@@ -179,16 +180,7 @@ function Inbox({ gmail, address }: { gmail: number; address: string }) {
               {imap.checked.error !== null && <dd className="col-span-2 text-xs text-accent-error">{imap.checked.error}</dd>}
             </dl>
           ))}
-        <Planned what={t(windowKeys.connections.inbox.planned, "Rules on this inbox: auto-reply to Google support, re-request the verification call")}>
-          <p className="flex items-center gap-2 text-sm text-ink">
-            <span className="flex-1">{t(windowKeys.connections.inbox.autoReply, "Auto-reply to Google support")}</span>
-            <Switch checked />
-          </p>
-          <p className="flex items-center gap-2 text-sm text-ink">
-            <span className="flex-1">{t(windowKeys.connections.inbox.reRequest, "Re-request verification call")}</span>
-            <Switch checked />
-          </p>
-        </Planned>
+        <AutoLink gmail={gmail} />
       </CardContent>
     </Card>
   );

@@ -6,6 +6,7 @@ import { CalendarClock, ChevronLeft, ChevronRight, Copy, ExternalLink, Globe, Ha
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
 import { CategoryChip, GmbNote, NewBrand, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, TradeName, useGoogleList, narrowed, openWindow, readyCount, under, syncGmb, useBrands, useGmails, useGmbTags, useOnMap, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
+import { useOpenThread } from "@/entities/mail";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { api, ok, reviewArchive } from "@/shared/api";
 import { type Changed, type Closed, type Country, type GbpRole, type Gmail, type Gmb, type GmbEdit, type LogDto, type LoggedDto, type Tab, gbpRoleValues, mustHaveValues } from "@/shared/api/schema";
@@ -867,19 +868,11 @@ function Ours({ e, gmail }: { e: LoggedDto; gmail: string | null }) {
 function Email({ e, gmail }: { e: Extract<LoggedDto, { kind: "email" }>; gmail: string | null }) {
   const t = useT();
   const locale = useLocale();
-  const [busy, setBusy] = useState(false);
+  const thread = useOpenThread();
   const who = e.counterparts.join(", ");
-  const open = async () => {
-    setBusy(true);
-    try {
-      if (e.gmail_id === null) throw new Error("an email is logged under its gmail");
-      await ok(api.POST("/gmails/{id}/browser/thread", { params: { path: { id: e.gmail_id } }, body: { thread: e.thread } }));
-      toast(t(windowKeys.log.threadOpened, "Opened in the gmail's browser"));
-    } catch (err) {
-      notifyFailure(err, t);
-    } finally {
-      setBusy(false);
-    }
+  const open = () => {
+    if (e.gmail_id === null) throw new Error("an email is logged under its gmail");
+    void thread.open(e.gmail_id, e.thread);
   };
   return (
     <Row
@@ -888,7 +881,7 @@ function Email({ e, gmail }: { e: Extract<LoggedDto, { kind: "email" }>; gmail: 
       detail={[e.sent ? t(windowKeys.log.emailTo, "to {who}", { who }) : t(windowKeys.log.emailFrom, "from {who}", { who }), formatDateTime(e.date, locale), e.of_gmail ? t(windowKeys.log.ofGmail, "the gmail's, {gmail}", { gmail: gmail ?? "" }) : null].filter(Boolean).join(" · ")}
     >
       {e.snippet && <p className="line-clamp-2 text-xs text-ink-soft">{e.snippet}</p>}
-      <button type="button" disabled={busy} onClick={() => void open()} className="flex items-center gap-1 self-start text-xs text-ink-soft hover:text-ink disabled:opacity-50">
+      <button type="button" disabled={thread.opening !== null} onClick={open} className="flex items-center gap-1 self-start text-xs text-ink-soft hover:text-ink disabled:opacity-50">
         <ExternalLink className="size-3" />
         {t(windowKeys.log.openThread, "Open thread")}
       </button>

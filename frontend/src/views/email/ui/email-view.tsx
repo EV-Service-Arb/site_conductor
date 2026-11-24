@@ -1,17 +1,155 @@
 "use client";
 
-import { Empty, EmptyHeader, EmptyTitle } from "@evinvest/uikit";
+import { Button, Skeleton, Tabs, TabsList, TabsTrigger, cn, useBinding } from "@evinvest/uikit";
+import { ArrowLeft } from "lucide-react";
+import type { KeyboardEvent } from "react";
 
-import { nav, useT } from "@/shared/i18n";
+import { useGmails } from "@/entities/gmb";
+import { CaseRow, type Show, mail, shownIn, useCases } from "@/entities/mail";
+import { AutoReplies } from "@/features/auto-mail";
+import type { MailCase } from "@/shared/api/schema";
+import { type T, nav, useT } from "@/shared/i18n";
+import { type Params, go, useAt } from "@/shared/lib/location";
+import { EmptyState } from "@/shared/ui/empty-state";
+import { ErrorState } from "@/shared/ui/error-state";
 
-/** Google's mail about the caller's GBPs, as cases. */
+import { CaseDetail } from "./case-detail";
+import { Inboxes } from "./inboxes";
+
+type Sought = Params<"email">;
+
+/** Google's mail about the caller's GBPs, as cases: the list and the one opened, in a narrow room one or the other; and which replies go by themselves. */
 export function EmailView() {
+  const at = useAt();
+  if (at.view !== "email") throw new Error("the email view on another's");
   const t = useT();
+  const { case: opened, show } = at.params;
+  const automatic = show === "automatic";
   return (
-    <Empty className="min-h-full">
-      <EmptyHeader>
-        <EmptyTitle>{t(nav.email, "Email")}</EmptyTitle>
-      </EmptyHeader>
-    </Empty>
+    <div className="@container flex min-h-0 flex-1 flex-col">
+      <header className={cn("flex items-center gap-3 border-b border-border px-4", opened !== undefined && "@max-3xl:hidden")}>
+        <h1 className="text-base font-semibold text-ink">{t(nav.email, "Email")}</h1>
+        <Tabs value={automatic ? "automatic" : "threads"} onValueChange={(tab) => go({ view: "email", params: tab === "automatic" ? { show: "automatic" } : {} })}>
+          <TabsList aria-label={t(nav.email, "Email")}>
+            <TabsTrigger value="threads">{t(mail.tab.threads, "Threads")}</TabsTrigger>
+            <TabsTrigger value="automatic">{t(mail.tab.automatic, "Automatic replies")}</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </header>
+      {automatic ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5">
+          <AutoReplies />
+          <Inboxes />
+        </div>
+      ) : (
+        <Threads sought={at.params} show={show ?? "needs_you"} />
+      )}
+    </div>
   );
+}
+
+const SHOWS: readonly Show[] = ["needs_you", "waiting", "all"];
+
+const SHOW_NAME: Record<Show, (t: T) => string> = {
+  needs_you: (t) => t(mail.show.needs_you, "Needs you"),
+  waiting: (t) => t(mail.show.waiting, "Waiting"),
+  all: (t) => t(mail.show.all, "All"),
+};
+
+const NOTHING: Record<Show, (t: T) => string> = {
+  needs_you: (t) => t(mail.nothing.needs_you, "Nothing needs you"),
+  waiting: (t) => t(mail.nothing.waiting, "Nothing waits on Google"),
+  all: (t) => t(mail.nothing.all, "No mail from Google yet"),
+};
+
+const CHIP = "inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full border border-border px-3 text-sm text-ink outline-none focus-visible:ring-2 focus-visible:ring-ring aria-pressed:bg-hover";
+
+/** The view at `show`, a case of it open or none. */
+const threads = (show: Show, c?: number) => ({ view: "email", params: { ...(show !== "needs_you" && { show }), ...(c !== undefined && { case: c }) } }) as const;
+
+function Threads({ sought, show }: { sought: Sought; show: Show }) {
+  const t = useT();
+  const { case: opened } = sought;
+  const read = useCases();
+  const listed = read.shown === null ? [] : shownIn(read.shown, show);
+  const step = (by: number) => {
+    const here = listed.findIndex((c) => c.id === opened);
+    const next = listed[here === -1 ? (by > 0 ? 0 : listed.length - 1) : (here + by + listed.length) % listed.length];
+    if (next !== undefined) go(threads(show, next.id), "replace");
+  };
+  const other = listed.some((c) => c.id !== opened);
+  useBinding({ on: { key: "ArrowDown" }, id: "mail-next", run: { label: t(mail.next, "Next thread"), run: other ? () => step(1) : null } });
+  useBinding({ on: { key: "ArrowUp" }, id: "mail-prev", run: { label: t(mail.prev, "Previous thread"), run: other ? () => step(-1) : null } });
+  return (
+    <div className="flex min-h-0 flex-1">
+      <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col @3xl:max-w-80 @3xl:border-r @3xl:border-border @5xl:max-w-110", opened !== undefined && "@max-3xl:hidden")}>
+        <div className="flex gap-2 overflow-x-auto border-b border-border px-3 py-2.5">
+          {SHOWS.map((s) => (
+            <button key={s} type="button" aria-pressed={s === show} className={CHIP} onClick={() => go(threads(s), "replace")}>
+              {SHOW_NAME[s](t)}
+              {read.shown !== null && <span className="text-ink-soft tabular-nums">{shownIn(read.shown, s).length}</span>}
+            </button>
+          ))}
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+          <Inboxes />
+          {read.status === "error" ? (
+            <div className="p-4">
+              <ErrorState failure={read.failure} onRetry={read.reload} />
+            </div>
+          ) : read.shown === null ? (
+            <Skeleton className="m-3 h-60" />
+          ) : (
+            <List cases={listed} all={read.shown.length} show={show} opened={opened} />
+          )}
+        </div>
+      </div>
+      <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", opened === undefined && "@max-3xl:hidden")}>
+        {opened === undefined ? (
+          <p className="px-4 py-16 text-center text-sm text-ink-soft">{t(mail.pick, "Pick a thread to read it here.")}</p>
+        ) : (
+          <>
+            <div className="flex items-center gap-1 border-b border-border px-2 py-1.5 @3xl:hidden">
+              <Button type="button" variant="ghost" size="touch" icon aria-label={t(mail.back, "Back to the threads")} onClick={() => go(threads(show), "replace")}>
+                <ArrowLeft aria-hidden className="size-5" />
+              </Button>
+              <p className="text-base font-semibold text-ink">{SHOW_NAME[show](t)}</p>
+            </div>
+            <CaseDetail key={opened} id={opened} />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function List({ cases, all, show, opened }: { cases: readonly MailCase[]; all: number; show: Show; opened: number | undefined }) {
+  const t = useT();
+  const gmails = useGmails();
+  if (cases.length === 0)
+    return (
+      <EmptyState
+        className="m-3 flex-none"
+        title={NOTHING[all === 0 ? "all" : show](t)}
+        description={all === 0 ? t(mail.nothing.why, "It is read from each gmail's inbox every minute, once its IMAP is set.") : t(mail.nothing.elsewhere, "{n} in All", { n: all })}
+      />
+    );
+  const gbp = (c: MailCase) => (gmails.status === "ok" ? (gmails.data.gmbs.find((g) => g.id === c.gmb_id)?.name ?? null) : null);
+  return (
+    <div className="flex flex-col gap-0.5 p-1.5" onKeyDown={arrows}>
+      {cases.map((c) => (
+        <CaseRow key={c.id} c={c} gbp={gbp(c)} current={c.id === opened} to={threads(show, c.id)} />
+      ))}
+    </div>
+  );
+}
+
+/** Arrow keys go from row to row. */
+function arrows(e: KeyboardEvent<HTMLElement>) {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const rows = [...e.currentTarget.querySelectorAll<HTMLElement>("a[data-case]")];
+  const here = rows.indexOf(document.activeElement as HTMLElement);
+  if (here === -1) return;
+  e.preventDefault();
+  rows[here + (e.key === "ArrowDown" ? 1 : -1)]?.focus();
 }

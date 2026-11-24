@@ -267,10 +267,6 @@
     "en": "Login",
     "t": "Логин"
   },
-  "account.imap.why": {
-    "en": "Inbox alerts and email automations will read it; nothing reads mail yet.",
-    "t": "Её будут читать оповещения о письмах и автоматизации почты; пока почту ничто не читает."
-  },
   "account.integrations": {
     "en": "Integrations",
     "t": "Интеграции"
@@ -2935,6 +2931,10 @@
     "en": "This browser gives no location here",
     "t": "Этот браузер не предоставляет данные о местоположении здесь"
   },
+  "mail.thread.opened": {
+    "en": "Opened in the gmail's browser",
+    "t": "Открыто в браузере gmail"
+  },
   "move.cancel": {
     "en": "Cancel",
     "t": "Отмена"
@@ -4907,10 +4907,6 @@
     "en": "Sent",
     "t": "Отправлено"
   },
-  "window.appeal.sent.what": {
-    "en": "The appeals sent for this profile, one per try, and what Google answered",
-    "t": "Апелляции, отправленные по этому профилю, по одной на попытку, и ответ Google"
-  },
   "window.browser.afterNext": {
     "en": "After Next on step 8, it is on Google: verifying.",
     "t": "После «Далее» на шаге 8 профиль попадает в Google: верификация."
@@ -5087,10 +5083,6 @@
     "en": "video, live, instant",
     "t": "видео, живая, мгновенная"
   },
-  "window.connections.inbox.autoReply": {
-    "en": "Auto-reply to Google support",
-    "t": "Автоответ поддержке Google"
-  },
   "window.connections.inbox.checked": {
     "en": "Checked",
     "t": "Проверено"
@@ -5110,14 +5102,6 @@
   "window.connections.inbox.none": {
     "en": "{gmail}'s inbox is not read yet: Google's emails need its IMAP.",
     "t": "Почта {gmail} пока не читается: для писем Google нужен её IMAP."
-  },
-  "window.connections.inbox.planned": {
-    "en": "Rules on this inbox: auto-reply to Google support, re-request the verification call",
-    "t": "Правила для этой почты: автоответ поддержке Google, повторный запрос звонка для верификации"
-  },
-  "window.connections.inbox.reRequest": {
-    "en": "Re-request verification call",
-    "t": "Повторно запросить звонок для верификации"
   },
   "window.connections.inbox.title": {
     "en": "Email · IMAP",
@@ -5466,10 +5450,6 @@
   "window.log.syncs": {
     "en": "Syncs",
     "t": "Синхронизации"
-  },
-  "window.log.threadOpened": {
-    "en": "Opened in the gmail's browser",
-    "t": "Открыто в браузере gmail"
   },
   "window.log.trade": {
     "en": "Given another trade",
@@ -6027,17 +6007,9 @@
     "en": "After a rejected video",
     "t": "После отклонённого видео"
   },
-  "window.verification.after.what": {
-    "en": "The playbook's verification guide for after a rejected video, step by step, with what is done and what is next",
-    "t": "Руководство плейбука по верификации после отклонённого видео, шаг за шагом, с тем, что сделано и что дальше"
-  },
   "window.verification.attempts": {
     "en": "Attempts",
     "t": "Попытки"
-  },
-  "window.verification.attempts.what": {
-    "en": "Each try at verifying it, one row per try: its kind, when, the film or the call, and Google's answer",
-    "t": "Каждая попытка верификации, по строке на попытку: её вид, когда, видео или звонок и ответ Google"
   },
   "window.verification.banner.email": {
     "en": "Google wrote: {subject} · {ago}",

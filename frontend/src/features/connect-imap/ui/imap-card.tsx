@@ -70,7 +70,7 @@ export function ImapCard({ gmail, imap, onChanged }: { gmail: Gmail; imap: Imap 
         ) : (
           <ImapForm gmail={gmail} busy={busy} onCancel={imap ? () => setEditing(false) : undefined} onSubmit={(v) => void act(() => ok(api.PUT("/gmails/{id}/imap", { params: { path: { id: gmail.id } }, body: v })))} />
         )}
-        <p className="text-xs text-ink-soft">{t(account.imap.why, "Inbox alerts and email automations will read it; nothing reads mail yet.")}</p>
+        <p className="text-xs text-ink-soft">{t(account.imap.reads, "Google's mail about its GBPs is read from it every minute, and replies to Google go out through it.")}</p>
       </CardContent>
     </Card>
   );
