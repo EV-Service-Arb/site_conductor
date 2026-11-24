@@ -298,14 +298,21 @@ async fn a_network_that_hangs_delays_no_other() {
 	s.add(email("olga@x.io"), now).await;
 	s.networks.hung.lock().unwrap().push(hook());
 	assert_eq!(s.lead(now).await, 2);
-	let first = s.hub.deliver(now);
-	let mut first = std::pin::pin!(first);
-	assert!(tokio::time::timeout(std::time::Duration::from_millis(300), &mut first).await.is_err());
-	assert_eq!(s.networks.taken().len(), 1, "the mail of its pass");
-	let later = now + SignedDuration::from_secs(5);
-	s.lead(later).await;
-	assert_eq!(s.hub.deliver(later).await.unwrap().sent, 1, "the mail; the hook's waits for its first");
-	s.networks.hung.lock().unwrap().clear();
+	let meanwhile = async {
+		let sent = async || sqlx::query_scalar::<_, i64>("SELECT count(*) FROM alert_outbox WHERE state = 'sent'").fetch_one(s.panel.store().pool()).await.unwrap();
+		while sent().await == 0 {
+			tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+		}
+		assert_eq!(s.networks.taken().len(), 1, "the mail of its pass");
+		let later = now + SignedDuration::from_secs(5);
+		s.lead(later).await;
+		assert_eq!(s.hub.deliver(later).await.unwrap().sent, 1, "the mail; the hook's waits for its first");
+	};
+	// both polled: a pass left mid-write would hold the database
+	tokio::select! {
+		_ = s.hub.deliver(now) => panic!("its hook answers"),
+		() = meanwhile => {}
+	}
 }
 
 /// A mailbox that asks to wait holds every mail back; a webhook only its own. What nothing reaches is
