@@ -10,8 +10,13 @@ use uuid::Uuid;
 
 use super::{connections::Sealed, from_db, to_db};
 
+const MAIL: &str = "SELECT m.id, m.case_id, m.gmail_id, m.message, m.thread, m.at, m.sent, m.from_address, m.reply_to, m.recipients, m.subject, m.message_id, m.refs, \
+	m.authentic, m.repliable, m.gmb_id, m.listing, m.reading, m.read_by, m.attempts, m.read_error FROM mails m";
+
+const DRAFT: &str = "SELECT d.id, d.case_id, d.answers, d.body_sealed, d.data_key_fp, d.needs, d.state, d.send_at, d.created_at, d.sent_at, d.error FROM mail_drafts d";
+
 /// Who read a message.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, schemars::JsonSchema, strum::EnumString, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[schemars(rename = "MailReader")]
@@ -89,9 +94,6 @@ impl MailRow {
 	}
 }
 
-const MAIL: &str = "SELECT m.id, m.case_id, m.gmail_id, m.message, m.thread, m.at, m.sent, m.from_address, m.reply_to, m.recipients, m.subject, m.message_id, m.refs, \
-	m.authentic, m.repliable, m.gmb_id, m.listing, m.reading, m.read_by, m.attempts, m.read_error FROM mails m";
-
 #[derive(sqlx::FromRow)]
 pub(crate) struct CaseRow {
 	pub id: i64,
@@ -139,8 +141,6 @@ struct RawDraft {
 	sent_at: Option<i64>,
 	error: Option<String>,
 }
-
-const DRAFT: &str = "SELECT d.id, d.case_id, d.answers, d.body_sealed, d.data_key_fp, d.needs, d.state, d.send_at, d.created_at, d.sent_at, d.error FROM mail_drafts d";
 
 fn draft(r: RawDraft) -> eyre::Result<DraftRow> {
 	Ok(DraftRow {

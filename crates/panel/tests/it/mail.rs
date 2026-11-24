@@ -24,6 +24,8 @@ use uuid::Uuid;
 const SUPPORT: &str = "googlebusinessprofile-support@google.com";
 const NOTICE: &str = "businessprofile-noreply@google.com";
 
+const REJECTED: &str = "Action required: Submit a new verification video";
+
 fn t(s: &str) -> Timestamp {
 	s.parse().unwrap()
 }
@@ -216,8 +218,6 @@ fn ours(at: &str, thread: u64, subject: &str, to: &str, refs: &[&str], text: &st
 		..support(at, thread, subject, text)
 	}
 }
-
-const REJECTED: &str = "Action required: Submit a new verification video";
 
 fn rejected(of: &str, listing: &str) -> String {
 	format!("Your verification failed. Submit a new video.\n\nYour verification video{of} didn’t meet\nall of the requirements.\n\nSubmit new video  \n<https://business.google.com/verify/l/{listing}?trk=https%3A%2F%2Fc.gle%2FAbc>\n\nNo view of surrounding area\n")
