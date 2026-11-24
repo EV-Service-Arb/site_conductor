@@ -112,11 +112,10 @@ fn main() -> Result<()> {
 	}
 }
 
-/// `acts` set at Google, then `rows` recorded beside the account's export.
+/// `acts` set at Google, then `rows` recorded beside the account's export; an act Google refuses keeps neither the
+/// others nor the record from happening.
 fn hold(google: &Google, read: &Read, seen: &Seen, rows: &[Row], acts: &[Act]) -> Result<()> {
-	for act in acts {
-		google.act(act).wrap_err_with(|| format!("{act:?}"))?;
-	}
+	let refused: Vec<String> = acts.iter().filter_map(|act| google.act(act).err().map(|e| format!("{act:?}: {e:#}"))).collect();
 	let (project, dataset, _) = export(&seen.definition.held.table)?;
 	let list = seen.definition.digest();
 	let rows: Vec<Value> = rows
@@ -131,6 +130,7 @@ fn hold(google: &Google, read: &Read, seen: &Seen, rows: &[Row], acts: &[Act]) -
 	let url = format!("https://bigquery.googleapis.com/bigquery/v2/projects/{project}/datasets/{dataset}/tables/guard/insertAll");
 	let got = call(google.client.post(url).bearer_auth(&google.token).json(&json!({"rows": rows})))?;
 	ensure!(got["insertErrors"].is_null(), "recording the tick: {got}");
+	ensure!(refused.is_empty(), "{}", refused.join("\n"));
 	Ok(())
 }
 
