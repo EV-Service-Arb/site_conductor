@@ -180,16 +180,80 @@ export const VIEWS = {
       "needs": "sa:admin:tokens:grant",
       "key": "a"
     },
-    "alerts": {
-      "path": "/user/alerts",
-      "description": "Where the caller's alerts go, and which.",
+    "alert_settings": {
+      "path": "/user/alerts/settings",
+      "description": "Where the caller's alerts go, when, and which count as what.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
       "query": {
+        "properties": {
+          "confirm": {
+            "description": "A mailed link's token: the address it proves.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
+    },
+    "alerts": {
+      "path": "/user/alerts",
+      "description": "The caller's alerts, newest first.",
+      "params": {
         "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "family": {
+            "description": "What a rule is about, as a person sorts their alerts.",
+            "enum": [
+              "leads",
+              "reviews",
+              "profiles",
+              "money",
+              "panel",
+              "team",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "open": {
+            "description": "The one opened.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "tier": {
+            "description": "How much a note matters: what it may interrupt.",
+            "enum": [
+              "info",
+              "important",
+              "urgent",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "unread": {
+            "description": "The unread alone.",
+            "type": "boolean"
+          }
+        },
         "required": [],
         "type": "object"
       },

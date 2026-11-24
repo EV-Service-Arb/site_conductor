@@ -3,6 +3,7 @@
 import { platformSignOutHref } from "@evinvest/concierge";
 import { useCallback } from "react";
 
+import { unsubscribePush } from "@/entities/alerts";
 import { signOut } from "@/entities/session";
 import { useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -18,9 +19,13 @@ import { notifyFailure } from "@/shared/ui/notify";
 export function useSignOut(): () => void {
   const t = useT();
   return useCallback(() => {
-    signOut().then(
-      () => window.location.assign(platformSignOutHref(`${window.location.origin}/`)),
-      (e: unknown) => notifyFailure(e, t),
-    );
+    // whoever uses this browser next reads no alert of theirs; a push service that does not answer never keeps anyone signed in
+    unsubscribePush()
+      .catch((e: unknown) => console.error("unsubscribing from pushes", e))
+      .then(signOut)
+      .then(
+        () => window.location.assign(platformSignOutHref(`${window.location.origin}/`)),
+        (e: unknown) => notifyFailure(e, t),
+      );
   }, [t]);
 }

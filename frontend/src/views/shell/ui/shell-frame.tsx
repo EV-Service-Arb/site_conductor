@@ -6,7 +6,9 @@ import { useEffect } from "react";
 
 import { PANEL } from "@config";
 
+import { AlertsProvider } from "@/entities/alerts";
 import { GmailsProvider, PublishSelection, undo } from "@/entities/gmb";
+import { useAlertLive } from "@/features/alert-live";
 import { Assistant } from "@/features/assistant";
 import { api, goToSignIn } from "@/shared/api";
 import { useT, keys, nav } from "@/shared/i18n";
@@ -49,7 +51,9 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
     <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t(keys.help, "Keybinds") }}>
       <UndoProvider labels={{ undo: t(undo.undo, "Undo"), redo: t(undo.redo, "Redo") }}>
         <GmailsProvider>
+          <AlertsProvider>
           <PublishSelection />
+          <AlertLive />
           <NavKeys />
           <FloatieKey />
           <div className="flex h-svh flex-col">
@@ -66,8 +70,14 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
             <Floats />
             <PanelHotbar />
           </div>
+          </AlertsProvider>
         </GmailsProvider>
       </UndoProvider>
     </KeymapProvider>
   );
+}
+
+function AlertLive() {
+  useAlertLive();
+  return null;
 }

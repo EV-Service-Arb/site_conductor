@@ -8,7 +8,6 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-  NavDot,
   type NavGroup,
   type NavIcon,
   NavMenu,
@@ -26,13 +25,13 @@ import {
   useBinding,
   useKeymap,
 } from "@evinvest/uikit";
-import { ArrowUpRight, Bell, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen, Wallet } from "lucide-react";
+import { ArrowUpRight, Globe, MapPin, Menu, PanelLeftClose, PanelLeftOpen, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { unreached, useAlerts, alerts as alertsKeys } from "@/entities/alerts";
 import { ActingAsBadge, DevSignInBadge, useMe } from "@/entities/session";
 import { useTokens, tokens as tokensKeys } from "@/entities/tokens";
 import { AccountChip } from "@/features/account-chip";
+import { AlertBell } from "@/features/alert-bell";
 import { AssistantToggle } from "@/features/assistant";
 import { useSignOut } from "@/features/sign-out";
 
@@ -120,7 +119,7 @@ export function PanelTopBar() {
         <div className="flex items-center gap-1">
           <OwnScreens bar className="hidden md:flex" />
           {PANEL.assistant && at.view !== "assistant" && <AssistantToggle />}
-          <AlertsLink />
+          <AlertBell />
           <LanguageMenu />
           <ActingAsBadge className="ml-1" />
           <AccountChip me={me} onSignOut={signOut} className="ml-1" />
@@ -215,20 +214,6 @@ function AppSwitcher() {
         </NavMenu>
       </NavigationMenuList>
     </NavigationMenu>
-  );
-}
-
-/** The bell: the Alerts page, with a dot while nothing reaches the caller. */
-function AlertsLink() {
-  const t = useT();
-  const alerts = useAlerts();
-  return (
-    <Button asChild variant="ghost" size="sm" icon className="relative">
-      <ViewLink to={{ view: "alerts", params: {} }} aria-label={t(nav.alerts, "Alerts")}>
-        <Bell aria-hidden />
-        {alerts.status === "ok" && unreached(alerts.data) && <NavDot corner tone="warn" label={t(alertsKeys.connect, "Connect Telegram")} />}
-      </ViewLink>
-    </Button>
   );
 }
 
