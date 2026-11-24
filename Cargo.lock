@@ -5990,7 +5990,7 @@ checksum = "8aa3a1ebad7c7d912534fac818e45203fe094907e97806786285f8f440222e5a"
 [[package]]
 name = "social_networks_adapters"
 version = "0.6.19"
-source = "git+https://github.com/valeratrades/social_networks?branch=main#ba0d2ea20961deddd2a22d833889bf55d443605d"
+source = "git+https://github.com/valeratrades/social_networks?branch=main#7e3527a8c41cb88e80b99671818dbe0633b2f636"
 dependencies = [
  "base64 0.23.1",
  "jiff",
