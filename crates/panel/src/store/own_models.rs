@@ -7,7 +7,7 @@ use sqlx::SqliteConnection;
 use uuid::Uuid;
 
 use super::{
-	connections::{Checked, Sealed},
+	connections::{Checked, Sealed, set_key},
 	from_db, to_db,
 };
 
@@ -90,20 +90,7 @@ pub(crate) async fn openai(conn: &mut SqliteConnection, user: Uuid) -> eyre::Res
 
 /// Checked when set: a refused one is never stored.
 pub(crate) async fn set_openai(conn: &mut SqliteConnection, user: Uuid, last4: &str, key: &Sealed, now: Timestamp) -> eyre::Result<()> {
-	sqlx::query(
-		"INSERT INTO user_openai (user_id, key_sealed, data_key_fp, last4, set_at, checked_at, check_error) VALUES ($1, $2, $3, $4, $5, $5, NULL) \
-		 ON CONFLICT (user_id) DO UPDATE SET key_sealed = excluded.key_sealed, data_key_fp = excluded.data_key_fp, last4 = excluded.last4, \
-		 set_at = excluded.set_at, checked_at = excluded.checked_at, check_error = NULL",
-	)
-	.bind(user)
-	.bind(&key.blob)
-	.bind(&key.data_key_fp)
-	.bind(last4)
-	.bind(to_db(now))
-	.execute(&mut *conn)
-	.await
-	.wrap_err("setting a person's OpenAI key")?;
-	Ok(())
+	set_key(conn, (table(Provider::OpenAi), "user_id"), user, last4, key, now).await
 }
 
 pub(crate) async fn checked(conn: &mut SqliteConnection, user: Uuid, of: Provider, c: &Checked) -> eyre::Result<()> {
