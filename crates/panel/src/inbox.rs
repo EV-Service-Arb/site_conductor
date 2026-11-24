@@ -2,6 +2,11 @@
 //! message logged once, on each GBP of the gmail it names, else the gmail's, and what is about a
 //! Business Profile kept ([`crate::mail`]); read through a [`Mailbox`], in `serve` [`Gmail`].
 
+use std::{
+	collections::HashMap,
+	sync::{Arc, Mutex},
+};
+
 use eyre::WrapErr;
 use jiff::Timestamp;
 
@@ -15,6 +20,9 @@ use crate::{
 /// Messages read at once.
 pub const BATCH: usize = 50;
 const SNIPPET: usize = 200;
+
+/// As which account each gmail's inbox was last read to its end, and when, since the start.
+pub(crate) type Reads = Arc<Mutex<HashMap<i64, (String, Timestamp)>>>;
 
 /// A mailbox the follower reads.
 pub trait Mailbox: Sync {
@@ -59,7 +67,7 @@ pub struct Mail {
 	/// Its sender's address.
 	pub from: Option<String>,
 	pub reply_to: Option<String>,
-	/// Its recipients' addresses.
+	/// Its recipients' addresses, its copies' too.
 	pub to: Vec<String>,
 	/// Without its brackets, as each of `refs`.
 	pub message_id: Option<String>,
@@ -71,6 +79,8 @@ pub struct Mail {
 	pub sent: bool,
 	/// Its text, as far as it was read.
 	pub text: String,
+	/// It was read to its end.
+	pub whole: bool,
 }
 
 impl Panel {
@@ -99,6 +109,14 @@ impl Panel {
 			password: &password,
 		};
 		let batch = mailbox.read(account, after, BATCH).await?;
+		let read = || {
+			let was = (imap.username.clone(), now);
+			self.inboxes_read.lock().expect("never poisoned: no panic while held").insert(gmail, was);
+		};
+		if batch.mails.is_empty() && after.is_some_and(|c| c.validity == batch.validity) {
+			read();
+			return Ok(false);
+		}
 		let mut tx = self.store.begin_write().await?;
 		let set = connections::imap(&mut tx, gmail).await?.map(|(i, _)| i.username);
 		if set.as_ref() != Some(&imap.username) || db::cursor(&mut tx, gmail).await? != before {
@@ -144,6 +162,10 @@ impl Panel {
 		};
 		db::set_cursor(&mut tx, gmail, &imap.username, Cursor { validity: batch.validity, uid }).await?;
 		tx.commit().await.wrap_err("committing an inbox's batch")?;
-		Ok(batch.mails.len() == BATCH)
+		let more = batch.mails.len() == BATCH;
+		if !more {
+			read();
+		}
+		Ok(more)
 	}
 }

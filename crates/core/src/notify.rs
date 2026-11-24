@@ -205,8 +205,8 @@ impl Note {
 					(State::ReplyReady, false) => "✉️ Google: a reply is ready to send".to_owned(),
 					(State::Sending { at }, true) => format!("✉️ Google: ответ уйдёт сам {}", minute(*at)),
 					(State::Sending { at }, false) => format!("✉️ Google: a reply goes by itself {}", minute(*at)),
-					(State::NeedsYou { why: Why::Needs { needs } }, true) => format!("✉️ Google: для ответа нужно: {}", one_line(&needs.join("; "), MAX_SUMMARY)),
-					(State::NeedsYou { why: Why::Needs { needs } }, false) => format!("✉️ Google: the reply needs: {}", one_line(&needs.join("; "), MAX_SUMMARY)),
+					(State::NeedsYou { why: Why::Needs { .. } }, true) => "✉️ Google: для ответа нужно то, что есть только у вас".to_owned(),
+					(State::NeedsYou { why: Why::Needs { .. } }, false) => "✉️ Google: the reply needs what only you have".to_owned(),
 					(State::Waiting { until }, true) => format!("✉️ Google: передали специалисту, ответ до {}", minute(*until)),
 					(State::Waiting { until }, false) => format!("✉️ Google: passed on to a specialist, an answer by {}", minute(*until)),
 					(_, true) => "✉️ Google: нужны вы".to_owned(),
@@ -222,6 +222,10 @@ impl Note {
 				if let Some(summary) = summary.as_deref().map(|s| one_line(s, MAX_SUMMARY)).filter(|s| !s.is_empty()) {
 					out.push("\n");
 					out.code(&summary);
+					if let State::NeedsYou { why: Why::Needs { needs } } = state {
+						out.push(if ru { "\nНужно: " } else { "\nIt needs: " });
+						out.code(&one_line(&needs.join("; "), MAX_SUMMARY));
+					}
 				}
 				if let Some(at) = deadline {
 					out.push(&if ru { format!("\nДо {}", minute(*at)) } else { format!("\nBy {}", minute(*at)) });
@@ -487,6 +491,7 @@ fn kind_name(kind: Kind, locale: Locale) -> &'static str {
 		Kind::Invited => ("приглашение", "invited"),
 		Kind::AccessGranted => ("доступ выдан", "access granted"),
 		Kind::AccessLost => ("доступ отозван", "access lost"),
+		Kind::OthersAccess => ("доступ получил другой", "someone else given access"),
 		Kind::OwnershipRequested => ("запрос на владение", "ownership requested"),
 		Kind::ManagementRequested => ("запрос на управление", "management requested"),
 		Kind::EditSuggested => ("предложена правка", "edit suggested"),
@@ -610,6 +615,23 @@ mod tests {
 			mail.text(Locale::En),
 			"✉️ Google: a reply goes by itself 2026-10-06 10:15 UTC\nGoogle asks · Plomberie Dupont\nAsks for a photo of the signage\nBy 2026-10-10 00:00 UTC"
 		);
+		let lacking = |summary: Option<&str>| Note::GoogleMail {
+			state: State::NeedsYou {
+				why: Why::Needs { needs: vec!["see evil.io".into()] },
+			},
+			kind: Some(Kind::Asks),
+			gmb: None,
+			summary: summary.map(str::to_owned),
+			deadline: None,
+		};
+		assert_eq!(
+			lacking(None).text(Locale::En),
+			"✉️ Google: the reply needs what only you have\nGoogle asks",
+			"a channel hears nothing of Google's words"
+		);
+		let private = lacking(Some("Asks")).render(Locale::En);
+		assert!(private.text.ends_with("\nAsks\nIt needs: see evil.io"), "{}", private.text);
+		assert_eq!(private.entities.len(), 2, "both code");
 		assert_eq!(one_line("  a \u{2066}b\u{2069}  c ", 80), "a b c");
 		assert_eq!(one_line("abcdef", 4), "abc…");
 	}

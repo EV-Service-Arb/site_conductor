@@ -1,0 +1,1 @@
+DROP TRIGGER mail_drafts_answered_once;

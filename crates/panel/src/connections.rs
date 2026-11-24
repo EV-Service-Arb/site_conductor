@@ -28,7 +28,7 @@ use crate::{
 	store::{
 		browsers as browsers_db,
 		connections::{self as db, Inbox, Sealed},
-		gmbs as gmbs_db,
+		gmbs as gmbs_db, inbox as inbox_db, mail as mail_db,
 		tokens::{self as ledger, Charged, Entry, Kind},
 		users as users_db,
 	},
@@ -113,6 +113,13 @@ impl Panel {
 		let mut tx = self.store.begin_write().await?;
 		if gmbs_db::gmail_owner(&mut tx, id).await? != Some(owner) {
 			return Ok(Err(Refused::NotFound));
+		}
+		if db::inbox_elsewhere(&mut tx, id, inbox.username).await? {
+			return Ok(Err(Refused::Conflict("that inbox is another gmail's already: an inbox is one gmail's".to_owned())));
+		}
+		// its cases are the account's before: none is answered from another unasked
+		if inbox_db::cursor(&mut tx, id).await?.is_some_and(|(before, _)| before != inbox.username) {
+			mail_db::let_go(&mut tx, id).await?;
 		}
 		db::set_imap(&mut tx, id, inbox, &sealed, now).await?;
 		tx.commit().await.wrap_err("committing a gmail's IMAP")?;

@@ -170,6 +170,19 @@ pub(crate) async fn set_business_grant(conn: &mut SqliteConnection, gmail_id: i6
 	Ok(done.rows_affected() > 0)
 }
 
+/// Whether another gmail, not removed, has the inbox.
+pub(crate) async fn inbox_elsewhere(conn: &mut SqliteConnection, gmail_id: i64, username: &str) -> eyre::Result<bool> {
+	sqlx::query_scalar(
+		"SELECT EXISTS (SELECT 1 FROM gmail_imap i JOIN gmails g ON g.id = i.gmail_id \
+		 WHERE i.gmail_id != $1 AND lower(i.username) = lower($2) AND g.removed_at IS NULL)",
+	)
+	.bind(gmail_id)
+	.bind(username)
+	.fetch_one(&mut *conn)
+	.await
+	.wrap_err("looking for another gmail of an inbox")
+}
+
 /// Checked when set: a refused one is never stored.
 pub(crate) async fn set_imap(conn: &mut SqliteConnection, gmail_id: i64, inbox: Inbox<'_>, password: &Sealed, now: Timestamp) -> eyre::Result<()> {
 	sqlx::query(

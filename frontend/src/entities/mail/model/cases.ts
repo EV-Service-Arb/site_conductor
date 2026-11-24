@@ -120,7 +120,7 @@ function chip(c: MailCase, why: MailWhy, t: T): string {
     case "needs":
       return t(mail.needs.needs, "needs {n} from you", { n: why.needs.length });
     case "asked_often":
-      return c.said === "routed" ? t(mail.needs.unanswered, "no answer") : t(mail.needs.asked_often, "nothing new");
+      return t(mail.needs.asked_often, "nothing new");
     case "unanswered":
       return t(mail.needs.unanswered, "no answer");
     case "no_reply":
@@ -148,9 +148,9 @@ export function whyText(c: MailCase, why: MailWhy, t: T, locale: Locale, now: Da
     case "needs":
       return t(mail.why.needs, "Needs from you: {what}", { what: why.needs.join(", ") });
     case "asked_often":
-      return c.said === "routed" ? t(mail.why.silent, "Google's specialist stayed silent past the time given, and when asked again.") : t(mail.why.asked_often, "Google answers nothing new, however often it was asked.");
+      return t(mail.why.asked_often, "Google answers nothing new, however often it was asked.");
     case "unanswered":
-      return t(mail.why.unanswered, "Google went silent, and nothing here takes a reply.");
+      return c.said === "routed" && c.last.who === "us" ? t(mail.why.silent, "Google's specialist stayed silent past the time given, and when asked again.") : t(mail.why.unanswered, "Google went silent, and nothing here takes a reply.");
     case "no_reply":
       return t(mail.why.no_reply, "Google asks in a mail that takes no reply: answer it where it says.");
     case "unread":
@@ -160,7 +160,7 @@ export function whyText(c: MailCase, why: MailWhy, t: T, locale: Locale, now: Da
     case "nothing_to_say":
       return t(mail.why.nothing_to_say, "No reply was written: {why}", { why: why.why });
     case "may_have_gone_out":
-      return t(mail.why.may_have_gone_out, "The reply may have gone out: check the thread. It is never sent again by itself.");
+      return t(mail.why.may_have_gone_out, "The reply may have gone out, and its copy is not in the inbox: check the thread, and answer there if it did not go.");
     case "failed":
       return t(mail.why.failed, "The reply did not go: {error}", { error: why.error });
   }

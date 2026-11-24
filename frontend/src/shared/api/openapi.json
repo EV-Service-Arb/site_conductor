@@ -24674,7 +24674,7 @@
         "tags": [
           "mail"
         ],
-        "summary": "Corrects a case's GBP or topic, or marks it done: its draft is let go.",
+        "summary": "Corrects a case's GBP or topic, or marks it done: its draft is let go; one going by itself waits for its person.",
         "operationId": "edit_mail_case",
         "parameters": [
           {
@@ -24848,7 +24848,8 @@
           "unavailable": 503,
           "unreleased_category": 422,
           "unstudied": 422
-        }
+        },
+        "x-outward": true
       }
     },
     "/mail/cases/{id}/draft": {
@@ -24857,7 +24858,7 @@
           "mail"
         ],
         "summary": "Writes a reply to the case now, in place of the one there; nothing is sent.",
-        "description": "400 nothing in the case takes a reply; 409 another message came meanwhile; 503 no Claude to write it, or it or the review archive does not answer.",
+        "description": "400 nothing in the case takes a reply; 409 its last message is answered, or the case changed meanwhile; 503 no Claude to write it, or it or the review archive does not answer.",
         "operationId": "draft_mail",
         "parameters": [
           {
@@ -25217,7 +25218,8 @@
           "unavailable": 503,
           "unreleased_category": 422,
           "unstudied": 422
-        }
+        },
+        "x-outward": true
       },
       "delete": {
         "tags": [
@@ -25570,7 +25572,7 @@
         "tags": [
           "mail"
         ],
-        "summary": "Corrects what a message of Google's was read as; the caller's word from then on.",
+        "summary": "Corrects what a message of Google's was read as; the caller's word from then on. A draft going by itself waits for its person.",
         "description": "400 a topic its kind is not of, or a message of ours.",
         "operationId": "correct_mail",
         "parameters": [
@@ -25745,7 +25747,8 @@
           "unavailable": 503,
           "unreleased_category": 422,
           "unstudied": 422
-        }
+        },
+        "x-outward": true
       }
     },
     "/map": {
@@ -36569,7 +36572,7 @@
         ]
       },
       "MailKind": {
-        "description": "What a message of Google's says.\n\n- `video_rejected`: The recorded verification video did not pass.\n- `video_in_review`: The recorded verification video is being reviewed.\n- `verified`: The profile is verified.\n- `reverification_required`: The profile has to be verified again.\n- `self_serve`: Support points back at the recorded video or the on-screen prompts.\n- `call_offered`: The live verification call is enabled.\n- `call_failed`: A live verification call was held and did not verify.\n- `options_exhausted`: No way to verify is left on the profile.\n- `account_restricted`: The account, not one profile, is restricted.\n- `reviews_paused`: New reviews are paused: a spike of spam.\n- `reviews_restricted`: Fake or incentivised reviews were found, the profile's reviews restricted.\n- `review_removed`: A review was removed.\n- `reinstatement_refused`: Support will not bring the reviews back.\n- `reinstatement_done`: Support brought all or part of the reviews back.\n- `reviews_live_already`: Support sees the reviews live already.\n- `reviews_no_data`: Support has no record of the reviews.\n- `still_active`: Is the business still open: inactivity, removed or revoked unless answered.\n- `invited`: Someone invited this account to manage a profile.\n- `ownership_requested`: Someone asks for a profile's ownership.\n- `management_requested`: Someone asks to manage a profile.\n- `edit_suggested`: Someone suggested an edit: does this look right to you?\n- `edit_rejected`: An edit of ours was not accepted.\n- `changed_by_google`: Google changed the profile.\n- `content_removed`: A photo, post or other content was removed.\n- `duplicate`: The profile is marked as another's duplicate.\n- `acknowledged`: A request was received, nothing more.\n- `routed`: Handed to a specialist or another team, who answers.\n- `asks`: Asks for documents, photos, changes or answers before going on: which profile, which reviews.\n- `closed`: The case is closed: it accepts no reply, or a survey follows it.\n- `unclear`: About a profile, what it says cannot be told.\n- `noise`: Performance, promotions, surveys, new reviews, posts.\n- `not_business`: Not about a Business Profile.\n- `impersonation`: Not from Google.",
+        "description": "What a message of Google's says.\n\n- `video_rejected`: The recorded verification video did not pass.\n- `video_in_review`: The recorded verification video is being reviewed.\n- `verified`: The profile is verified.\n- `reverification_required`: The profile has to be verified again.\n- `self_serve`: Support points back at the recorded video or the on-screen prompts.\n- `call_offered`: The live verification call is enabled.\n- `call_failed`: A live verification call was held and did not verify.\n- `options_exhausted`: No way to verify is left on the profile.\n- `account_restricted`: The account, not one profile, is restricted.\n- `reviews_paused`: New reviews are paused: a spike of spam.\n- `reviews_restricted`: Fake or incentivised reviews were found, the profile's reviews restricted.\n- `review_removed`: A review was removed.\n- `reinstatement_refused`: Support will not bring the reviews back.\n- `reinstatement_done`: Support brought all or part of the reviews back.\n- `reviews_live_already`: Support sees the reviews live already.\n- `reviews_no_data`: Support has no record of the reviews.\n- `still_active`: Is the business still open: inactivity, removed or revoked unless answered.\n- `invited`: Someone invited this account to manage a profile.\n- `access_granted`: This account was given access to a profile.\n- `access_lost`: This account can no longer manage a profile.\n- `others_access`: Someone else was given access to a profile.\n- `ownership_requested`: Someone asks for a profile's ownership.\n- `management_requested`: Someone asks to manage a profile.\n- `edit_suggested`: Someone suggested an edit: does this look right to you?\n- `edit_rejected`: An edit of ours was not accepted.\n- `changed_by_google`: Google changed the profile.\n- `content_removed`: A photo, post or other content was removed.\n- `duplicate`: The profile is marked as another's duplicate.\n- `acknowledged`: A request was received, nothing more.\n- `routed`: Handed to a specialist or another team, who answers.\n- `asks`: Asks for documents, photos, changes or answers before going on: which profile, which reviews.\n- `closed`: The case is closed: it accepts no reply, or a survey follows it.\n- `unclear`: About a profile, what it says cannot be told.\n- `noise`: Performance, promotions, surveys, new reviews, posts.\n- `not_business`: Not about a Business Profile.\n- `impersonation`: Not from Google.",
         "type": "string",
         "enum": [
           "suspended",
@@ -36577,8 +36580,6 @@
           "appeal_approved",
           "appeal_denied",
           "restriction_lifted",
-          "access_granted",
-          "access_lost",
           "policy_warning",
           "video_rejected",
           "video_in_review",
@@ -36598,6 +36599,9 @@
           "reviews_no_data",
           "still_active",
           "invited",
+          "access_granted",
+          "access_lost",
+          "others_access",
           "ownership_requested",
           "management_requested",
           "edit_suggested",
@@ -37133,7 +37137,7 @@
             ]
           },
           {
-            "description": "Google answers nothing new, however often asked, or is silent past its word and asked again.",
+            "description": "Google answers nothing new, however often asked.",
             "type": "object",
             "properties": {
               "code": {
@@ -37146,16 +37150,21 @@
             ]
           },
           {
-            "description": "Google is silent, and nothing here takes a reply.",
+            "description": "Google is silent, and nothing here takes a reply, or its specialist was asked again already.",
             "type": "object",
             "properties": {
               "code": {
                 "type": "string",
                 "const": "unanswered"
+              },
+              "since": {
+                "type": "string",
+                "format": "date-time"
               }
             },
             "required": [
-              "code"
+              "code",
+              "since"
             ]
           },
           {
@@ -37226,7 +37235,7 @@
             ]
           },
           {
-            "description": "Cut off while sending: check the thread.",
+            "description": "Cut off while sending, or sent and never seen in the inbox: check the thread.",
             "type": "object",
             "properties": {
               "code": {

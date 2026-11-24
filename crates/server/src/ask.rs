@@ -58,7 +58,7 @@ Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[l
 
 /// The model that answered: a fallback's, when it stood in.
 pub(crate) fn answered_by(reply: &Value) -> eyre::Result<&str> {
-	reply["model"].as_str().ok_or_else(|| eyre::eyre!("the model answered without its name: {reply}"))
+	reply["model"].as_str().ok_or_else(|| eyre::eyre!("the model answered without its name"))
 }
 
 /// What an answer read and wrote, as its `usage` says.

@@ -319,7 +319,7 @@ function Read({ m, reload }: { m: MailMessage; reload: () => void }) {
   };
   return (
     <div className="flex flex-col gap-2 text-xs text-ink-soft">
-      {m.reading?.kind === "unclear" && <p>{t(mail.message.unclear, "What it says could not be told: the reply asks Google again. Set its kind if you can tell.")}</p>}
+      {m.reading?.kind === "unclear" && <p>{t(mail.message.unclear, "What it says could not be told, so its reply never goes by itself. Set its kind if you can tell.")}</p>}
       {m.read_error !== null && <p className="break-words text-accent-error">{m.read_error}</p>}
       <span className="flex flex-wrap items-center gap-2">
         <label htmlFor={id}>{t(mail.message.kind, "Kind")}</label>

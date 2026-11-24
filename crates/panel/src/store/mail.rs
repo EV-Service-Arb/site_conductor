@@ -1,10 +1,13 @@
 //! Google's mail as kept: the cases, their messages (each text sealed), the drafts of replies to them.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::mail::{DraftState, Holds, Reading, Sender, Topic};
+use sa_core::{
+	gbp,
+	mail::{DraftState, Holds, Reading, Sender, Topic},
+};
 use sqlx::{SqliteConnection, types::Json};
 use uuid::Uuid;
 
@@ -255,6 +258,37 @@ pub(crate) async fn supersede(conn: &mut SqliteConnection, case: i64) -> eyre::R
 	Ok(())
 }
 
+/// The case's draft going by itself waits for a person.
+pub(crate) async fn unhold(conn: &mut SqliteConnection, case: i64) -> eyre::Result<()> {
+	sqlx::query("UPDATE mail_drafts SET state = 'proposed' WHERE case_id = $1 AND state = 'held'")
+		.bind(case)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("holding a case's draft back")?;
+	Ok(())
+}
+
+/// Nothing of the gmail's goes by itself any more, until switched on anew.
+pub(crate) async fn let_go(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<()> {
+	for sql in [
+		"UPDATE mail_drafts SET state = 'proposed' WHERE state = 'held' AND case_id IN (SELECT id FROM mail_cases WHERE gmail_id = $1)",
+		"DELETE FROM gmail_mail_auto WHERE gmail_id = $1",
+	] {
+		sqlx::query(sql).bind(gmail).execute(&mut *conn).await.wrap_err("letting a gmail's automatic replies go")?;
+	}
+	Ok(())
+}
+
+/// Whether a reply to the case's message `answers` was handed to SMTP.
+pub(crate) async fn handed(conn: &mut SqliteConnection, case: i64, answers: i64) -> eyre::Result<bool> {
+	sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM mail_drafts WHERE case_id = $1 AND answers = $2 AND state IN ('sending', 'sent'))")
+		.bind(case)
+		.bind(answers)
+		.fetch_one(&mut *conn)
+		.await
+		.wrap_err("looking a reply handed over up")
+}
+
 /// The cases of the owner's gmails not removed, oldest first.
 pub(crate) async fn cases(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<CaseRow>> {
 	sqlx::query_as(
@@ -301,18 +335,43 @@ pub(crate) async fn text(conn: &mut SqliteConnection, mail: i64) -> eyre::Result
 	Ok(Sealed { blob, data_key_fp })
 }
 
-/// When each of the owner's GBPs was moved to verified, or added so, and from suspended or not.
-pub(crate) async fn verified(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<(i64, Timestamp, bool)>> {
-	let rows: Vec<(i64, i64, bool)> = sqlx::query_as(
-		"SELECT e.gmb_id, e.at, coalesce(e.data ->> 'from' = 'suspended', 0) FROM gmb_events e JOIN gmbs b ON b.id = e.gmb_id \
-		 WHERE b.owner = $1 AND b.removed_at IS NULL AND ((e.kind = 'state' AND e.data ->> 'to' = 'verified') OR (e.kind = 'added' AND e.data ->> 'state' = 'verified')) \
-		 ORDER BY e.id",
+/// Each move of the owner's GBPs, from which state (none, it was added) and to which.
+pub(crate) async fn moves(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<(i64, Timestamp, Option<gbp::State>, gbp::State)>> {
+	let rows: Vec<(i64, i64, Option<String>, String)> = sqlx::query_as(
+		"SELECT e.gmb_id, e.at, e.data ->> 'from', coalesce(e.data ->> 'to', e.data ->> 'state') FROM gmb_events e JOIN gmbs b ON b.id = e.gmb_id \
+		 WHERE b.owner = $1 AND e.kind IN ('state', 'added') ORDER BY e.id",
 	)
 	.bind(owner)
 	.fetch_all(&mut *conn)
 	.await
-	.wrap_err("listing when a person's GBPs were verified")?;
-	rows.into_iter().map(|(gmb, at, reinstated)| Ok((gmb, from_db(at)?, reinstated))).collect()
+	.wrap_err("listing the moves of a person's GBPs")?;
+	rows.into_iter()
+		.map(|(gmb, at, from, to)| Ok((gmb, from_db(at)?, from.map(|f| f.parse()).transpose()?, to.parse()?)))
+		.collect()
+}
+
+/// The owner's GBPs not removed.
+pub(crate) async fn live(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<BTreeSet<i64>> {
+	let ids: Vec<i64> = sqlx::query_scalar("SELECT id FROM gmbs WHERE owner = $1 AND removed_at IS NULL")
+		.bind(owner)
+		.fetch_all(&mut *conn)
+		.await
+		.wrap_err("listing a person's live GBPs")?;
+	Ok(ids.into_iter().collect())
+}
+
+/// Whom each of the owner's gmails' inboxes is read as, and whether another live gmail's is too.
+pub(crate) async fn inboxes(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<HashMap<i64, (String, bool)>> {
+	let rows: Vec<(i64, String, bool)> = sqlx::query_as(
+		"SELECT i.gmail_id, i.username, EXISTS (SELECT 1 FROM gmail_imap o JOIN gmails og ON og.id = o.gmail_id \
+		 WHERE o.gmail_id != i.gmail_id AND lower(o.username) = lower(i.username) AND og.removed_at IS NULL) \
+		 FROM gmail_imap i JOIN gmails g ON g.id = i.gmail_id WHERE g.owner = $1 AND g.removed_at IS NULL",
+	)
+	.bind(owner)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing whom a person's inboxes are read as")?;
+	Ok(rows.into_iter().map(|(gmail, username, shared)| (gmail, (username, shared))).collect())
 }
 
 /// Whoever has mail kept, in a gmail not removed.

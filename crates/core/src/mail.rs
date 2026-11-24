@@ -8,19 +8,25 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 /// Google is asked again after this long without an answer, if it gave no other term.
-pub const RE_ASK: SignedDuration = SignedDuration::from_hours(48);
+const RE_ASK: SignedDuration = SignedDuration::from_hours(48);
+/// A video or an appeal is decided on within it, if Google gave no other term.
+const IN_REVIEW: SignedDuration = SignedDuration::from_hours(24 * 7);
 /// Ours in a case since Google last gave something new; past it a person decides.
-pub const MAX_ASKS: usize = 6;
+const MAX_ASKS: usize = 6;
+/// What goes by itself waits this long after ours before it.
+const APART: SignedDuration = SignedDuration::from_hours(12);
+/// An inbox not read for this long may hold Google's answer.
+const STALE: SignedDuration = SignedDuration::from_hours(1);
 /// A draft that goes by itself waits this long.
 pub const HOLD: SignedDuration = SignedDuration::from_mins(15);
 /// A case whose last message is older needs nothing.
-pub const QUIET_AFTER: SignedDuration = SignedDuration::from_hours(24 * 21);
+const QUIET_AFTER: SignedDuration = SignedDuration::from_hours(24 * 21);
 /// Older mail is kept, not read by the model.
 pub const READ_BACK: SignedDuration = SignedDuration::from_hours(24 * 90);
 /// A reading failed this often is a person's.
 pub const MAX_READS: i64 = 3;
 /// A send not over by then was cut off.
-pub const SENDING_FOR: SignedDuration = SignedDuration::from_mins(5);
+const SENDING_FOR: SignedDuration = SignedDuration::from_mins(5);
 /// A shorter name, place id or address line is in every other message.
 const NAMES_FROM: usize = 4;
 
@@ -85,8 +91,12 @@ pub enum Kind {
 	StillActive,
 	/// Someone invited this account to manage a profile.
 	Invited,
+	/// This account was given access to a profile.
 	AccessGranted,
+	/// This account can no longer manage a profile.
 	AccessLost,
+	/// Someone else was given access to a profile.
+	OthersAccess,
 	/// Someone asks for a profile's ownership.
 	OwnershipRequested,
 	/// Someone asks to manage a profile.
@@ -135,7 +145,7 @@ impl Kind {
 			| Self::ReviewsLiveAlready
 			| Self::ReviewsNoData => Topic::Reviews,
 			Self::StillActive => Topic::Activity,
-			Self::Invited | Self::AccessGranted | Self::AccessLost | Self::OwnershipRequested | Self::ManagementRequested => Topic::Access,
+			Self::Invited | Self::AccessGranted | Self::AccessLost | Self::OthersAccess | Self::OwnershipRequested | Self::ManagementRequested => Topic::Access,
 			Self::EditSuggested | Self::EditRejected | Self::ChangedByGoogle | Self::ContentRemoved | Self::PolicyWarning | Self::Duplicate => Topic::Profile,
 			Self::Noise | Self::NotBusiness | Self::Impersonation => Topic::Other,
 			Self::Acknowledged | Self::Routed | Self::Asks | Self::Closed | Self::Unclear => return None,
@@ -146,14 +156,11 @@ impl Kind {
 	fn turn(self) -> Turn {
 		match self {
 			Self::SelfServe | Self::OptionsExhausted | Self::ReinstatementRefused | Self::ReviewsNoData | Self::Asks | Self::Unclear => Turn::Reply,
-			Self::Acknowledged | Self::Routed => Turn::Google,
+			Self::Acknowledged | Self::Routed | Self::VideoInReview | Self::AppealReceived => Turn::Google,
 			Self::Verified | Self::AppealApproved | Self::RestrictionLifted | Self::ReinstatementDone | Self::Closed => Turn::Nobody { resolved: true },
-			Self::VideoInReview
-			| Self::AppealReceived
-			| Self::ReviewRemoved
+			Self::ReviewRemoved
 			| Self::Invited
 			| Self::AccessGranted
-			| Self::AccessLost
 			| Self::EditRejected
 			| Self::ChangedByGoogle
 			| Self::ContentRemoved
@@ -171,6 +178,8 @@ impl Kind {
 			| Self::ReviewsRestricted
 			| Self::ReviewsLiveAlready
 			| Self::StillActive
+			| Self::AccessLost
+			| Self::OthersAccess
 			| Self::OwnershipRequested
 			| Self::ManagementRequested
 			| Self::EditSuggested
@@ -179,9 +188,25 @@ impl Kind {
 		}
 	}
 
-	/// Whether a conversation ending in `self` is over once `later` is read of its GBP in another case.
-	fn resolved_by(self, later: Self) -> bool {
-		matches!(later, Self::Verified | Self::AppealApproved | Self::RestrictionLifted | Self::ReinstatementDone) || (self == Self::CallOffered && later == Self::CallFailed)
+	/// Whether it settles a case of `topic`, said in it.
+	fn resolves(self, topic: Topic) -> bool {
+		self.turn() == Turn::Nobody { resolved: true } && self.topic().is_none_or(|t| t == topic)
+	}
+
+	/// Whether what it says of a GBP stands no more once `later` is said of it.
+	fn superseded_by(self, later: Self) -> bool {
+		let by: &[Self] = match self {
+			Self::VideoRejected | Self::VideoInReview | Self::ReverificationRequired => &[Self::VideoRejected, Self::VideoInReview, Self::CallOffered, Self::Verified],
+			Self::CallOffered | Self::CallFailed => &[Self::CallOffered, Self::CallFailed, Self::Verified],
+			Self::Suspended | Self::AppealReceived | Self::AppealDenied => &[Self::AppealReceived, Self::AppealApproved, Self::AppealDenied],
+			Self::AccountRestricted => &[Self::AppealReceived, Self::AppealApproved],
+			Self::ReviewsPaused | Self::ReviewsRestricted => &[Self::ReviewsPaused, Self::ReviewsRestricted, Self::RestrictionLifted],
+			Self::ReviewsLiveAlready => &[Self::ReinstatementDone],
+			Self::StillActive => &[Self::StillActive],
+			Self::AccessLost => &[Self::AccessGranted],
+			_ => &[], // two edits suggested, two requests, two warnings are two
+		};
+		by.contains(&later)
 	}
 }
 
@@ -230,26 +255,17 @@ impl Sender {
 	}
 }
 
-/// Whether nobody reads what is sent to `address`.
-pub fn noreply(address: &str) -> bool {
-	let local = address.rsplit_once('@').map_or(address, |(l, _)| l).to_lowercase();
-	["noreply", "no-reply", "no_reply", "donotreply", "do-not-reply"].iter().any(|n| local.contains(n))
-}
-
-/// Where a reply may go, or why not: the counterpart's Reply-To, else its From, of a message that is
-/// Google's.
+/// Where a reply may go, or why not: the counterpart's Reply-To, else its From, support's, of a message that
+/// is Google's.
 pub fn recipient<'a>(authentic: bool, from: Option<&'a str>, reply_to: Option<&'a str>) -> Result<&'a str, String> {
 	if !authentic {
 		return Err("the message it answers is not proved Google's".to_owned());
 	}
 	let to = reply_to.or(from).ok_or("the message it answers names no sender")?;
-	if domain(to) != Some("google.com".to_owned()) {
-		return Err(format!("{to} is not an address @google.com"));
+	match Sender::of(to) {
+		Sender::Support => Ok(to),
+		Sender::Notice | Sender::Noreply | Sender::Other => Err(format!("{to} is not Google's support")),
 	}
-	if noreply(to) {
-		return Err(format!("nobody reads {to}"));
-	}
-	Ok(to)
 }
 
 /// Whether a message is Google's: its one From is @google.com exactly, and the first
@@ -298,15 +314,20 @@ pub fn ruled(from: Option<&str>, shown: &str, authentic: bool, subject: &str) ->
 
 /// Whether a message from `sender` takes a reply.
 pub fn repliable(sender: Sender, text: &str) -> bool {
-	let text = squeezed(text).replace('’', "'");
-	let refuses = [
-		"can't accept replies",
-		"cannot accept replies",
-		"n'accepte pas les réponses",
-		"doesn't allow replies",
-		"does not allow replies",
-	];
-	sender == Sender::Support && !refuses.iter().any(|r| text.contains(r))
+	static REFUSES: LazyLock<Regex> = LazyLock::new(|| {
+		let refuses = [
+			r"(can't|cannot|can not|doesn't|does not|don't|do not|unable to) (accept|receive|allow|take) (any )?(replies|responses)",
+			// "if you do not reply" asks for one
+			r"(^|[.!?:*] )(do not|don't) (reply|respond)\b",
+			r"please,? (do not|don't) (reply|respond)\b",
+			r"(isn't|is not|aren't|are not|not) (being )?(actively )?monitored\b",
+			r"(n'accepte|ne peut|ne permet|ne reçoit|ne prend) (pas|aucune|plus)( de)?( recevoir| accepter)? ?(les |de |des |aucune )?réponses?",
+			r"(veuillez|merci de|prière de) ne pas (y )?répondre|(^|[.!?:*] )ne (pas répondre|répondez pas)",
+			r"n'est pas (surveillée?|consultée?|relevée?)",
+		];
+		Regex::new(&refuses.join("|")).expect("a constant")
+	});
+	sender == Sender::Support && !REFUSES.is_match(&squeezed(text).replace('’', "'"))
 }
 
 /// The case numbers a subject carries.
@@ -436,9 +457,17 @@ pub struct Message {
 	/// Received, from an address taking no reply; sent, to such alone.
 	pub noreply: bool,
 	pub repliable: bool,
+	/// Received, to the account its inbox is read as; sent, by it.
+	pub addressed: bool,
 	pub reading: Option<Reading>,
 	/// Why it is not read, once given up on.
 	pub read_error: Option<String>,
+}
+impl Message {
+	/// Whether it counts in its case: not ours where nobody reads it, nor a survey.
+	pub fn heard(&self) -> bool {
+		!(self.sent && self.noreply) && !self.reading.as_ref().is_some_and(|r| matches!(r.kind, Kind::Noise | Kind::NotBusiness))
+	}
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema)]
@@ -467,6 +496,7 @@ pub struct Draft {
 	/// The case's last message when it was written.
 	pub answers: i64,
 	pub needs: Vec<String>,
+	pub written_at: Timestamp,
 	/// Held, when it goes; sending, since when.
 	pub send_at: Option<Timestamp>,
 	pub sent_at: Option<Timestamp>,
@@ -474,22 +504,33 @@ pub struct Draft {
 	pub error: Option<String>,
 }
 
+/// The GBP a case is about.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum About {
+	Unknown,
+	Live,
+	Removed,
+}
+
 /// What a case's state stands on.
 #[derive(Clone, Debug)]
 pub struct Case<'a> {
 	pub topic: Topic,
+	pub about: About,
 	/// Oldest first.
 	pub messages: &'a [Message],
 	/// The latest.
 	pub draft: Option<&'a Draft>,
 	/// The message a person marked it done at.
 	pub done: Option<i64>,
-	/// Google's readings on its GBP in its other cases, and the GBP's moves to verified as such.
-	pub elsewhere: &'a [(Timestamp, Topic, Kind)],
+	/// Google's readings on its GBP in its other cases, and the GBP's moves as such.
+	pub elsewhere: &'a [(Timestamp, Kind)],
 	/// Another case, open, asks Google to verify its GBP.
 	pub asked_elsewhere: bool,
 	/// Why its mail is not read or its reply not written: no Claude, no balance.
 	pub stuck: Option<&'a str>,
+	/// When its inbox was last read, since the conductor started.
+	pub read: Option<Timestamp>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, strum::EnumDiscriminants, schemars::JsonSchema)]
@@ -537,10 +578,10 @@ pub enum Why {
 	Deadline { at: Timestamp },
 	/// The draft lacks what only the operator has.
 	Needs { needs: Vec<String> },
-	/// Google answers nothing new, however often asked, or is silent past its word and asked again.
+	/// Google answers nothing new, however often asked.
 	AskedOften,
-	/// Google is silent, and nothing here takes a reply.
-	Unanswered,
+	/// Google is silent, and nothing here takes a reply, or its specialist was asked again already.
+	Unanswered { since: Timestamp },
 	/// Google asks in a mail that takes no reply.
 	NoReply,
 	/// Not read; `null`: not yet.
@@ -549,16 +590,16 @@ pub enum Why {
 	Stuck { error: String },
 	/// The writer had nothing to say.
 	NothingToSay { why: String },
-	/// Cut off while sending: check the thread.
+	/// Cut off while sending, or sent and never seen in the inbox: check the thread.
 	MayHaveGoneOut,
 	/// The reply was not written, or not sent.
 	Failed { error: String },
 }
 
 pub fn state(c: &Case<'_>, now: Timestamp) -> State {
-	let heard: Vec<&Message> = c.messages.iter().filter(|m| !(m.sent && m.noreply)).collect();
+	let heard = heard(c);
 	let Some(last) = heard.last() else { return State::Quiet };
-	if c.done.is_some() && c.messages.iter().rev().take_while(|m| Some(m.id) != c.done).all(|m| m.sent && m.noreply) {
+	if c.done.is_some() && c.messages.iter().rev().take_while(|m| Some(m.id) != c.done).all(|m| !m.heard()) {
 		return State::Done { by_hand: true };
 	}
 	let draft = c.draft.filter(|d| d.answers == last.id);
@@ -576,26 +617,27 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 			needs(Why::MayHaveGoneOut)
 		};
 	}
-	let sent_at = draft.filter(|d| d.state == DraftState::Sent).map(|d| d.sent_at.expect("a sent draft went out at a moment"));
-	if now.duration_since(sent_at.unwrap_or(last.at)) > QUIET_AFTER {
+	if c.about == About::Removed {
 		return State::Quiet;
 	}
-	let google = heard.iter().rev().find(|m| !m.sent);
-	let said = google.and_then(|m| m.reading.as_ref());
-	let over = c.elsewhere.iter().filter(|(at, topic, _)| *at > last.at && *topic == c.topic).any(|(_, topic, kind)| {
-		let notice = !last.sent && last.noreply;
-		// two edits suggested are two
-		(notice && !matches!(topic, Topic::Profile | Topic::Other)) || said.is_some_and(|r| r.kind.resolved_by(*kind))
-	});
-	if over {
+	let sent_at = draft.filter(|d| d.state == DraftState::Sent).map(|d| d.sent_at.expect("a sent draft went out at a moment"));
+	let said = said(&heard);
+	let deadline = said.and_then(|r| r.deadline).filter(|at| now < *at);
+	if deadline.is_none() && now.duration_since(sent_at.unwrap_or(last.at)) > QUIET_AFTER {
+		return State::Quiet;
+	}
+	if over(c, &heard) {
 		return State::Done { by_hand: false };
 	}
 	// what Google asks is the operator's to give or to confirm
 	let asks = last.reading.as_ref().is_some_and(|r| r.kind == Kind::Asks);
 	match draft {
 		Some(Draft {
-			state: DraftState::Held, send_at, ..
-		}) if !asks => {
+			state: DraftState::Held,
+			send_at,
+			needs: lacks,
+			..
+		}) if lacks.is_empty() && press(c, now).is_some() => {
 			return State::Sending {
 				at: send_at.expect("a held draft goes at a moment"),
 			};
@@ -622,25 +664,36 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 			error: Some(why),
 			..
 		}) => return needs(Why::NothingToSay { why: why.clone() }),
+		Some(Draft { state: DraftState::Dismissed, .. }) if asks => return needs(Why::Kind { kind: Kind::Asks }),
+		Some(Draft {
+			state: DraftState::Dismissed,
+			written_at,
+			..
+		}) if now < later(*written_at, RE_ASK) => return State::Waiting { until: later(*written_at, RE_ASK) },
 		_ => {}
 	}
-	let ours = sent_at.or_else(|| heard.iter().rev().find(|m| m.sent).map(|m| m.at));
+	let turn = |kind: Kind| match kind.turn() {
+		Turn::Operator if kind == Kind::CallFailed && counterpart(c.messages.iter()).is_some() => Turn::Reply,
+		t => t,
+	};
 	let silence = || {
-		let promised = google.map(|m| {
-			let hours = m.reading.as_ref().and_then(|r| r.answer_within_hours);
-			m.at + hours.map_or(RE_ASK, |h| SignedDuration::from_hours(i64::from(h)))
-		});
-		// a promise made before we asked again does not answer what we asked since
-		let until = promised.into_iter().chain(ours.map(|at| at + RE_ASK)).max().expect("what is heard is Google's or ours");
-		let pressed = said.is_some_and(|r| r.kind == Kind::Routed) && (last.sent || sent_at.is_some());
-		match (now < until, pressed) {
-			(true, _) => State::Waiting { until },
-			(false, true) => needs(Why::AskedOften),
-			(false, false) => reply(c, &heard, true),
+		let until = term(&heard, sent_at);
+		// an inbox not read since may hold the answer
+		if now < until || c.read.is_none_or(|read| read < until) {
+			return State::Waiting { until };
+		}
+		match said.map(|r| (r.kind, turn(r.kind))) {
+			Some((kind, Turn::Operator)) => needs(Why::Kind { kind }),
+			_ if sent_at.is_some() => needs(Why::MayHaveGoneOut),
+			Some((Kind::Routed, _)) if last.sent => needs(Why::Unanswered { since: until }),
+			_ => reply(c, &heard, Some(until)),
 		}
 	};
 	if last.sent || sent_at.is_some() {
-		return silence();
+		return match said {
+			Some(r) if r.kind.resolves(c.topic) => State::Done { by_hand: false },
+			_ => silence(),
+		};
 	}
 	let Some(read) = &last.reading else {
 		return needs(match (&last.read_error, c.stuck) {
@@ -648,32 +701,43 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 			(error, _) => Why::Unread { error: error.clone() },
 		});
 	};
-	let deadline = |otherwise| match read.deadline {
-		Some(at) if now < at => needs(Why::Deadline { at }),
-		_ => otherwise,
-	};
-	match read.kind.turn() {
-		Turn::Reply => reply(c, &heard, false),
-		Turn::Google => deadline(silence()),
-		Turn::Nobody { resolved: true } => State::Done { by_hand: false },
-		Turn::Nobody { resolved: false } => deadline(State::Quiet),
-		Turn::Operator if read.kind == Kind::VideoRejected && c.asked_elsewhere => State::Quiet,
-		Turn::Operator => needs(Why::Kind { kind: read.kind }),
+	let or_deadline = |otherwise| deadline.map_or(otherwise, |at| needs(Why::Deadline { at }));
+	match turn(read.kind) {
+		_ if matches!(read.kind, Kind::VideoRejected | Kind::VideoInReview) && c.asked_elsewhere => State::Quiet,
+		Turn::Reply => reply(c, &heard, None),
+		Turn::Google => or_deadline(silence()),
+		Turn::Nobody { resolved: false } => or_deadline(State::Quiet),
+		Turn::Nobody { resolved: true } if read.kind.resolves(c.topic) => State::Done { by_hand: false },
+		// resolved, and not what the case is about
+		Turn::Nobody { resolved: true } | Turn::Operator => needs(Why::Kind { kind: read.kind }),
 	}
+}
+
+/// From when a reply lacking nothing may go to Google by itself; `None`, never.
+pub fn press(c: &Case<'_>, now: Timestamp) -> Option<Timestamp> {
+	let heard = heard(c);
+	let r = said(&heard)?;
+	let to = counterpart(c.messages.iter())?;
+	let ours = heard.iter().rev().find(|m| m.sent);
+	let presses = match r.kind {
+		Kind::SelfServe | Kind::OptionsExhausted | Kind::ReinstatementRefused | Kind::ReviewsNoData | Kind::CallFailed => true,
+		k => k.turn() == Turn::Google && now >= term(&heard, None),
+	};
+	let goes = presses
+		&& r.asks.is_empty()
+		&& r.kind.topic().is_none_or(|t| t == c.topic)
+		&& c.about == About::Live
+		&& !settled(c)
+		&& !over(c, &heard)
+		&& (to.addressed || heard.iter().any(|m| m.sent && m.addressed))
+		&& asked(&heard) < MAX_ASKS
+		&& c.read.is_none_or(|read| now.duration_since(read) <= STALE);
+	goes.then(|| ours.map_or(to.at, |m| later(m.at, APART)))
 }
 
 /// Whom a reply goes to: Google's last message from an address that takes one, unless it refuses it.
 pub fn counterpart<'a>(messages: impl DoubleEndedIterator<Item = &'a Message>) -> Option<&'a Message> {
-	messages.rev().find(|m| !m.sent && !m.noreply).filter(|m| m.repliable)
-}
-
-/// Ours since Google last gave something new.
-pub fn asked<'a>(messages: impl DoubleEndedIterator<Item = &'a Message>) -> usize {
-	messages
-		.rev()
-		.take_while(|m| m.sent || !m.reading.as_ref().is_some_and(|r| matches!(r.kind.turn(), Turn::Operator | Turn::Nobody { resolved: true })))
-		.filter(|m| m.sent && !m.noreply)
-		.count()
+	messages.rev().find(|m| m.heard() && !m.sent && !m.noreply).filter(|m| m.repliable)
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
@@ -708,6 +772,7 @@ pub fn attempt(kind: Kind) -> Option<(Method, Outcome)> {
 	})
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
 enum Turn {
 	Reply,
 	Google,
@@ -778,13 +843,82 @@ fn whole(text: &str, at: usize, len: usize) -> bool {
 	!inside(text[..at].chars().next_back()) && !inside(text[at + len..].chars().next())
 }
 
-/// A reply of ours is due: of Google's word, or its silence.
-fn reply(c: &Case<'_>, heard: &[&Message], silence: bool) -> State {
-	let why = match counterpart(heard.iter().copied()) {
-		None if silence => Why::Unanswered,
-		None => Why::NoReply,
-		Some(_) if asked(heard.iter().copied()) >= MAX_ASKS => Why::AskedOften,
-		Some(_) => match c.stuck {
+fn heard<'a>(c: &Case<'a>) -> Vec<&'a Message> {
+	c.messages.iter().filter(|m| m.heard()).collect()
+}
+
+/// Google's last word, once read.
+fn said<'a>(heard: &[&'a Message]) -> Option<&'a Reading> {
+	heard.iter().rev().find(|m| !m.sent)?.reading.as_ref()
+}
+
+/// A moment told by a mail, whatever its server or its reader made of it.
+fn later(at: Timestamp, by: SignedDuration) -> Timestamp {
+	at.saturating_add(by).expect("a duration has no calendar unit")
+}
+
+/// Until when Google's answer is waited for; `sent_at`, our last, not in the inbox yet.
+fn term(heard: &[&Message], sent_at: Option<Timestamp>) -> Timestamp {
+	let promised = heard.iter().rev().find(|m| !m.sent).map(|m| {
+		let by = m.reading.as_ref().map_or(RE_ASK, |r| match (r.answer_within_hours, r.kind) {
+			(Some(h), _) => SignedDuration::from_hours(i64::from(h)),
+			(None, Kind::VideoInReview | Kind::AppealReceived) => IN_REVIEW,
+			(None, _) => RE_ASK,
+		});
+		later(m.at, by)
+	});
+	// a promise made before we asked again does not answer what we asked since
+	let ours = sent_at.or_else(|| heard.iter().rev().find(|m| m.sent).map(|m| m.at));
+	promised.into_iter().chain(ours.map(|at| later(at, RE_ASK))).max().expect("what is heard is Google's or ours")
+}
+
+/// Ours since Google last gave something new.
+fn asked(heard: &[&Message]) -> usize {
+	heard
+		.iter()
+		.rev()
+		.take_while(|m| m.sent || !m.reading.as_ref().is_some_and(|r| matches!(r.kind.turn(), Turn::Operator | Turn::Nobody { resolved: true })))
+		.filter(|m| m.sent)
+		.count()
+}
+
+/// Whether its GBP's other mail, or the GBP's moves, leave nothing of it to do.
+fn over(c: &Case<'_>, heard: &[&Message]) -> bool {
+	let (Some(last), Some(said)) = (heard.last(), said(heard)) else { return false };
+	let operators = said.kind.turn() == Turn::Operator;
+	let settles = |k: Kind| !operators && matches!(k, Kind::Verified | Kind::AppealApproved | Kind::ReinstatementDone) && k.resolves(c.topic);
+	c.elsewhere.iter().any(|&(at, k)| at > last.at && (said.kind.superseded_by(k) || settles(k))) || (!operators && said.kind != Kind::Asks && settled(c))
+}
+
+/// Whether its GBP, by all that is said of it, is verified, of a verification; reinstated, of a suspension.
+fn settled(c: &Case<'_>) -> bool {
+	let own = c.messages.iter().filter_map(|m| Some((m.at, m.reading.as_ref()?.kind)));
+	let mut all: Vec<(Timestamp, Kind)> = c.elsewhere.iter().copied().chain(own).collect();
+	all.sort_by_key(|(at, _)| *at);
+	let (mut verified, mut suspended) = (false, None);
+	for (_, kind) in all {
+		match kind {
+			Kind::Verified => (verified, suspended) = (true, suspended.map(|_| false)),
+			Kind::ReverificationRequired | Kind::VideoRejected => verified = false,
+			Kind::Suspended => suspended = Some(true),
+			Kind::AppealApproved => suspended = Some(false),
+			_ => {}
+		}
+	}
+	match c.topic {
+		Topic::Verification => verified && suspended != Some(true),
+		Topic::Suspension => suspended == Some(false),
+		_ => false,
+	}
+}
+
+/// A reply of ours is due: of Google's word, or its `silence` since.
+fn reply(c: &Case<'_>, heard: &[&Message], silence: Option<Timestamp>) -> State {
+	let why = match (counterpart(c.messages.iter()), silence) {
+		(None, Some(since)) => Why::Unanswered { since },
+		(None, None) => Why::NoReply,
+		(Some(_), _) if asked(heard) >= MAX_ASKS => Why::AskedOften,
+		(Some(_), _) => match c.stuck {
 			None => return State::ReplyDue,
 			Some(error) => Why::Stuck { error: error.to_owned() },
 		},
@@ -860,6 +994,26 @@ mod tests {
 		assert!(!repliable(Sender::Support, "This email address can’t\naccept replies."));
 		assert!(!repliable(Sender::Support, "Cette adresse n'accepte pas les réponses."));
 		assert!(!repliable(Sender::Notice, "you can reply to this email"));
+		for refused in [
+			"Please do not reply to this email.",
+			"This is an automated message. Do not reply.",
+			"This mailbox can't receive replies.",
+			"Replies to this inbox are not monitored.",
+			"This inbox isn’t monitored.",
+			"Merci de ne pas répondre à cet e-mail.",
+			"Cette adresse ne peut pas recevoir de réponses.",
+			"Cette boîte n'est pas surveillée.",
+		] {
+			assert!(!repliable(Sender::Support, refused), "{refused}");
+		}
+		for taken in [
+			"If you do not reply within 3 days, we will close your case.",
+			"If you don't respond, the case closes. Reply to this email.",
+			"Si vous ne répondez pas sous 3 jours, votre demande sera fermée.",
+			"Google n'accepte pas les vidéos floues. Répondez à cet e-mail.",
+		] {
+			assert!(repliable(Sender::Support, taken), "{taken}");
+		}
 	}
 
 	#[test]
@@ -870,8 +1024,11 @@ mod tests {
 		assert!(recipient(true, Some(NOTICE), None).is_err(), "nobody reads it");
 		assert!(recipient(true, Some(SUPPORT), Some("a@evil.io")).is_err());
 		assert!(recipient(true, Some(SUPPORT), Some("a@mail.google.com")).is_err(), "google.com exactly");
+		assert!(
+			recipient(true, Some(SUPPORT), Some("case-1234@google.com")).is_err(),
+			"support exactly: ours is followed only there"
+		);
 		assert!(recipient(true, None, None).is_err());
-		assert!(noreply("No-Reply@x.com"));
 	}
 
 	#[test]
@@ -1006,6 +1163,7 @@ mod tests {
 			sent: false,
 			noreply: false,
 			repliable: true,
+			addressed: true,
 			reading: Some(reading(kind)),
 			read_error: None,
 		}
@@ -1026,6 +1184,7 @@ mod tests {
 			sent: true,
 			noreply: false,
 			repliable: false,
+			addressed: true,
 			reading: None,
 			read_error: None,
 		}
@@ -1034,12 +1193,14 @@ mod tests {
 	fn case(messages: &[Message]) -> Case<'_> {
 		Case {
 			topic: Topic::Verification,
+			about: About::Live,
 			messages,
 			draft: None,
 			done: None,
 			elsewhere: &[],
 			asked_elsewhere: false,
 			stuck: None,
+			read: Some(Timestamp::MAX),
 		}
 	}
 
@@ -1048,6 +1209,7 @@ mod tests {
 			state,
 			answers,
 			needs: needs.iter().map(|s| (*s).to_owned()).collect(),
+			written_at: t("2026-10-06T09:45:00Z"),
 			send_at: Some(t("2026-10-06T10:00:00Z")),
 			sent_at: (state == DraftState::Sent).then(|| t("2026-10-06T10:00:00Z")),
 			error: (state == DraftState::Failed).then(|| "550 no".to_owned()),
@@ -1072,7 +1234,11 @@ mod tests {
 		assert_eq!(state(&case(&m), t("2026-10-08T13:00:00Z")), State::ReplyDue, "silent past them");
 		let pressed = [m.clone(), vec![ours(4, "2026-10-08T13:00:00Z")]].concat();
 		assert_eq!(state(&case(&pressed), t("2026-10-10T12:00:00Z")), State::Waiting { until: t("2026-10-10T13:00:00Z") });
-		assert_eq!(state(&case(&pressed), t("2026-10-10T13:00:00Z")), needs(Why::AskedOften), "a specialist is pressed once");
+		assert_eq!(
+			state(&case(&pressed), t("2026-10-10T13:00:00Z")),
+			needs(Why::Unanswered { since: t("2026-10-10T13:00:00Z") }),
+			"a specialist is pressed once"
+		);
 		let untold = [
 			google(1, "2026-10-05T09:00:00Z", Kind::SelfServe),
 			ours(2, "2026-10-05T10:00:00Z"),
@@ -1109,10 +1275,21 @@ mod tests {
 			"not yet in the inbox"
 		);
 		assert_eq!(with(&draft(DraftState::Failed, 4, &[])), needs(Why::Failed { error: "550 no".into() }));
-		assert_eq!(with(&draft(DraftState::Dismissed, 4, &[])), State::ReplyDue);
+		assert_eq!(with(&draft(DraftState::Dismissed, 4, &[])), asks(), "let go, and still asked");
+		assert_eq!(
+			pressing(&draft(DraftState::Dismissed, 1, &[])),
+			State::Waiting { until: t("2026-10-08T09:45:00Z") },
+			"let go: not at once again"
+		);
+		let silent = draft(DraftState::Sent, 1, &[]);
+		let unseen = Case {
+			draft: Some(&silent),
+			..case(&deflected)
+		};
+		assert_eq!(state(&unseen, t("2026-10-08T10:00:00Z")), needs(Why::MayHaveGoneOut), "never seen in the inbox");
 		m.push(google(5, "2026-10-06T10:00:00Z", Kind::CallOffered));
 		assert_eq!(state(&case(&m), now), needs(Why::Kind { kind: Kind::CallOffered }));
-		let later = [(t("2026-10-06T10:10:00Z"), Topic::Verification, Kind::CallFailed)];
+		let later = [(t("2026-10-06T10:10:00Z"), Kind::CallFailed)];
 		assert_eq!(state(&Case { elsewhere: &later, ..case(&m) }, now), DONE, "the call was held");
 		assert_eq!(state(&Case { done: Some(5), ..case(&m) }, now), State::Done { by_hand: true });
 		assert_eq!(
@@ -1134,7 +1311,18 @@ mod tests {
 		};
 		assert_eq!(state(&case(&[refused]), now), needs(Why::NoReply));
 		let silent = [ours(1, "2026-10-01T09:00:00Z")];
-		assert_eq!(state(&case(&silent), now), needs(Why::Unanswered), "nobody to ask again");
+		assert_eq!(state(&case(&silent), now), needs(Why::Unanswered { since: t("2026-10-03T09:00:00Z") }), "nobody to ask again");
+		assert_eq!(
+			state(
+				&Case {
+					read: Some(t("2026-10-03T08:00:00Z")),
+					..case(&silent)
+				},
+				now
+			),
+			State::Waiting { until: t("2026-10-03T09:00:00Z") },
+			"its inbox not read since"
+		);
 		let mut asked = vec![google(1, "2026-10-01T09:00:00Z", Kind::Asks)];
 		for i in 0..6 {
 			asked.push(ours(2 + i, "2026-10-02T09:00:00Z"));
@@ -1169,36 +1357,42 @@ mod tests {
 	}
 
 	#[test]
-	fn a_notice_stands_until_something_newer_of_its_gbp_and_topic() {
+	fn a_notice_stands_until_what_supersedes_it() {
 		let now = t("2026-10-06T10:30:00Z");
 		let m = [notice(1, "2026-10-05T09:00:00Z", Kind::VideoRejected)];
 		assert_eq!(state(&case(&m), now), needs(Why::Kind { kind: Kind::VideoRejected }));
 		assert_eq!(state(&Case { asked_elsewhere: true, ..case(&m) }, now), State::Quiet, "a conversation asks for its verification");
-		let on = |at: &str, topic, kind| {
+		let on = |said: Kind, at: &str, kind| {
+			let m = [notice(1, "2026-10-05T09:00:00Z", said)];
 			state(
 				&Case {
-					elsewhere: &[(t(at), topic, kind)],
+					topic: said.topic().unwrap(),
+					elsewhere: &[(t(at), kind)],
 					..case(&m)
 				},
 				now,
 			)
 		};
-		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Verification, Kind::Verified), DONE);
-		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Verification, Kind::VideoRejected), DONE, "the newer one stands");
+		let after = "2026-10-06T09:00:00Z";
+		assert_eq!(on(Kind::VideoRejected, after, Kind::Verified), DONE);
+		assert_eq!(on(Kind::VideoRejected, after, Kind::VideoRejected), DONE, "the newer one stands");
 		assert_eq!(
-			on("2026-10-04T09:00:00Z", Topic::Verification, Kind::Verified),
+			on(Kind::VideoRejected, "2026-10-04T09:00:00Z", Kind::Verified),
 			needs(Why::Kind { kind: Kind::VideoRejected }),
 			"older"
 		);
-		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Access, Kind::Invited), needs(Why::Kind { kind: Kind::VideoRejected }));
-		let edit = [notice(1, "2026-10-05T09:00:00Z", Kind::EditSuggested)];
-		let later = [(t("2026-10-06T09:00:00Z"), Topic::Profile, Kind::EditSuggested)];
-		let two = Case {
-			topic: Topic::Profile,
-			elsewhere: &later,
-			..case(&edit)
-		};
-		assert_eq!(state(&two, now), needs(Why::Kind { kind: Kind::EditSuggested }), "two suggestions are two");
+		for (said, other) in [
+			(Kind::VideoRejected, Kind::Invited),
+			(Kind::ReverificationRequired, Kind::Acknowledged),
+			(Kind::CallOffered, Kind::Acknowledged),
+			(Kind::AppealDenied, Kind::Acknowledged),
+			(Kind::OwnershipRequested, Kind::AccessGranted),
+			(Kind::ReviewsRestricted, Kind::ReviewRemoved),
+			(Kind::EditSuggested, Kind::EditSuggested),
+			(Kind::AccessLost, Kind::Invited),
+		] {
+			assert_eq!(on(said, after, other), needs(Why::Kind { kind: said }), "{said:?} stands over {other:?}");
+		}
 		let to_noreply = Message {
 			noreply: true,
 			..ours(2, "2026-10-05T10:00:00Z")
@@ -1211,6 +1405,34 @@ mod tests {
 		assert_eq!(state(&case(&[to_noreply]), now), State::Quiet);
 		for k in [Kind::Noise, Kind::Impersonation, Kind::AccessGranted] {
 			assert_eq!(state(&case(&[notice(1, "2026-10-06T09:00:00Z", k)]), now), State::Quiet);
+		}
+	}
+
+	#[test]
+	fn no_date_panics_a_state() {
+		let dates = [Timestamp::MIN, t("1970-01-01T00:00:00Z"), t("2026-10-06T10:30:00Z"), t("9999-12-30T00:00:00Z"), Timestamp::MAX];
+		let mut kinds = vec![None];
+		kinds.extend(<Kind as strum::VariantArray>::VARIANTS.iter().copied().map(Some));
+		let at = || dates.into_iter();
+		for (kind, a, b, now) in kinds.iter().flat_map(|k| at().flat_map(move |a| at().flat_map(move |b| at().map(move |now| (*k, a, b, now))))) {
+			let mut m = google(1, "2026-10-06T09:00:00Z", Kind::Asks);
+			m.at = a;
+			m.reading = kind.map(|k| Reading {
+				deadline: Some(b),
+				answer_within_hours: Some(u32::MAX),
+				..reading(k)
+			});
+			let mut us = ours(2, "2026-10-06T09:00:00Z");
+			us.at = b;
+			for messages in [vec![m.clone()], vec![m.clone(), us.clone()], vec![us.clone(), m]] {
+				state(&case(&messages), now);
+				for s in [DraftState::Held, DraftState::Sending, DraftState::Sent, DraftState::Dismissed] {
+					let mut d = draft(s, messages.last().unwrap().id, &[]);
+					d.send_at = Some(b);
+					d.sent_at = Some(a);
+					state(&Case { draft: Some(&d), ..case(&messages) }, now);
+				}
+			}
 		}
 	}
 }

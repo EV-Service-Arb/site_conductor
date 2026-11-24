@@ -53,6 +53,7 @@ fn mail(uid: u32, subject: &str, text: &str) -> Mail {
 		authentic: true,
 		sent: false,
 		text: text.to_owned(),
+		whole: true,
 	}
 }
 

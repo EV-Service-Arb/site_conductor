@@ -8,6 +8,7 @@ use std::{
 };
 
 use eyre::WrapErr;
+use jiff::{SignedDuration, Timestamp};
 use rustls_platform_verifier::ConfigVerifierExt;
 use tokio::{
 	io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
@@ -31,8 +32,9 @@ const TIMEOUT: Duration = Duration::from_secs(10);
 /// A batch's read: the login, the search and the fetch of its messages.
 const READ_WITHIN: Duration = Duration::from_secs(60);
 /// What of a message is fetched: its headers and the start of its text.
-const BODY_MAX: usize = 32 * 1024;
-const LITERAL_MAX: usize = 4 * BODY_MAX;
+const BODY_MAX: usize = 128 * 1024;
+/// What a session may answer in all: a batch, and the search of a whole mailbox before it.
+const ANSWERED_MAX: usize = 32 << 20;
 /// Gmail's search for mail with Google: from or to any google.com address, its promotions left out, and what
 /// is not sent yet.
 const WITH_GOOGLE: &str = "{from:google.com to:google.com} -category:promotions -in:drafts";
@@ -76,12 +78,12 @@ async fn read(account: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre
 		.parse()
 		.wrap_err("its UIDVALIDITY")?;
 	let from = match after {
-		Some(c) if c.validity == validity => c.uid + 1,
-		_ => 1,
+		Some(c) if c.validity == validity => c.uid,
+		_ => 0,
 	};
-	let mut uids = s.search(&format!("UID {from}:* X-GM-RAW {}", quoted(WITH_GOOGLE))).await?;
-	// `n:*` past the last UID is the last one
-	uids.retain(|&u| u >= from);
+	let mut uids = s.search(&format!("UID {}:* X-GM-RAW {}", from.max(1), quoted(WITH_GOOGLE))).await?;
+	// the one before, and `n:*` past the last UID is the last one
+	uids.retain(|&u| u > from);
 	uids.sort_unstable();
 	uids.truncate(limit);
 	let mut mails = Vec::new();
@@ -92,7 +94,7 @@ async fn read(account: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre
 			.ok(&format!("UID FETCH {set} (UID X-GM-MSGID X-GM-THRID INTERNALDATE BODY.PEEK[]<0.{BODY_MAX}>)"), "FETCH")
 			.await?;
 		for u in fetched.iter().filter(|u| u.text.contains("X-GM-THRID")) {
-			mails.push(mail(u, &sent)?);
+			mails.push(mail(u, &sent, Timestamp::now())?);
 		}
 		mails.sort_by_key(|m| m.uid);
 	}
@@ -130,9 +132,12 @@ async fn open(inbox: Inbox<'_>, password: &str) -> eyre::Result<Result<Session, 
 		Ok(s) => s,
 		Err(e) => return Ok(Err(format!("TLS with {host}: {e}"))),
 	};
-	let mut s = Session { io: BufReader::new(tls), tag: 0 };
-	let mut line = String::new();
-	s.io.read_line(&mut line).await?;
+	let mut s = Session {
+		io: BufReader::new(tls),
+		tag: 0,
+		left: ANSWERED_MAX,
+	};
+	let line = s.line("the greeting").await?;
 	if !line.starts_with("* OK") {
 		return Ok(Err(format!("{host} greeted with {:?}", line.trim_end())));
 	}
@@ -151,6 +156,8 @@ fn quoted(s: &str) -> String {
 struct Session {
 	io: BufReader<TlsStream<TcpStream>>,
 	tag: u32,
+	/// What it may still answer, bytes.
+	left: usize,
 }
 impl Session {
 	/// `command`'s untagged responses and its tagged status; `verb` names it in errors, never its
@@ -193,16 +200,26 @@ impl Session {
 			.collect()
 	}
 
+	async fn line(&mut self, verb: &str) -> eyre::Result<String> {
+		let mut raw = Vec::new();
+		let most = u64::try_from(self.left).expect("within u64");
+		let n = (&mut self.io).take(most).read_until(b'\n', &mut raw).await?;
+		self.answers(n, verb)?;
+		eyre::ensure!(raw.ends_with(b"\n"), "the connection closed at {verb}, or answers more than {ANSWERED_MAX} bytes");
+		Ok(String::from_utf8_lossy(&raw).into_owned())
+	}
+
+	fn answers(&mut self, n: usize, verb: &str) -> eyre::Result<()> {
+		self.left = self.left.checked_sub(n).ok_or_else(|| eyre::eyre!("{verb}: an answer past {ANSWERED_MAX} bytes"))?;
+		Ok(())
+	}
+
 	/// A response's lines and the literals between them.
 	async fn response(&mut self, verb: &str) -> eyre::Result<(String, Vec<Vec<u8>>)> {
 		let (mut text, mut literals) = (String::new(), Vec::new());
 		//LOOP: a line a turn, a literal after each that ends in one
 		loop {
-			let mut raw = Vec::new();
-			if self.io.read_until(b'\n', &mut raw).await? == 0 {
-				eyre::bail!("the connection closed at {verb}");
-			}
-			let line = String::from_utf8_lossy(&raw);
+			let line = self.line(verb).await?;
 			let line = line.trim_end_matches(['\r', '\n']);
 			let literal = line
 				.strip_suffix('}')
@@ -213,7 +230,8 @@ impl Session {
 				return Ok((text, literals));
 			};
 			let n: usize = n.parse().wrap_err("a literal's length")?;
-			eyre::ensure!(n <= LITERAL_MAX, "{verb}: a literal of {n} bytes");
+			eyre::ensure!(n <= BODY_MAX, "{verb}: a literal of {n} bytes");
+			self.answers(n, verb)?;
 			let mut bytes = vec![0; n];
 			self.io.read_exact(&mut bytes).await?;
 			text.push_str(before);
@@ -250,7 +268,7 @@ fn all_mail(u: &Untagged) -> Option<String> {
 }
 
 /// A message of a FETCH response, `sent` the UIDs of those the account sent: a From alone anyone can write.
-fn mail(u: &Untagged, sent: &[u32]) -> eyre::Result<Mail> {
+fn mail(u: &Untagged, sent: &[u32], now: Timestamp) -> eyre::Result<Mail> {
 	let text = &u.text;
 	let number = |key: &str| -> eyre::Result<u64> {
 		let mut words = text.split([' ', '(', ')']);
@@ -270,6 +288,7 @@ fn mail(u: &Untagged, sent: &[u32]) -> eyre::Result<Mail> {
 	let date = jiff::fmt::strtime::parse("%d-%b-%Y %H:%M:%S %z", received.trim_start())
 		.and_then(|t| t.to_timestamp())
 		.wrap_err_with(|| format!("INTERNALDATE {received:?}"))?;
+	eyre::ensure!(date.duration_since(now) < SignedDuration::from_hours(24), "message {uid} is of {date}, which is yet to come");
 	let [body] = u.literals.as_slice() else {
 		eyre::bail!("a FETCH of {uid} with {} literals", u.literals.len());
 	};
@@ -296,8 +315,12 @@ fn mail(u: &Untagged, sent: &[u32]) -> eyre::Result<Mail> {
 		.all("Authentication-Results")
 		.map(|h| String::from_utf8_lossy(h.raw_value()).into_owned())
 		.collect();
+	let whole = body.len() < BODY_MAX;
 	let mut text = parsed.body_text(0).map(|t| t.into_owned()).unwrap_or_default(); // no text part: none to read
 	if sent {
+		if !whole {
+			text = format!("[its files past those named above were not read]\n{text}");
+		}
 		// what we sent along: Google's answers speak of it
 		for name in parsed.attachments().filter_map(|a| a.attachment_name().map(str::to_owned)) {
 			text = format!("[attached: {name}]\n{text}");
@@ -312,7 +335,12 @@ fn mail(u: &Untagged, sent: &[u32]) -> eyre::Result<Mail> {
 		counterparts,
 		from: from.and_then(|a| a.address()).map(str::to_owned),
 		reply_to: parsed.reply_to().and_then(|a| a.first()).and_then(|a| a.address()).map(str::to_owned),
-		to: parsed.to().map(|t| t.mailboxes().filter_map(|m| m.address()).map(str::to_owned).collect()).unwrap_or_default(), // undisclosed recipients
+		// neither: undisclosed recipients
+		to: [parsed.to(), parsed.cc()]
+			.into_iter()
+			.flatten()
+			.flat_map(|a| a.mailboxes().filter_map(|m| m.address()).map(str::to_owned).collect::<Vec<_>>())
+			.collect(),
 		message_id: parsed.message_id().map(str::to_owned),
 		refs: parsed
 			.references()
@@ -323,6 +351,7 @@ fn mail(u: &Untagged, sent: &[u32]) -> eyre::Result<Mail> {
 		authentic: sa_core::mail::authentic(&froms, &verdicts.iter().map(String::as_str).collect::<Vec<_>>()),
 		sent,
 		text,
+		whole,
 	})
 }
 
@@ -346,5 +375,31 @@ pub(crate) fn public(ip: IpAddr) -> bool {
 				!(v6.is_loopback() || v6.is_unspecified() || v6.is_multicast() || (first & 0xfe00) == 0xfc00 || (first & 0xffc0) == 0xfe80)
 			}
 		},
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn fetched(date: &str, body: &str) -> Untagged {
+		Untagged {
+			text: format!("1 FETCH (UID 7 X-GM-MSGID 1 X-GM-THRID 2 INTERNALDATE \"{date}\" BODY[]<0> {{}})"),
+			literals: vec![body.as_bytes().to_vec()],
+		}
+	}
+
+	#[test]
+	fn a_message_is_of_a_day_that_was_and_says_whether_it_was_read_to_its_end() {
+		let now: Timestamp = "2026-10-01T09:00:00Z".parse().unwrap();
+		let head = "From: a@gmail.com\r\nTo: b@x.com\r\nCc: c@google.com\r\n";
+		let read = |date, body: &str| mail(&fetched(date, body), &[7], now);
+		let whole = read("01-Oct-2026 08:00:00 +0000", &format!("{head}\r\nHello")).unwrap();
+		assert_eq!((whole.to, whole.whole, whole.text.trim()), (vec!["b@x.com".to_owned(), "c@google.com".to_owned()], true, "Hello"));
+		for date in ["30-Dec-9999 00:00:00 +0000", "03-Oct-2026 09:00:00 +0000"] {
+			assert!(read(date, &format!("{head}\r\nHello")).is_err(), "{date}");
+		}
+		let cut = read("01-Oct-2026 08:00:00 +0000", &format!("{head}\r\n{}", "x".repeat(BODY_MAX - head.len() - 2))).unwrap();
+		assert!(!cut.whole && cut.text.contains("were not read"), "what it says past there, and its files, are not known");
 	}
 }

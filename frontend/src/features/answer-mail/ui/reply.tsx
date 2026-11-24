@@ -55,7 +55,7 @@ export function Reply({ detail, gmail, onChanged }: Props) {
       return <Editor key={draft.id} draft={draft} detail={detail} gmail={gmail} onChanged={onChanged} />;
     case "sending":
     case "sent":
-      return <HandedOver draft={draft} detail={detail} onChanged={onChanged} />;
+      return <HandedOver draft={draft} detail={detail} />;
     case "dismissed":
     case "superseded":
       return none;
@@ -298,7 +298,7 @@ export function Held({ draft, detail, gmail, onChanged }: Props & { draft: MailD
 }
 
 /** Out of the operator's hands: sent, being sent, or cut off while it was. */
-function HandedOver({ draft, detail, onChanged }: { draft: MailDraft; detail: MailCaseDetail; onChanged: () => void }) {
+function HandedOver({ draft, detail }: { draft: MailDraft; detail: MailCaseDetail }) {
   const t = useT();
   const locale = useLocale();
   const now = useNow(30_000);
@@ -312,11 +312,8 @@ function HandedOver({ draft, detail, onChanged }: { draft: MailDraft; detail: Ma
         ? t(mail.unsure, "May have gone out to {to}", { to })
         : t(mail.sending, "Being sent to {to}", { to });
   return (
-    <>
-      <Box title={title} note={draft.error}>
-        <Text>{draft.body}</Text>
-      </Box>
-      {unsure && detail.recipient !== null && <Write detail={detail} onChanged={onChanged} />}
-    </>
+    <Box title={title} note={draft.error}>
+      <Text>{draft.body}</Text>
+    </Box>
   );
 }

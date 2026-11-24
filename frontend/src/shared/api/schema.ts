@@ -2066,7 +2066,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Corrects a case's GBP or topic, or marks it done: its draft is let go. */
+        /** Corrects a case's GBP or topic, or marks it done: its draft is let go; one going by itself waits for its person. */
         patch: operations["edit_mail_case"];
         trace?: never;
     };
@@ -2081,7 +2081,7 @@ export interface paths {
         put?: never;
         /**
          * Writes a reply to the case now, in place of the one there; nothing is sent.
-         * @description 400 nothing in the case takes a reply; 409 another message came meanwhile; 503 no Claude to write it, or it or the review archive does not answer.
+         * @description 400 nothing in the case takes a reply; 409 its last message is answered, or the case changed meanwhile; 503 no Claude to write it, or it or the review archive does not answer.
          */
         post: operations["draft_mail"];
         delete?: never;
@@ -2143,7 +2143,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Corrects what a message of Google's was read as; the caller's word from then on.
+         * Corrects what a message of Google's was read as; the caller's word from then on. A draft going by itself waits for its person.
          * @description 400 a topic its kind is not of, or a message of ours.
          */
         patch: operations["correct_mail"];
@@ -4505,6 +4505,9 @@ export interface components {
          *     - `reviews_no_data`: Support has no record of the reviews.
          *     - `still_active`: Is the business still open: inactivity, removed or revoked unless answered.
          *     - `invited`: Someone invited this account to manage a profile.
+         *     - `access_granted`: This account was given access to a profile.
+         *     - `access_lost`: This account can no longer manage a profile.
+         *     - `others_access`: Someone else was given access to a profile.
          *     - `ownership_requested`: Someone asks for a profile's ownership.
          *     - `management_requested`: Someone asks to manage a profile.
          *     - `edit_suggested`: Someone suggested an edit: does this look right to you?
@@ -4522,7 +4525,7 @@ export interface components {
          *     - `impersonation`: Not from Google.
          * @enum {string}
          */
-        MailKind: "suspended" | "appeal_received" | "appeal_approved" | "appeal_denied" | "restriction_lifted" | "access_granted" | "access_lost" | "policy_warning" | "video_rejected" | "video_in_review" | "verified" | "reverification_required" | "self_serve" | "call_offered" | "call_failed" | "options_exhausted" | "account_restricted" | "reviews_paused" | "reviews_restricted" | "review_removed" | "reinstatement_refused" | "reinstatement_done" | "reviews_live_already" | "reviews_no_data" | "still_active" | "invited" | "ownership_requested" | "management_requested" | "edit_suggested" | "edit_rejected" | "changed_by_google" | "content_removed" | "duplicate" | "acknowledged" | "routed" | "asks" | "closed" | "unclear" | "noise" | "not_business" | "impersonation";
+        MailKind: "suspended" | "appeal_received" | "appeal_approved" | "appeal_denied" | "restriction_lifted" | "policy_warning" | "video_rejected" | "video_in_review" | "verified" | "reverification_required" | "self_serve" | "call_offered" | "call_failed" | "options_exhausted" | "account_restricted" | "reviews_paused" | "reviews_restricted" | "review_removed" | "reinstatement_refused" | "reinstatement_done" | "reviews_live_already" | "reviews_no_data" | "still_active" | "invited" | "access_granted" | "access_lost" | "others_access" | "ownership_requested" | "management_requested" | "edit_suggested" | "edit_rejected" | "changed_by_google" | "content_removed" | "duplicate" | "acknowledged" | "routed" | "asks" | "closed" | "unclear" | "noise" | "not_business" | "impersonation";
         /** @description A message, in a line. */
         MailLine: {
             /** @description RFC 3339. */
@@ -4692,6 +4695,8 @@ export interface components {
         } | {
             /** @constant */
             code: "unanswered";
+            /** Format: date-time */
+            since: string;
         } | {
             /** @constant */
             code: "no_reply";
@@ -30080,7 +30085,7 @@ export const kitHappeningValues: ReadonlyArray<FlattenedDeepRequired<components>
 export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitTarget"]> = ["google", "drafts", "one_tap"];
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
 export const mailDraftStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailDraftState"]> = ["sent", "dismissed", "proposed", "held", "sending", "superseded", "failed"];
-export const mailKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailKind"]> = ["suspended", "appeal_received", "appeal_approved", "appeal_denied", "restriction_lifted", "access_granted", "access_lost", "policy_warning", "video_rejected", "video_in_review", "verified", "reverification_required", "self_serve", "call_offered", "call_failed", "options_exhausted", "account_restricted", "reviews_paused", "reviews_restricted", "review_removed", "reinstatement_refused", "reinstatement_done", "reviews_live_already", "reviews_no_data", "still_active", "invited", "ownership_requested", "management_requested", "edit_suggested", "edit_rejected", "changed_by_google", "content_removed", "duplicate", "acknowledged", "routed", "asks", "closed", "unclear", "noise", "not_business", "impersonation"];
+export const mailKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailKind"]> = ["suspended", "appeal_received", "appeal_approved", "appeal_denied", "restriction_lifted", "policy_warning", "video_rejected", "video_in_review", "verified", "reverification_required", "self_serve", "call_offered", "call_failed", "options_exhausted", "account_restricted", "reviews_paused", "reviews_restricted", "review_removed", "reinstatement_refused", "reinstatement_done", "reviews_live_already", "reviews_no_data", "still_active", "invited", "access_granted", "access_lost", "others_access", "ownership_requested", "management_requested", "edit_suggested", "edit_rejected", "changed_by_google", "content_removed", "duplicate", "acknowledged", "routed", "asks", "closed", "unclear", "noise", "not_business", "impersonation"];
 export const mailReaderValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailReader"]> = ["rule", "model", "person"];
 export const mailStandingValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailStanding"]> = ["needs_you", "done", "reply_ready", "sending", "reply_due", "waiting", "quiet"];
 export const mailTopicValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailTopic"]> = ["verification", "suspension", "reviews", "activity", "access", "profile", "other"];

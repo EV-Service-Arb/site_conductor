@@ -93,6 +93,8 @@ impl Model {
 		match status {
 			s if s.is_success() => Ok(Ok(body)),
 			reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => Ok(Err(body["error"]["message"].as_str().map_or_else(|| body.to_string(), str::to_owned))),
+			// what it was asked is at fault: too long, or filtered
+			s @ (reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::PAYLOAD_TOO_LARGE) => Err(Refusal::new(Code::BadRequest, format!("the assistant's model refused with {s}: {body}"))),
 			s => Err(Refusal::new(Code::Unavailable, format!("the assistant's model refused with {s}: {body}"))),
 		}
 	}

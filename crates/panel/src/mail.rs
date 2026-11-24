@@ -17,7 +17,8 @@ use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Rule, Tier};
 use sa_core::{
-	mail::{self as rules, Draft as Reply, DraftState, HOLD, Holds, Joining, Kind, MAX_ASKS, MAX_READS, Message, READ_BACK, Reading, Ruled, Sender, State, Topic, Why},
+	gbp::State as Stands,
+	mail::{self as rules, About, Draft as Reply, DraftState, HOLD, Holds, Joining, Kind, MAX_READS, Message, READ_BACK, Reading, Ruled, Sender, State, Topic, Why},
 	notify::{Locale, Note, Rendered, one_line},
 };
 use sqlx::SqliteConnection;
@@ -48,6 +49,10 @@ pub const FILES_MAX: usize = 18 << 20;
 const SUMMARY_MAX: usize = 160;
 /// A turn older than this is told of no more: the marks of what was told are kept a little longer.
 const TELL_WITHIN: SignedDuration = SignedDuration::from_hours(24 * 6);
+/// A date Google set is told of again this long before.
+const DEADLINE_NEAR: SignedDuration = SignedDuration::from_hours(24);
+/// A held reply that did not go for this long past its moment goes by itself no more.
+const LATE: SignedDuration = SignedDuration::from_hours(1);
 
 pub type Sending<'a> = Pin<Box<dyn Future<Output = Result<(), SendError>> + Send + 'a>>;
 
@@ -100,6 +105,10 @@ pub struct Case {
 	pub state: State,
 	/// A reply is due and none is written, whatever it waits on.
 	pub due: bool,
+	/// From when a reply lacking nothing may go by itself; `None`, never.
+	press: Option<Timestamp>,
+	/// When its inbox was last read, as the account it has now, since the conductor started.
+	read: Option<Timestamp>,
 	/// Oldest first.
 	pub messages: Vec<Kept>,
 	/// The latest.
@@ -108,13 +117,14 @@ pub struct Case {
 impl Case {
 	/// What its state is about: its last message somebody reads.
 	pub fn last(&self) -> &Kept {
-		let heard = self.messages.iter().rev().find(|m| !(m.said.sent && m.said.noreply));
+		let heard = self.messages.iter().rev().find(|m| m.said.heard());
 		heard.or(self.messages.last()).expect("a case is opened by its first message")
 	}
 
 	/// Google's last word in it.
 	pub fn google(&self) -> Option<&Kept> {
-		self.messages.iter().rev().find(|m| !m.said.sent)
+		let mut said = self.messages.iter().rev().filter(|m| !m.said.sent);
+		said.clone().find(|m| m.said.heard()).or_else(|| said.next())
 	}
 
 	fn messages(&self) -> Vec<Message> {
@@ -156,7 +166,6 @@ pub struct Draft {
 	pub id: i64,
 	pub reply: Reply,
 	pub body: String,
-	pub created_at: Timestamp,
 }
 
 /// A message the model is to read.
@@ -275,7 +284,7 @@ impl Panel {
 			message_id: m.message_id.as_deref(),
 			refs: &m.refs,
 			authentic: m.authentic,
-			repliable: !m.sent && m.authentic && rules::repliable(sender, &text),
+			repliable: !m.sent && m.authentic && m.whole && rules::repliable(sender, &text),
 			gmb: match (named, forged) {
 				([one], false) => Some(*one),
 				_ => None,
@@ -370,6 +379,7 @@ impl Panel {
 			return Ok(Err(Refused::NotFound));
 		}
 		db::edit_case(&mut tx, id, e.gmb, e.topic).await?;
+		db::unhold(&mut tx, id).await?;
 		if let Some(done) = e.done {
 			db::set_done(&mut tx, id, done.then(|| (case.messages.last().expect("a case has a message").said.id, by))).await?;
 			if done {
@@ -411,7 +421,7 @@ impl Panel {
 		};
 		reading.kind = e.kind.unwrap_or(reading.kind);
 		reading.gmb = e.gmb.unwrap_or(kept.gmb);
-		reading.summary = e.summary.unwrap_or(reading.summary);
+		reading.summary = e.summary.map_or(reading.summary, |s| one_line(&s, SUMMARY_MAX));
 		reading.deadline = e.deadline.unwrap_or(reading.deadline);
 		reading.topic = match (reading.kind.topic(), e.topic) {
 			(Some(of), Some(said)) if of != said => {
@@ -422,6 +432,7 @@ impl Panel {
 			(None, said) => said.unwrap_or(reading.topic),
 		};
 		db::set_reading(&mut tx, mail, &reading, ReadBy::Person, now).await?;
+		db::unhold(&mut tx, case).await?;
 		tx.commit().await.wrap_err("committing a corrected reading")?;
 		Ok(Ok(case))
 	}
@@ -524,21 +535,23 @@ impl Panel {
 		tx.commit().await.wrap_err("committing why mail waits")
 	}
 
-	/// A reply to the person's case `id`, written of its messages up to `answers`; it goes by itself only when
-	/// none asked for it, Google asks nothing, its topic is switched on there and it lacks nothing. `None`: another message came
-	/// meanwhile.
-	pub async fn draft_mail(&self, owner: Uuid, id: i64, answers: i64, written: Written, asked_for: bool, now: Timestamp) -> eyre::Result<Option<()>> {
+	/// A reply to the person's case as it was written of, `of`; it goes by itself only when none asked for it, the
+	/// case may be pressed, its topic is switched on there and it lacks nothing. `None`: the case changed
+	/// meanwhile, or a reply to its last message was handed to SMTP.
+	pub async fn draft_mail(&self, owner: Uuid, of: &Case, written: Written, asked_for: bool, now: Timestamp) -> eyre::Result<Option<()>> {
+		let (id, answers) = (of.id, of.last().said.id);
 		let mut tx = self.store.begin_write().await?;
 		let Some(case) = self.gathered(&mut tx, owner, now).await?.into_iter().find(|c| c.id == id) else {
 			return Ok(None);
 		};
-		if case.last().said.id != answers || (!asked_for && !case.due) {
+		let written_of = |c: &Case| (c.last().said.id, c.last().said.reading.clone(), c.gmb, c.topic);
+		if written_of(&case) != written_of(of) || (!asked_for && !case.due) || db::handed(&mut tx, id, answers).await? {
 			return Ok(None);
 		}
-		let asks = case.last().said.reading.as_ref().is_some_and(|r| r.kind == Kind::Asks);
-		let auto = self.mail_by_itself && !asked_for && !asks && db::auto(&mut tx, owner).await?.contains(&(case.gmail, case.topic));
+		let auto = self.mail_by_itself && !asked_for && db::auto(&mut tx, owner).await?.contains(&(case.gmail, case.topic));
+		let held = case.press.filter(|_| auto).map(|from| from.max(now + HOLD));
 		let (body, needs, state, error) = match written {
-			Written::Reply { body, needs } if auto && needs.is_empty() => (body, needs, DraftState::Held, None),
+			Written::Reply { body, needs } if held.is_some() && needs.is_empty() => (body, needs, DraftState::Held, None),
 			Written::Reply { body, needs } => (body, needs, DraftState::Proposed, None),
 			Written::Nothing(why) => (String::new(), Vec::new(), DraftState::Dismissed, Some(why)),
 			Written::Failed(error) => (String::new(), Vec::new(), DraftState::Failed, Some(error)),
@@ -550,7 +563,7 @@ impl Panel {
 			body: &self.seal(&mail_draft_aad(id, answers), &body)?,
 			needs: &needs,
 			state,
-			send_at: (state == DraftState::Held).then(|| now + HOLD),
+			send_at: held.filter(|_| state == DraftState::Held),
 			error: error.as_deref(),
 		};
 		db::add_draft(&mut tx, &new, now).await?;
@@ -616,14 +629,15 @@ impl Panel {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the drafts due")?;
 		let due = db::held_due(&mut conn, now).await?;
 		drop(conn);
-		let mut sent = 0;
+		let (mut sent, mut failed) = (0, None);
 		for (owner, id) in due {
-			match self.dispatch(owner, id, None, Vec::new(), now).await? {
-				Ok(_) => sent += 1,
-				Err(why) => tracing::info!(draft = id, %why, "a held reply did not go"),
+			match self.dispatch(owner, id, None, Vec::new(), now).await {
+				Ok(Ok(_)) => sent += 1,
+				Ok(Err(why)) => tracing::info!(draft = id, %why, "a held reply did not go"),
+				Err(e) => failed = failed.or(Some(e.wrap_err(format!("held draft {id}")))),
 			}
 		}
-		Ok(sent)
+		failed.map_or(Ok(sent), Err)
 	}
 
 	/// Draft `id` handed to SMTP: `sending` is committed first, so whatever happens it is handed once.
@@ -643,17 +657,19 @@ impl Panel {
 			.ok_or_else(|| eyre::eyre!("draft {id} is of case {}, which is not its owner's", d.case))?;
 		// what stops it is kept, whoever asked
 		let stopped = |state, why: &str| (state, why.to_owned());
-		let messages = case.messages();
+		let send_at = d.send_at.filter(|_| d.state == DraftState::Held);
 		let stop = if case.last().said.id != d.answers {
 			Some(stopped(DraftState::Superseded, "another message came since it was written"))
+		} else if db::handed(&mut tx, d.case, d.answers).await? {
+			Some(stopped(DraftState::Superseded, "another reply to it was handed over already"))
 		} else if person.is_some() {
 			None
+		} else if send_at.is_none_or(|at| now.duration_since(at) > LATE) {
+			Some(stopped(DraftState::Proposed, "its moment is past"))
 		} else if !db::auto(&mut tx, owner).await?.contains(&(case.gmail, case.topic)) {
 			Some(stopped(DraftState::Proposed, "replies on its topic go by themselves no more"))
-		} else if !d.needs.is_empty() || !matches!(case.state, State::Sending { .. }) {
+		} else if !matches!(case.state, State::Sending { .. }) || case.press.is_none() {
 			Some(stopped(DraftState::Proposed, "its case is not what it was"))
-		} else if rules::asked(messages.iter()) >= MAX_ASKS {
-			Some(stopped(DraftState::Proposed, "Google was asked often enough"))
 		} else {
 			None
 		};
@@ -662,6 +678,11 @@ impl Panel {
 			tx.commit().await.wrap_err("committing a draft not sent")?;
 			return Ok(Err(Refused::Conflict(why)));
 		}
+		// Google may have answered since the inbox was read
+		if person.is_none() && (case.read < send_at || case.press > Some(now)) {
+			return Ok(Err(Refused::Unavailable("its inbox is not read past its moment yet".to_owned())));
+		}
+		let messages = case.messages();
 		let counterpart = rules::counterpart(messages.iter()).and_then(|m| case.messages.iter().find(|k| k.said.id == m.id));
 		let to = match counterpart {
 			None => Err("nothing of Google's in it takes a reply".to_owned()),
@@ -761,64 +782,76 @@ impl Panel {
 	/// were queued.
 	pub async fn tell_mail(&self, locale: Locale, now: Timestamp) -> eyre::Result<usize> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection to tell of mail")?;
-		let mut queued = 0;
+		let (mut queued, mut failed) = (0, None);
 		for owner in db::owners(&mut conn).await? {
-			let all = gmbs_db::gmbs(&mut conn, owner).await?;
-			for c in self.gathered(&mut conn, owner, now).await? {
-				let last = c.last();
-				let at = match &c.draft {
-					Some(d) if d.reply.answers == last.said.id => d.created_at,
-					_ => last.said.at,
-				};
-				let turn = match &c.state {
-					// each again once mended, under what it then is
-					State::NeedsYou {
-						why: Why::Unread { error: None } | Why::Stuck { .. },
-					} => continue,
-					State::NeedsYou { .. } => "needs_you",
-					State::ReplyReady => "reply_ready",
-					State::Sending { .. } if c.draft.as_ref().is_some_and(|d| d.reply.state == DraftState::Held) => "held",
-					State::Waiting { .. } if last.said.reading.as_ref().is_some_and(|r| r.kind == Kind::Routed) => "routed",
-					State::Sending { .. } | State::ReplyDue | State::Waiting { .. } | State::Done { .. } | State::Quiet => continue,
-				};
-				if now.duration_since(at) > TELL_WITHIN {
-					continue;
-				}
-				let read = c.google().and_then(|m| m.said.reading.as_ref());
-				let note = |summary| Note::GoogleMail {
-					state: c.state.clone(),
-					kind: read.map(|r| r.kind),
-					gmb: c.gmb.and_then(|id| all.iter().find(|g| g.id == id)).map(|g| g.name.clone()),
-					summary,
-					deadline: read.and_then(|r| r.deadline).filter(|d| *d > now),
-				};
-				let gmbs: Vec<i64> = match c.gmb {
-					Some(gmb) => vec![gmb],
-					None => all.iter().filter(|g| g.gmail_id == Some(c.gmail)).map(|g| g.id).collect(),
-				};
-				let event = derived_event_id(&["google_mail", &last.said.id.to_string(), turn]);
-				let telling = Telling {
-					person: Some(owner),
-					gmail: gmbs.is_empty().then_some(c.gmail),
-					gmbs,
-					tier: match read.map(|r| r.kind) {
-						Some(Kind::Suspended | Kind::AccountRestricted | Kind::AccessLost) => Some(Tier::Urgent),
-						_ if turn == "routed" => Some(Tier::Info),
-						_ => None,
-					},
-					link: Some(format!("/email?case={}", c.id)),
-					// what the mail says may be a code to sign in with: its owner's alone
-					body: Body {
-						open: Some(note(None).render(locale)),
-						private: Some(note(read.map(|r| r.summary.clone()).or_else(|| last.subject.clone())).render(locale)),
-						..Body::default()
-					},
-					..Telling::new(Rule::GoogleMail, event, at, Rendered::default())
-				};
-				let mut tx = crate::store::begin_write(&mut conn).await?;
-				queued += self.tell(&mut tx, &telling, now).await?;
-				tx.commit().await.wrap_err("committing a note")?;
+			match self.tell_mail_of(&mut conn, owner, locale, now).await {
+				Ok(n) => queued += n,
+				Err(e) => failed = failed.or(Some(e.wrap_err(format!("user {owner}")))),
 			}
+		}
+		failed.map_or(Ok(queued), Err)
+	}
+
+	async fn tell_mail_of(&self, conn: &mut SqliteConnection, owner: Uuid, locale: Locale, now: Timestamp) -> eyre::Result<usize> {
+		let mut queued = 0;
+		let all = gmbs_db::gmbs(conn, owner).await?;
+		for c in self.gathered(conn, owner, now).await? {
+			let last = c.last();
+			let at = match &c.draft {
+				Some(d) if d.reply.answers == last.said.id => d.reply.written_at,
+				_ => last.said.at,
+			};
+			let read = c.google().and_then(|m| m.said.reading.as_ref());
+			let deadline = read.and_then(|r| r.deadline).filter(|d| *d > now);
+			let (turn, at) = match &c.state {
+				// each again once mended, under what it then is
+				State::NeedsYou {
+					why: Why::Unread { error: None } | Why::Stuck { .. },
+				} => continue,
+				State::NeedsYou { .. } if deadline.is_some_and(|d| d.duration_since(now) <= DEADLINE_NEAR) => ("deadline", now),
+				State::NeedsYou { why: Why::Unanswered { since } } => ("needs_you", *since),
+				State::NeedsYou { .. } => ("needs_you", at),
+				State::ReplyReady => ("reply_ready", at),
+				State::Sending { .. } if c.draft.as_ref().is_some_and(|d| d.reply.state == DraftState::Held) => ("held", at),
+				State::Waiting { .. } if last.said.reading.as_ref().is_some_and(|r| r.kind == Kind::Routed) => ("routed", at),
+				State::Sending { .. } | State::ReplyDue | State::Waiting { .. } | State::Done { .. } | State::Quiet => continue,
+			};
+			if now.duration_since(at) > TELL_WITHIN {
+				continue;
+			}
+			let note = |summary| Note::GoogleMail {
+				state: c.state.clone(),
+				kind: read.map(|r| r.kind),
+				gmb: c.gmb.and_then(|id| all.iter().find(|g| g.id == id)).map(|g| g.name.clone()),
+				summary,
+				deadline,
+			};
+			let gmbs: Vec<i64> = match c.gmb {
+				Some(gmb) => vec![gmb],
+				None => all.iter().filter(|g| g.gmail_id == Some(c.gmail)).map(|g| g.id).collect(),
+			};
+			let event = derived_event_id(&["google_mail", &last.said.id.to_string(), turn]);
+			let telling = Telling {
+				person: Some(owner),
+				gmail: gmbs.is_empty().then_some(c.gmail),
+				gmbs,
+				tier: match read.map(|r| r.kind) {
+					Some(Kind::Suspended | Kind::AccountRestricted | Kind::AccessLost | Kind::OthersAccess | Kind::OwnershipRequested | Kind::StillActive) => Some(Tier::Urgent),
+					_ if turn == "routed" => Some(Tier::Info),
+					_ => None,
+				},
+				link: Some(format!("/email?case={}", c.id)),
+				// what the mail says may be a code to sign in with: its owner's alone
+				body: Body {
+					open: Some(note(None).render(locale)),
+					private: Some(note(read.map(|r| r.summary.clone()).or_else(|| last.subject.clone())).render(locale)),
+					..Body::default()
+				},
+				..Telling::new(Rule::GoogleMail, event, at, Rendered::default())
+			};
+			let mut tx = crate::store::begin_write(conn).await?;
+			queued += self.tell(&mut tx, &telling, now).await?;
+			tx.commit().await.wrap_err("committing a note")?;
 		}
 		Ok(queued)
 	}
@@ -839,17 +872,22 @@ impl Panel {
 		let stuck = db::stuck(conn, owner).await?;
 		// the latest mail to name a GBP beside a link says whose the link is
 		let known: HashMap<String, i64> = mails.iter().filter_map(|m| Some((m.listing.clone()?, m.gmb_id?))).collect();
+		let inboxes = db::inboxes(conn, owner).await?;
+		let reads = self.inboxes_read.lock().expect("never poisoned: no panic while held").clone();
 		let mut held: HashMap<i64, Vec<Kept>> = HashMap::new();
 		for m in mails {
-			held.entry(m.case_id).or_default().push(kept(m, &known)?);
+			let account = inboxes.get(&m.gmail_id).filter(|(_, shared)| !shared).map(|(u, _)| u.as_str());
+			held.entry(m.case_id).or_default().push(kept(m, &known, account)?);
 		}
 		let mut cases = Vec::new();
 		for r in rows {
 			let messages = held.remove(&r.id).ok_or_else(|| eyre::eyre!("case {} holds no message", r.id))?;
 			let gmb = r.gmb_id.or_else(|| messages.iter().rev().find_map(|m| m.gmb));
-			let read = messages.iter().rev().filter_map(|m| m.said.reading.as_ref()).map(|r| r.topic).find(|t| *t != Topic::Other);
 			let by_hand = r.topic()?;
-			let topic = by_hand.or(read).unwrap_or(Topic::Other); // nothing read yet, or only of none
+			// a kind of any topic says least of what a conversation is about
+			let said = || messages.iter().filter_map(|m| m.said.reading.as_ref()).filter(|r| r.topic != Topic::Other);
+			let read = said().find(|r| r.kind.topic().is_some()).or_else(|| said().next());
+			let topic = by_hand.or(read.map(|r| r.topic)).unwrap_or(Topic::Other); // nothing read yet, or only of none
 			cases.push((
 				r.done_mail,
 				Case {
@@ -864,66 +902,81 @@ impl Panel {
 					numbers: r.numbers().clone(),
 					state: State::Quiet,
 					due: false,
+					press: None,
+					read: reads
+						.get(&r.gmail_id)
+						.filter(|(u, _)| inboxes.get(&r.gmail_id).is_some_and(|(now, _)| now == u))
+						.map(|(_, at)| *at),
 					messages,
 					draft: drafts.remove(&r.id),
 				},
 			));
 		}
 		// of no case, the GBP's own
-		type Read = (Option<i64>, Timestamp, Topic, Kind);
+		type Read = (Option<i64>, Timestamp, Kind);
 		let mut elsewhere: HashMap<i64, Vec<Read>> = HashMap::new();
-		for (gmb, at, reinstated) in db::verified(conn, owner).await? {
-			let (topic, kind) = match reinstated {
-				true => (Topic::Suspension, Kind::AppealApproved),
-				false => (Topic::Verification, Kind::Verified),
+		for (gmb, at, from, to) in db::moves(conn, owner).await? {
+			let as_said: &[Kind] = match (from, to) {
+				(Some(Stands::Suspended), Stands::Verified) => &[Kind::AppealApproved, Kind::Verified],
+				(Some(Stands::Suspended), Stands::Verifying) => &[Kind::AppealApproved, Kind::ReverificationRequired],
+				(Some(Stands::Verified), Stands::Verifying) => &[Kind::ReverificationRequired],
+				(_, Stands::Verified) => &[Kind::Verified],
+				(_, Stands::Suspended) => &[Kind::Suspended],
+				(_, Stands::Draft | Stands::Verifying) => &[],
 			};
-			elsewhere.entry(gmb).or_default().push((None, at, topic, kind));
+			elsewhere.entry(gmb).or_default().extend(as_said.iter().map(|k| (None, at, *k)));
 		}
 		for (_, c) in &cases {
 			for m in &c.messages {
 				if let (Some(gmb), Some(r)) = (m.gmb.or(c.gmb), &m.said.reading) {
-					elsewhere.entry(gmb).or_default().push((Some(c.id), m.said.at, r.topic, r.kind));
+					elsewhere.entry(gmb).or_default().push((Some(c.id), m.said.at, r.kind));
 				}
 			}
 		}
+		let live = db::live(conn, owner).await?;
 		let state = |done: Option<i64>, c: &Case, asked_elsewhere: bool, stuck: Option<&str>| {
 			let messages = c.messages();
-			let others: Vec<(Timestamp, Topic, Kind)> = c
+			let others: Vec<(Timestamp, Kind)> = c
 				.gmb
 				.and_then(|g| elsewhere.get(&g))
 				.into_iter()
 				.flatten()
 				.filter(|(case, ..)| *case != Some(c.id))
-				.map(|(_, at, topic, kind)| (*at, *topic, *kind))
+				.map(|(_, at, kind)| (*at, *kind))
 				.collect();
-			rules::state(
-				&rules::Case {
-					topic: c.topic,
-					messages: &messages,
-					draft: c.draft.as_ref().map(|d| &d.reply),
-					done,
-					elsewhere: &others,
-					asked_elsewhere,
-					stuck,
+			let of = rules::Case {
+				topic: c.topic,
+				about: match c.gmb {
+					None => About::Unknown,
+					Some(g) if live.contains(&g) => About::Live,
+					Some(_) => About::Removed,
 				},
-				now,
-			)
+				messages: &messages,
+				draft: c.draft.as_ref().map(|d| &d.reply),
+				done,
+				elsewhere: &others,
+				asked_elsewhere,
+				stuck,
+				read: c.read,
+			};
+			(rules::state(&of, now), rules::press(&of, now))
 		};
 		// a notice's state stands on whether a conversation asks for its GBP's verification
 		let asking: HashMap<i64, i64> = cases
 			.iter()
 			.filter(|(_, c)| c.topic == Topic::Verification && c.messages.iter().any(|m| !m.said.noreply))
-			.filter(|(done, c)| !matches!(state(*done, c, false, None), State::Done { .. } | State::Quiet))
+			.filter(|(done, c)| !matches!(state(*done, c, false, None).0, State::Done { .. } | State::Quiet))
 			.filter_map(|(_, c)| Some((c.gmb?, c.id)))
 			.collect();
 		Ok(cases
 			.iter()
 			.map(|(done, c)| {
 				let asked = c.gmb.and_then(|g| asking.get(&g)).is_some_and(|id| *id != c.id);
-				let open = c.draft.as_ref().is_some_and(|d| d.reply.answers == c.last().said.id);
+				let (stands, press) = state(*done, c, asked, stuck.as_deref());
 				Case {
-					state: state(*done, c, asked, stuck.as_deref()),
-					due: !open && state(*done, c, asked, None) == State::ReplyDue,
+					state: stands,
+					due: state(*done, c, asked, None).0 == State::ReplyDue,
+					press,
 					..c.clone()
 				}
 			})
@@ -934,11 +987,11 @@ impl Panel {
 		Ok(Draft {
 			id: d.id,
 			body: self.unseal(&mail_draft_aad(d.case, d.answers), &d.body)?.to_string(),
-			created_at: d.created_at,
 			reply: Reply {
 				state: d.state,
 				answers: d.answers,
 				needs: d.needs,
+				written_at: d.created_at,
 				send_at: d.send_at,
 				sent_at: d.sent_at,
 				error: d.error,
@@ -947,10 +1000,12 @@ impl Panel {
 	}
 }
 
-fn kept(m: MailRow, known: &HashMap<String, i64>) -> eyre::Result<Kept> {
+/// `account`: whom its gmail's mail is read as, that gmail's alone.
+fn kept(m: MailRow, known: &HashMap<String, i64>, account: Option<&str>) -> eyre::Result<Kept> {
 	let read_by = m.read_by()?;
 	let reading = m.reading().cloned();
 	let seen = reading.as_ref().and_then(|r| r.gmb);
+	let ours = |a: &String| account.is_some_and(|account| a.eq_ignore_ascii_case(account));
 	let linked = m.listing.as_ref().and_then(|l| known.get(l).copied());
 	Ok(Kept {
 		gmb: match read_by {
@@ -966,6 +1021,10 @@ fn kept(m: MailRow, known: &HashMap<String, i64>) -> eyre::Result<Kept> {
 				false => m.from_address.as_deref().is_none_or(|f| Sender::of(f) != Sender::Support),
 			},
 			repliable: m.repliable,
+			addressed: match m.sent {
+				true => m.from_address.as_ref().is_some_and(ours),
+				false => m.to().iter().any(ours),
+			},
 			reading,
 			read_error: m.read_error.clone().filter(|_| m.attempts >= MAX_READS),
 		},

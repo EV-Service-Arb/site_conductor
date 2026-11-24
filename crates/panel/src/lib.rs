@@ -25,8 +25,8 @@ mod business;
 pub mod categories;
 pub mod claude;
 pub mod connections;
-pub mod gmbs;
 pub mod deliver;
+pub mod gmbs;
 mod google_categories;
 mod imap;
 pub mod import;
@@ -147,6 +147,7 @@ pub struct Panel {
 	smtp: Arc<dyn mail::Smtp>,
 	/// Its held replies go by themselves: production's alone, or a copy of its database would answer Google too.
 	mail_by_itself: bool,
+	inboxes_read: inbox::Reads,
 	/// Told of every change review_archive's snapshot carries.
 	snapshot_due: Arc<tokio::sync::Notify>,
 }
@@ -162,6 +163,7 @@ impl Panel {
 			purses: Arc::default(),
 			smtp,
 			mail_by_itself,
+			inboxes_read: Arc::default(),
 			snapshot_due: Arc::default(),
 		}
 	}
