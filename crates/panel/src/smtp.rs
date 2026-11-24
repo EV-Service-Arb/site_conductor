@@ -14,6 +14,7 @@ use crate::{
 };
 
 const HOST: &str = "smtp.gmail.com";
+pub(crate) const PORT: u16 = lettre::transport::smtp::SUBMISSIONS_PORT;
 const TIMEOUT: Duration = Duration::from_secs(60);
 
 /// Gmail over SMTP.

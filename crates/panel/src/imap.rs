@@ -26,7 +26,7 @@ use crate::{
 
 /// IMAP over TLS from the first byte; nothing else is dialled, so a host cannot point the probe
 /// at another service.
-const PORT: u16 = 993;
+pub(crate) const PORT: u16 = 993;
 const TIMEOUT: Duration = Duration::from_secs(10);
 /// A batch's read: the login, the search and the fetch of its messages.
 const READ_WITHIN: Duration = Duration::from_secs(60);

@@ -71,6 +71,33 @@ pub struct CaseDto {
 	/// Its draft, until it is answered; what it lacks in `draft.needs`.
 	pub draft: Option<DraftDto>,
 }
+impl CaseDto {
+	fn of(c: &Case, now: Timestamp) -> Self {
+		let (last, google) = (c.last(), c.google());
+		let read = google.and_then(|m| m.said.reading.as_ref());
+		let said = last.said.reading.as_ref();
+		Self {
+			id: c.id,
+			gmail_id: c.gmail,
+			gmb_id: c.gmb,
+			topic: c.topic,
+			subject: google.unwrap_or(last).subject.clone(),
+			numbers: c.numbers.iter().cloned().collect(),
+			thread: last.thread.clone(),
+			state: c.state.clone(),
+			deadline: read.and_then(|r| r.deadline).filter(|d| *d > now).map(|d| d.to_string()),
+			last: MailLineDto {
+				id: last.said.id,
+				at: last.said.at.to_string(),
+				sent: last.said.sent,
+				kind: said.map(|r| r.kind),
+				summary: said.map(|r| r.summary.clone()),
+			},
+			asks: read.map(|r| r.asks.clone()).unwrap_or_default(), // not read: nothing asked is known
+			draft: c.draft.as_ref().filter(|d| d.reply.answers == last.said.id).map(DraftDto::from),
+		}
+	}
+}
 
 /// A message, in a line.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
@@ -138,6 +165,26 @@ pub struct MessageDto {
 	/// Why it is not read, once given up on.
 	pub read_error: Option<String>,
 }
+impl MessageDto {
+	fn of(m: &Kept, text: &str) -> Self {
+		Self {
+			id: m.said.id,
+			at: m.said.at.to_string(),
+			sent: m.said.sent,
+			from: m.from.clone(),
+			to: m.to.clone(),
+			subject: m.subject.clone(),
+			text: text.to_owned(),
+			authentic: m.authentic,
+			repliable: m.said.repliable,
+			gmb_id: m.gmb,
+			listing: m.listing.clone(),
+			reading: m.said.reading.clone(),
+			read_by: m.read_by,
+			read_error: m.said.read_error.clone(),
+		}
+	}
+}
 
 /// A try to verify a GBP, as Google's mail tells it.
 #[derive(Clone, Debug, JsonSchema, Serialize)]
@@ -193,34 +240,6 @@ pub struct AutosDto {
 	pub topics: Vec<Topic>,
 }
 
-impl CaseDto {
-	fn of(c: &Case, now: Timestamp) -> Self {
-		let (last, google) = (c.last(), c.google());
-		let read = google.and_then(|m| m.said.reading.as_ref());
-		let said = last.said.reading.as_ref();
-		Self {
-			id: c.id,
-			gmail_id: c.gmail,
-			gmb_id: c.gmb,
-			topic: c.topic,
-			subject: google.unwrap_or(last).subject.clone(),
-			numbers: c.numbers.iter().cloned().collect(),
-			thread: last.thread.clone(),
-			state: c.state.clone(),
-			deadline: read.and_then(|r| r.deadline).filter(|d| *d > now).map(|d| d.to_string()),
-			last: MailLineDto {
-				id: last.said.id,
-				at: last.said.at.to_string(),
-				sent: last.said.sent,
-				kind: said.map(|r| r.kind),
-				summary: said.map(|r| r.summary.clone()),
-			},
-			asks: read.map(|r| r.asks.clone()).unwrap_or_default(), // not read: nothing asked is known
-			draft: c.draft.as_ref().filter(|d| d.reply.answers == last.said.id).map(DraftDto::from),
-		}
-	}
-}
-
 impl From<&Draft> for DraftDto {
 	fn from(d: &Draft) -> Self {
 		Self {
@@ -236,23 +255,99 @@ impl From<&Draft> for DraftDto {
 	}
 }
 
-impl MessageDto {
-	fn of(m: &Kept, text: &str) -> Self {
-		Self {
-			id: m.said.id,
-			at: m.said.at.to_string(),
-			sent: m.said.sent,
-			from: m.from.clone(),
-			to: m.to.clone(),
-			subject: m.subject.clone(),
-			text: text.to_owned(),
-			authentic: m.authentic,
-			repliable: m.said.repliable,
-			gmb_id: m.gmb,
-			listing: m.listing.clone(),
-			reading: m.said.reading.clone(),
-			read_by: m.read_by,
-			read_error: m.said.read_error.clone(),
+// ── in `serve` ───────────────────────────────────────────────────────────────────────────
+
+/// Each person's mail with Google: read, answered, sent when held, told of.
+pub struct Worker {
+	pub panel: Panel,
+	pub model: Model,
+	/// Replies go by themselves: production's alone, or a copy of its database would answer Google too.
+	pub by_itself: bool,
+	/// The alerts' language; none tells nothing.
+	pub tell: Option<Locale>,
+}
+impl Worker {
+	/// Everyone's unread mail read, and the replies due written. A person's failing pass is reported, and
+	/// the others' go on.
+	pub async fn read_and_write(&self) -> eyre::Result<()> {
+		for owner in self.panel.mail_owners().await? {
+			let why = match self.of(owner).await {
+				Ok(asked) if !asked => continue,
+				Ok(_) => None,
+				Err(Unanswered::Stuck(why)) => Some(why),
+				Err(Unanswered::Unread(why)) => unreachable!("kept with its mail: {why}"),
+				Err(Unanswered::Internal(e)) => {
+					crate::report(&e.wrap_err(format!("user {owner}")), "a person's mail with Google");
+					continue;
+				}
+			};
+			if let Some(why) = &why {
+				tracing::debug!(user_id = %owner, why, "their mail with Google waits");
+			}
+			self.panel.mail_stuck(owner, why.as_deref()).await?;
+		}
+		Ok(())
+	}
+
+	/// What is held until now sent, and what turned to a person told.
+	pub async fn send_and_tell(&self) -> eyre::Result<()> {
+		if self.by_itself {
+			self.panel.send_held_mail(Timestamp::now()).await?;
+		}
+		if let Some(locale) = self.tell {
+			self.panel.tell_mail(locale, Timestamp::now()).await?;
+		}
+		Ok(())
+	}
+
+	/// The person's mail; whether the model was asked anything.
+	async fn of(&self, owner: Uuid) -> Result<bool, Unanswered> {
+		let Self { panel, model, by_itself, .. } = self;
+		let mut asked = false;
+		for m in panel.unread_mail(owner, Timestamp::now()).await? {
+			asked = true;
+			match read(panel, model, &m).await {
+				Ok(reading) => panel.mail_read(m.mail, reading, &m.gmbs, Timestamp::now()).await?,
+				Err(Unanswered::Unread(why)) => panel.mail_unread(m.mail, &why).await?,
+				Err(e) => return Err(e),
+			}
+		}
+		for c in panel.mail_cases(owner, Timestamp::now()).await? {
+			if !c.due {
+				continue;
+			}
+			let Ok(brief) = panel.mail_case(owner, c.id, Timestamp::now()).await? else {
+				continue; // purged since it was listed
+			};
+			asked = true;
+			let written = match write(panel, model, Spender::new(owner), &brief, None).await {
+				Ok(w) => w,
+				Err(Unanswered::Unread(why)) => Written::Failed(why),
+				Err(e) => return Err(e),
+			};
+			panel.draft_mail(owner, c.id, brief.case.last().said.id, written, !by_itself, Timestamp::now()).await?;
+		}
+		Ok(asked)
+	}
+}
+
+/// Runs `w` every [`EVERY`] until `shutdown` turns true; a send begun is seen through. Nothing here ends
+/// `serve`.
+pub async fn run(w: Worker, mut shutdown: watch::Receiver<bool>) {
+	while !*shutdown.borrow() {
+		tokio::select! {
+			r = w.read_and_write() =>
+				if let Err(e) = r {
+					crate::report(&e, "reading mail with Google");
+				},
+			_ = shutdown.changed() => return,
+		}
+		if let Err(e) = w.send_and_tell().await {
+			crate::report(&e, "sending and telling of mail with Google");
+		}
+		tokio::select! {
+			() = tokio::time::sleep(EVERY) => {}
+			_ = shutdown.changed() => return,
 		}
 	}
 }
@@ -795,98 +890,5 @@ Answer with body and needs, nothing null; or, when no reply serves the goal, bod
 			..
 		} => Ok(Written::Nothing(why)),
 		_ => Err(Unanswered::Unread("the writer answered neither a reply nor why none".to_owned())),
-	}
-}
-
-// ── in `serve` ───────────────────────────────────────────────────────────────────────────
-
-/// Each person's mail with Google: read, answered, sent when held, told of.
-pub struct Worker {
-	pub panel: Panel,
-	pub model: Model,
-	/// The alerts' language; none tells nothing.
-	pub tell: Option<Locale>,
-}
-impl Worker {
-	/// Everyone's unread mail read, and the replies due written. A person's failing pass is reported, and
-	/// the others' go on.
-	pub async fn read_and_write(&self) -> eyre::Result<()> {
-		for owner in self.panel.mail_owners().await? {
-			let why = match self.of(owner).await {
-				Ok(asked) if !asked => continue,
-				Ok(_) => None,
-				Err(Unanswered::Stuck(why)) => Some(why),
-				Err(Unanswered::Unread(why)) => unreachable!("kept with its mail: {why}"),
-				Err(Unanswered::Internal(e)) => {
-					crate::report(&e.wrap_err(format!("user {owner}")), "a person's mail with Google");
-					continue;
-				}
-			};
-			if let Some(why) = &why {
-				tracing::debug!(user_id = %owner, why, "their mail with Google waits");
-			}
-			self.panel.mail_stuck(owner, why.as_deref()).await?;
-		}
-		Ok(())
-	}
-
-	/// What is held until now sent, and what turned to a person told.
-	pub async fn send_and_tell(&self) -> eyre::Result<()> {
-		self.panel.send_held_mail(Timestamp::now()).await?;
-		if let Some(locale) = self.tell {
-			self.panel.tell_mail(locale, Timestamp::now()).await?;
-		}
-		Ok(())
-	}
-
-	/// The person's mail; whether the model was asked anything.
-	async fn of(&self, owner: Uuid) -> Result<bool, Unanswered> {
-		let Self { panel, model, .. } = self;
-		let mut asked = false;
-		for m in panel.unread_mail(owner, Timestamp::now()).await? {
-			asked = true;
-			match read(panel, model, &m).await {
-				Ok(reading) => panel.mail_read(m.mail, reading, &m.gmbs, Timestamp::now()).await?,
-				Err(Unanswered::Unread(why)) => panel.mail_unread(m.mail, &why).await?,
-				Err(e) => return Err(e),
-			}
-		}
-		for c in panel.mail_cases(owner, Timestamp::now()).await? {
-			if !c.due {
-				continue;
-			}
-			let Ok(brief) = panel.mail_case(owner, c.id, Timestamp::now()).await? else {
-				continue; // purged since it was listed
-			};
-			asked = true;
-			let written = match write(panel, model, Spender::new(owner), &brief, None).await {
-				Ok(w) => w,
-				Err(Unanswered::Unread(why)) => Written::Failed(why),
-				Err(e) => return Err(e),
-			};
-			panel.draft_mail(owner, c.id, brief.case.last().said.id, written, false, Timestamp::now()).await?;
-		}
-		Ok(asked)
-	}
-}
-
-/// Runs `w` every [`EVERY`] until `shutdown` turns true; a send begun is seen through. Nothing here ends
-/// `serve`.
-pub async fn run(w: Worker, mut shutdown: watch::Receiver<bool>) {
-	while !*shutdown.borrow() {
-		tokio::select! {
-			r = w.read_and_write() =>
-				if let Err(e) = r {
-					crate::report(&e, "reading mail with Google");
-				},
-			_ = shutdown.changed() => return,
-		}
-		if let Err(e) = w.send_and_tell().await {
-			crate::report(&e, "sending and telling of mail with Google");
-		}
-		tokio::select! {
-			() = tokio::time::sleep(EVERY) => {}
-			_ = shutdown.changed() => return,
-		}
 	}
 }

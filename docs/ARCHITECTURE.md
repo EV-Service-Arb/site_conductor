@@ -36,7 +36,8 @@ A cargo workspace; dependencies point inwards only.
 
 ```text
 crates/core/             no I/O: the queries cache's wire, a GBP's states and moves, its country and language, and the
-                         snapshot the services are told (`gbp`; review_archive takes it too),
+                         snapshot the services are told (`gbp`; review_archive takes it too), Google's
+                         mail: its kinds, its cases, whose turn one is (`mail`),
                          brand ids, the HMAC of a signed request and its window, the
                          conductor's own alert messages, when a destination is told and of what (`alerts`), the buttons' signed data, retry and
                          pacing, tokens' renewal and a charge's split, the charge feed's
@@ -53,7 +54,8 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          Directory, Feeds and Outlets ports), `own_alerts` (what the conductor tells
                          itself), `deliver` (the outbox sent), `telegram` (links, chats, buttons), `live` (the in-process bus), `gmbs`,
                          `connections` (a gmail's inbox, Maps key and Business Profile client and grant; who pays a Places request), `inbox` (its mail
-                         with Google followed into its GBPs' logs; the Mailbox port), `claude` (a person's own
+                         with Google followed into its GBPs' logs; the Mailbox port), `mail` (that mail as
+                         cases, their readings and drafts; the Smtp port), `claude` (a person's own
                          Claude),
                          `browsers` (a gmail's browser: its proxy checked and sealed, Multilogin and
                          GoLogin, a launch),
@@ -116,6 +118,7 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
   src/categories.rs      /api/v1/categories, /api/v1/category-versions
   src/library.rs         /api/v1/library: listings, their versions, the standard library
   src/connections.rs     /api/v1/gmails/{id}/{connections,imap,maps_key,business}; each gmail's inbox followed
+  src/mail.rs            /api/v1/mail, /api/v1/gmbs/{id}/mail; Google's mail read and answered by the model, sent, told
   src/browser.rs         /api/v1/gmails/{id}/browser{,/test,/start,/stop,/film,/thread}; the runner; the viewer's
                          socket, the relay between it and a browser's devtools, a phone's passed through
   src/tokens.rs          /api/v1/tokens, /api/v1/admin/tokens; review_archive followed and told
@@ -781,7 +784,8 @@ DELETE /mcp           its session ends, the sandbox's with it
 ```
 
 - **One approval level, at the gate.** `ask` proposes what destroys or spends, `spend` runs what
-  spends, `act` runs both (`sa_core::agent::Approval`; `Hints::held_by`, which `call`, an
+  spends, `act` runs both; what speaks to someone outside (`sa_core::agent::Outward`) is held as what
+  destroys (`sa_core::agent::Approval`; `Hints::held_by`, which `call`, an
   operation's own tool and a cell's relay all ask). The in-page assistant is told it with each
   question (the composer's chip); an MCP client's is its grant's scope, chosen on the consent page
   and kept on its session: `spend`, `act`, or neither for `ask` (`scopes_supported`). A call that
@@ -944,8 +948,8 @@ a Google answer bought, any service ─ PUT /api/queries_cache, `bought` ─ in 
 a map, before it is built ─ POST /map/load        a panorama ─ POST /map/street_view   (each charged in its write)
 review_archive's walk steps ─ GET /api/conductor/usage ┐ followed every 10 s, a page, its charges
 the runner's phone minutes, browser starts ─ GET /usage ┘ and its cursor in one write (`sa_core::usage`)
-the assistant's model tokens, by kind ─ each round of POST /assistant/chats/{id}/ask, its model the key,
-                                        on whose Claude it ran
+the model's tokens, by kind ─ each round of POST /assistant/chats/{id}/ask, each message of Google's
+                              read or answered, its model the key, on whose Claude it ran
 ```
 
 **Street View is bought before it opens.** Google bills each panorama opened on a browser key
@@ -1123,7 +1127,7 @@ priced in money, so an account overshoots by its hours behind.
   `never_purge` (an admin's say; unsaid, on under dev sign-in); `never_purge` turned off counts
   the kept days from then, so nothing goes the moment it may. The owner may purge one at once: a
   gmail with every GBP of it in the trash. Purged is gone for good: its gmail's connections
-  and the notes on it deleted, its row kept.
+  and mail and the notes on it deleted, its row kept.
 
 ```text
 follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=500 (Conductor)
@@ -1168,8 +1172,9 @@ push (a change, a page, 60 s)
   with the gmail it was under and who did it. A browser run for the gmail alone is the gmail's, in
   the log of each GBP while under it. Its gmail's mail with Google (`email`): `serve` reads each
   set inbox's All Mail over IMAP every 60 s past its cursor (account, UIDVALIDITY, last UID), a batch
-  a write with the cursor; a message is logged once, on each GBP whose name, place id or address's
-  first line it holds, else the gmail's. Its thread opens in a new tab of the gmail's own running
+  a write with the cursor; a message is logged once, on each GBP whose name (the longest first: one
+  may begin another) or place id it holds, else whose address's first line, else the gmail's; what is
+  about a Business Profile is kept too (Google's mail). Its thread opens in a new tab of the gmail's own running
   browser (`POST /gmails/{id}/browser/thread`); the conductor never reads Gmail on the web. review_archive's events of the GBP (reviews appeared, gone,
   back, appeals, failed scans) are its own (`/me/gmbs/{gmb}/events`): the page merges both by time.
 - **A note on a GBP** is a person's own (`gmb_notes`, one a person and GBP, plain text, at most 4000
@@ -1180,6 +1185,39 @@ push (a change, a page, 60 s)
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand
   (`PUT /gmbs/{id}/country`); a Sync brings Google's over one set by hand.
+
+## Google's mail
+
+What Google sends about the GBPs is kept (`mails`, each text sealed, its quoted history dropped), read,
+and answered. A **case** is a conversation with support or a lone notice; its state, and every try to
+verify a GBP, is derived from its messages' readings (`sa_core::mail`), never stored.
+
+```text
+follow (60 s) ─ kept, joined to its case ─ read ─┬─ by rule: the sender, a notice's fixed subject
+                                                 ├─ by the model (≤ 90 days old), 3 tries
+                                                 └─ by a person, over either
+case's state: needs_you (why) │ reply_due │ reply_ready │ sending │ waiting │ done │ quiet
+reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ SMTP ─▶ sent | failed
+                     └─▶ held (15 min; its topic switched on, nothing lacking) ─┘
+                         either ─ another message in its case ─▶ superseded
+```
+
+- **Whose a message is.** Authentic: its one From is @google.com exactly and Gmail's own first
+  `Authentication-Results` passes DMARC for it; a look-alike is an impersonation, in a case of its own.
+  Google's other mail is in the log alone.
+- **Joining.** A reply joins what it answers (Message-IDs), else its Gmail thread's conversation, else
+  its case number's; a notice only its number's: Gmail threads the notices of every profile together.
+- **The GBP** of a message: by hand, else the one it names, else the one its profile link is known by
+  (the latest mail that named a GBP beside it), else what its reader saw. A profile has a link for its
+  verification and another for its page.
+- **The model** runs on the gmail's owner's own Claude, else the panel's, charged to them; without
+  either or a balance, mail waits and its case says so. The writer's facts are the case, Google's other
+  readings of the GBP and the GBP; what it lacks is a need, and a draft with one never goes by itself.
+- **A reply** goes as the gmail, to the last message of the case that takes one. `sending` is committed
+  before SMTP; one left so is never tried again. A held one goes only while its topic's switch
+  (`verification`, `reviews`; off unless its owner's) is on, its case is as it was, and fewer than
+  `MAX_ASKS` of ours went unanswered; a person may send past that. Only production's goes by itself: a
+  copy of its database would answer Google too.
 
 ## Review kit
 
@@ -1329,7 +1367,8 @@ feed (2 s)        GET <service>/api/conductor/notifications?after=<cursor>&limit
                   as its rule says, its buttons callable) and told, the cursor moved to the page's
                   `next`; a note that fails fails the page, the cursor stays (loud, never skipped); 404:
                   a service not cut over, said once, asked again every 60 s
-own               told in the write that made it so, or found due every 2 s (`own_alerts`)
+own               told in the write that made it so, or found due every 2 s (`own_alerts`); Google's mail
+                  every 60 s: a case turned to a person, once per message and turn, for 6 days
 told              once per (rule, event): kept 30 days, sealed; in the inbox of each person of its
                   audience; queued for each destination of theirs reached, its filter passed, their access
                   confirmed within the hour
@@ -1413,7 +1452,7 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   listener, on GETs, for that query's life. The public listener never takes a token.
 - **A source is only ever revoked.** `sources` refuses DELETE and any UPDATE but of `revoked_at`
   and a site's `origin` set once from NULL (only a `site` has one); a key id is never reused.
-- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, alerts' notes and destinations' addresses, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
+- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, alerts' notes and destinations' addresses, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, its mail with Google and the replies to it, and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
 - **No price beside its use.** What a person is charged is an item of `sa_core::prices` at its
@@ -1423,7 +1462,7 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
 - **No buy on credit.** A Places request on the shared keys, a Street View panorama, a map, a
   browser's start or a study's pull for a person is charged at its price, and refused before it is
   sent when their balance is below it; a pull buys no search past what the balance affords. Their
-  own keys and the queries cache cost nothing. A round of the assistant on the panel's Claude starts
+  own keys and the queries cache cost nothing. A round of the assistant on the panel's Claude, or a message of Google's read or answered on it, starts
   only on a balance above 0, a cloud phone on one minute's; their cost, known once done, is charged
   up to what they hold, and a phone runs no longer than its launch's balance affords.
 - **No Street View past the free ones.** No panorama opens on a browser key but one
@@ -1434,6 +1473,8 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   stop never opens on an account without its reading.**
 - **Alerts are the conductor's.** A service publishes notes and never reaches a person itself;
   who is told, where and how is decided here.
+- **A reply to Google is handed to SMTP once**, only to an address @google.com somebody reads, of a
+  message proved Google's; by itself only where its gmail's owner switched its topic on and it lacks nothing.
 - **A note is in the outbox before the cursor passes it**: the page and the cursor move in one
   transaction. **So is a charge in the ledger**, and a page is taken only from where the cursor
   stands.
@@ -1523,8 +1564,8 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   export) read with its `export.reader`, a service account's JSON key (BigQuery Data Viewer on the dataset, Job
   User on its project). An export starts the day it is turned on: until the next month, that
   account's baseline misses what came before.
-- **IMAP, outbound.** A gmail's inbox is dialled on :993 at a public address when it is set or
-  tested, and read every 60 s: egress to public :993. The browser loads Maps JS straight
+- **Mail, outbound.** A gmail's inbox is dialled on :993 at a public address when it is set or
+  tested, and read every 60 s: egress to public :993; its replies go through `smtp.gmail.com:465`. The browser loads Maps JS straight
   from Google with the browser key `GET /map` names (referrer-restricted to the public origin); the
   server's keys never reach it.
 - **Browsers.** sa_browsers is its own pod (`PANEL_BROWSERS_URL`, in-cluster only): `BROWSERS_DIR` on

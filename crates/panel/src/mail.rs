@@ -37,6 +37,8 @@ use crate::{
 	},
 };
 
+/// The ports a gmail's mail is read and sent on.
+pub const PORTS: [u16; 2] = [crate::imap::PORT, crate::smtp::PORT];
 /// Topics a person may have answered automatically.
 pub const AUTO: [Topic; 2] = [Topic::Verification, Topic::Reviews];
 /// Unread mail the model is handed in one pass, per person.

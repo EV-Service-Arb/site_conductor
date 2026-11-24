@@ -167,6 +167,7 @@ impl World {
 			worker: Worker {
 				panel: p.clone(),
 				model,
+				by_itself: true,
 				tell: None,
 			},
 			p,

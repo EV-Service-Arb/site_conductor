@@ -36865,7 +36865,7 @@
         ]
       },
       "MailStanding": {
-        "description": "Auto-generated discriminant enum variants\n\n- `reply_ready`: A draft waits for the operator.\n- `sending`: A draft goes by itself.\n- `reply_due`: Google waits for an answer, or has been silent too long; no draft yet.\n- `waiting`: Google's turn.\n- `quiet`: Nothing to do.",
+        "description": "A case's state, by its name.\n\n- `reply_ready`: A draft waits for the operator.\n- `sending`: A draft goes by itself.\n- `reply_due`: Google waits for an answer, or has been silent too long; no draft yet.\n- `waiting`: Google's turn.\n- `quiet`: Nothing to do.",
         "type": "string",
         "enum": [
           "needs_you",

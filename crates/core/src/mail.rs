@@ -24,7 +24,7 @@ pub const SENDING_FOR: SignedDuration = SignedDuration::from_mins(5);
 /// A shorter name, place id or address line is in every other message.
 const NAMES_FROM: usize = 4;
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, schemars::JsonSchema, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, strum::VariantArray)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[schemars(rename = "MailTopic")]
@@ -194,13 +194,6 @@ impl Kind {
 	}
 }
 
-enum Turn {
-	Reply,
-	Google,
-	Operator,
-	Nobody { resolved: bool },
-}
-
 /// What a message of Google's was read as.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -268,10 +261,6 @@ pub fn recipient<'a>(authentic: bool, from: Option<&'a str>, reply_to: Option<&'
 	Ok(to)
 }
 
-fn domain(address: &str) -> Option<String> {
-	address.trim().rsplit_once('@').map(|(_, d)| d.to_lowercase())
-}
-
 /// Whether a message is Google's: its one From is @google.com exactly, and the first
 /// `Authentication-Results` Gmail itself wrote (`results`, topmost first) passes DMARC for it.
 pub fn authentic(from: &[&str], results: &[&str]) -> bool {
@@ -288,25 +277,6 @@ pub fn authentic(from: &[&str], results: &[&str]) -> bool {
 	let (Some(one), None) = (dmarc.next(), dmarc.next()) else { return false };
 	let mut words = one.split_whitespace();
 	words.next() == Some("dmarc=pass") && words.any(|w| w == "header.from=google.com")
-}
-
-/// A header without its comments and quoted strings, which a sender writes; `None`, one never closes.
-fn bare(header: &str) -> Option<String> {
-	let (mut out, mut depth, mut quoted) = (String::new(), 0_usize, false);
-	let mut chars = header.chars();
-	while let Some(c) = chars.next() {
-		match c {
-			'\\' if quoted || depth > 0 => {
-				chars.next()?;
-			}
-			'"' if depth == 0 => quoted = !quoted,
-			'(' if !quoted => depth += 1,
-			')' if !quoted => depth = depth.checked_sub(1)?,
-			_ if !quoted && depth == 0 => out.push(c.to_ascii_lowercase()),
-			_ => {}
-		}
-	}
-	(!quoted && depth == 0).then_some(out)
 }
 
 /// What rules alone make of a message received.
@@ -335,21 +305,6 @@ pub fn ruled(from: Option<&str>, shown: &str, authentic: bool, subject: &str) ->
 	}
 }
 
-/// What a notice's subject says by itself.
-fn fixed(subject: &str) -> Option<Kind> {
-	static SUBJECTS: LazyLock<[(Regex, Kind); 4]> = LazyLock::new(|| {
-		[
-			(r"^you are now (an? |the )?(primary )?(manager|owner) of ", Kind::AccessGranted),
-			(r" invited you to manage ", Kind::Invited),
-			(r"^you can no longer manage ", Kind::AccessLost),
-			(r"performance report|^you got \d+ new reviews?| left a review for ", Kind::Noise),
-		]
-		.map(|(r, k)| (Regex::new(r).expect("a constant"), k))
-	});
-	let subject = squeezed(subject);
-	SUBJECTS.iter().find(|(r, _)| r.is_match(&subject)).map(|(_, k)| *k)
-}
-
 /// Whether a message from `sender` takes a reply.
 pub fn repliable(sender: Sender, text: &str) -> bool {
 	let text = squeezed(text).replace('’', "'");
@@ -361,11 +316,6 @@ pub fn repliable(sender: Sender, text: &str) -> bool {
 		"does not allow replies",
 	];
 	sender == Sender::Support && !refuses.iter().any(|r| text.contains(r))
-}
-
-/// Lowercase, runs of whitespace one space: Google wraps names over lines.
-fn squeezed(s: &str) -> String {
-	s.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// The case numbers a subject carries.
@@ -412,20 +362,6 @@ pub fn trimmed(raw: &str) -> String {
 	BLANKS.replace_all(&TRACKED.replace_all(&own, "$1"), "\n\n").trim().to_owned()
 }
 
-/// How many of `lines`, from the first, say who wrote what follows: "On … wrote:", "Le … a écrit :",
-/// wrapped.
-fn attribution(lines: &[&str]) -> Option<usize> {
-	static SAID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(On\b.*\bwrote ?:|Le\b.*\ba écrit ?:)$").expect("a constant"));
-	static DATED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"@|\b20\d\d\b").expect("a constant"));
-	if !lines[0].starts_with("On ") && !lines[0].starts_with("Le ") {
-		return None;
-	}
-	(1..=lines.len().min(4)).find(|&n| {
-		let joined = lines[..n].join(" ").split_whitespace().collect::<Vec<_>>().join(" ");
-		SAID.is_match(&joined) && DATED.is_match(&joined)
-	})
-}
-
 /// A GBP as a message may name it.
 #[derive(Clone, Debug)]
 pub struct Named {
@@ -464,12 +400,6 @@ pub fn named(text: &str, gbps: &[Named]) -> BTreeSet<i64> {
 		.iter()
 		.filter_map(|g| Some((g.id, g.address.as_deref()?.split(',').next().expect("split yields one").to_owned())))
 		.collect())
-}
-
-/// Whether `len` bytes of `text` at `at` are no part of a longer word.
-fn whole(text: &str, at: usize, len: usize) -> bool {
-	let inside = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
-	!inside(text[..at].chars().next_back()) && !inside(text[at + len..].chars().next())
 }
 
 /// What decides which case a message joins.
@@ -519,7 +449,7 @@ pub struct Message {
 	pub read_error: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema, strum::EnumString, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[schemars(rename = "MailDraftState")]
@@ -570,10 +500,10 @@ pub struct Case<'a> {
 	pub stuck: Option<&'a str>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema, strum::EnumDiscriminants)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, strum::EnumDiscriminants, schemars::JsonSchema)]
 #[serde(tag = "is", rename_all = "snake_case")]
 #[schemars(rename = "MailState")]
-#[strum_discriminants(name(Standing), derive(Deserialize, schemars::JsonSchema), serde(rename_all = "snake_case"), schemars(rename = "MailStanding"))]
+#[strum_discriminants(doc = "A case's state, by its name.", name(Standing), derive(Deserialize, schemars::JsonSchema), serde(rename_all = "snake_case"), schemars(rename = "MailStanding"))]
 pub enum State {
 	NeedsYou {
 		why: Why,
@@ -708,20 +638,6 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	}
 }
 
-/// A reply of ours is due: of Google's word, or its silence.
-fn reply(c: &Case<'_>, heard: &[&Message], silence: bool) -> State {
-	let why = match counterpart(heard.iter().copied()) {
-		None if silence => Why::Unanswered,
-		None => Why::NoReply,
-		Some(_) if asked(heard.iter().copied()) >= MAX_ASKS => Why::AskedOften,
-		Some(_) => match c.stuck {
-			None => return State::ReplyDue,
-			Some(error) => Why::Stuck { error: error.to_owned() },
-		},
-	};
-	State::NeedsYou { why }
-}
-
 /// Whom a reply goes to: Google's last message from an address that takes one, unless it refuses it.
 pub fn counterpart<'a>(messages: impl DoubleEndedIterator<Item = &'a Message>) -> Option<&'a Message> {
 	messages.rev().find(|m| !m.sent && !m.noreply).filter(|m| m.repliable)
@@ -766,6 +682,90 @@ pub fn attempt(kind: Kind) -> Option<(Method, Outcome)> {
 		Kind::Verified => (Method::Unknown, Outcome::Verified),
 		_ => return None,
 	})
+}
+
+enum Turn {
+	Reply,
+	Google,
+	Operator,
+	Nobody { resolved: bool },
+}
+
+fn domain(address: &str) -> Option<String> {
+	address.trim().rsplit_once('@').map(|(_, d)| d.to_lowercase())
+}
+
+/// A header without its comments and quoted strings, which a sender writes; `None`, one never closes.
+fn bare(header: &str) -> Option<String> {
+	let (mut out, mut depth, mut quoted) = (String::new(), 0_usize, false);
+	let mut chars = header.chars();
+	while let Some(c) = chars.next() {
+		match c {
+			'\\' if quoted || depth > 0 => {
+				chars.next()?;
+			}
+			'"' if depth == 0 => quoted = !quoted,
+			'(' if !quoted => depth += 1,
+			')' if !quoted => depth = depth.checked_sub(1)?,
+			_ if !quoted && depth == 0 => out.push(c.to_ascii_lowercase()),
+			_ => {}
+		}
+	}
+	(!quoted && depth == 0).then_some(out)
+}
+
+/// What a notice's subject says by itself.
+fn fixed(subject: &str) -> Option<Kind> {
+	static SUBJECTS: LazyLock<[(Regex, Kind); 4]> = LazyLock::new(|| {
+		[
+			(r"^you are now (an? |the )?(primary )?(manager|owner) of ", Kind::AccessGranted),
+			(r" invited you to manage ", Kind::Invited),
+			(r"^you can no longer manage ", Kind::AccessLost),
+			(r"performance report|^you got \d+ new reviews?| left a review for ", Kind::Noise),
+		]
+		.map(|(r, k)| (Regex::new(r).expect("a constant"), k))
+	});
+	let subject = squeezed(subject);
+	SUBJECTS.iter().find(|(r, _)| r.is_match(&subject)).map(|(_, k)| *k)
+}
+
+/// Lowercase, runs of whitespace one space: Google wraps names over lines.
+fn squeezed(s: &str) -> String {
+	s.to_lowercase().split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// How many of `lines`, from the first, say who wrote what follows: "On … wrote:", "Le … a écrit :",
+/// wrapped.
+fn attribution(lines: &[&str]) -> Option<usize> {
+	static SAID: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(On\b.*\bwrote ?:|Le\b.*\ba écrit ?:)$").expect("a constant"));
+	static DATED: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"@|\b20\d\d\b").expect("a constant"));
+	if !lines[0].starts_with("On ") && !lines[0].starts_with("Le ") {
+		return None;
+	}
+	(1..=lines.len().min(4)).find(|&n| {
+		let joined = lines[..n].join(" ").split_whitespace().collect::<Vec<_>>().join(" ");
+		SAID.is_match(&joined) && DATED.is_match(&joined)
+	})
+}
+
+/// Whether `len` bytes of `text` at `at` are no part of a longer word.
+fn whole(text: &str, at: usize, len: usize) -> bool {
+	let inside = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
+	!inside(text[..at].chars().next_back()) && !inside(text[at + len..].chars().next())
+}
+
+/// A reply of ours is due: of Google's word, or its silence.
+fn reply(c: &Case<'_>, heard: &[&Message], silence: bool) -> State {
+	let why = match counterpart(heard.iter().copied()) {
+		None if silence => Why::Unanswered,
+		None => Why::NoReply,
+		Some(_) if asked(heard.iter().copied()) >= MAX_ASKS => Why::AskedOften,
+		Some(_) => match c.stuck {
+			None => return State::ReplyDue,
+			Some(error) => Why::Stuck { error: error.to_owned() },
+		},
+	};
+	State::NeedsYou { why }
 }
 
 #[cfg(test)]

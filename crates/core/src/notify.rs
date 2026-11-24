@@ -22,9 +22,6 @@ pub const SOURCE_SILENCE: SignedDuration = SignedDuration::from_hours(24);
 /// Longest a name may run in a message, in characters.
 pub const MAX_NAME: usize = 80;
 
-/// Longest what a mail says may run in a message, in characters.
-const MAX_SUMMARY: usize = 200;
-
 /// At most one message a second to a private chat (Telegram's limit for one).
 pub const PER_CHAT_GAP: SignedDuration = SignedDuration::from_secs(1);
 
@@ -39,6 +36,9 @@ pub const GLOBAL_PER_SECOND: i64 = 25;
 /// Tries before a message is given up on: with [`backoff`], about an hour — past that a lead
 /// notice is news nobody needs.
 pub const MAX_ATTEMPTS: i32 = 10;
+
+/// Longest what a mail says may run in a message, in characters.
+const MAX_SUMMARY: usize = 200;
 
 /// Bytes of HMAC in a button's data: 80 bits, far past guessing within Telegram's rate of
 /// callbacks, and short enough for its 64-byte limit.

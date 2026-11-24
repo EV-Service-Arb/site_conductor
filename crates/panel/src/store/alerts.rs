@@ -184,7 +184,6 @@ pub struct Sealed<'a> {
 }
 
 /// A new destination of the user's; `None` when the address is one of theirs already.
-#[expect(clippy::too_many_arguments, reason = "a row's columns")]
 pub async fn add(
 	conn: &mut SqliteConnection,
 	user: Uuid,

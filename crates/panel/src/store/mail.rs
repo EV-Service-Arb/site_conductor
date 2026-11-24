@@ -10,8 +10,13 @@ use uuid::Uuid;
 
 use super::{connections::Sealed, from_db, to_db};
 
+const MAIL: &str = "SELECT m.id, m.case_id, m.gmail_id, m.message, m.thread, m.at, m.sent, m.from_address, m.reply_to, m.recipients, m.subject, m.message_id, m.refs, \
+	m.authentic, m.repliable, m.gmb_id, m.listing, m.reading, m.read_by, m.attempts, m.read_error FROM mails m";
+
+const DRAFT: &str = "SELECT d.id, d.case_id, d.answers, d.body_sealed, d.data_key_fp, d.needs, d.state, d.send_at, d.created_at, d.sent_at, d.error FROM mail_drafts d";
+
 /// Who read a message.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, schemars::JsonSchema, strum::EnumString, strum::IntoStaticStr)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[schemars(rename = "MailReader")]
@@ -89,9 +94,6 @@ impl MailRow {
 	}
 }
 
-const MAIL: &str = "SELECT m.id, m.case_id, m.gmail_id, m.message, m.thread, m.at, m.sent, m.from_address, m.reply_to, m.recipients, m.subject, m.message_id, m.refs, \
-	m.authentic, m.repliable, m.gmb_id, m.listing, m.reading, m.read_by, m.attempts, m.read_error FROM mails m";
-
 #[derive(sqlx::FromRow)]
 pub(crate) struct CaseRow {
 	pub id: i64,
@@ -140,8 +142,6 @@ struct RawDraft {
 	error: Option<String>,
 }
 
-const DRAFT: &str = "SELECT d.id, d.case_id, d.answers, d.body_sealed, d.data_key_fp, d.needs, d.state, d.send_at, d.created_at, d.sent_at, d.error FROM mail_drafts d";
-
 fn draft(r: RawDraft) -> eyre::Result<DraftRow> {
 	Ok(DraftRow {
 		id: r.id,
@@ -166,7 +166,8 @@ fn json<T: serde::Serialize + ?Sized>(v: &T) -> String {
 
 /// What each case of the gmail's holds, for a message to join; a message not Google's draws none.
 pub(crate) async fn holds(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Vec<Holds>> {
-	let rows: Vec<(i64, Json<BTreeSet<String>>, String, Option<String>, bool, Option<String>)> = sqlx::query_as(
+	type Row = (i64, Json<BTreeSet<String>>, String, Option<String>, bool, Option<String>);
+	let rows: Vec<Row> = sqlx::query_as(
 		"SELECT c.id, c.numbers, m.thread, m.message_id, m.sent, m.from_address FROM mail_cases c \
 		 JOIN mails m ON m.case_id = c.id AND (m.authentic OR m.sent) WHERE c.gmail_id = $1 ORDER BY c.id",
 	)
@@ -312,9 +313,10 @@ pub(crate) async fn owners(conn: &mut SqliteConnection) -> eyre::Result<Vec<Uuid
 		.wrap_err("listing whose mail is kept")
 }
 
+/// The model's never goes over a person's.
 pub(crate) async fn set_reading(conn: &mut SqliteConnection, mail: i64, reading: &Reading, by: ReadBy, now: Timestamp) -> eyre::Result<()> {
 	let by: &'static str = by.into();
-	sqlx::query("UPDATE mails SET reading = $2, read_by = $3, read_at = $4, read_error = NULL WHERE id = $1")
+	sqlx::query("UPDATE mails SET reading = $2, read_by = $3, read_at = $4, read_error = NULL WHERE id = $1 AND (read_by IS NOT 'person' OR $3 = 'person')")
 		.bind(mail)
 		.bind(json(reading))
 		.bind(by)
