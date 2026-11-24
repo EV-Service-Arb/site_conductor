@@ -2059,7 +2059,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A case of the caller's: its messages, its draft, and the tries to verify its GBP. */
+        /** A case of the caller's: its messages, its draft, the tries to verify its GBP, its missing reviews. */
         get: operations["mail_case"];
         put?: never;
         post?: never;
@@ -2081,7 +2081,7 @@ export interface paths {
         put?: never;
         /**
          * Writes a reply to the case now, in place of the one there; nothing is sent.
-         * @description 409 another message came meanwhile; 503 no Claude to write it, or it does not answer.
+         * @description 400 nothing in the case takes a reply; 409 another message came meanwhile; 503 no Claude to write it, or it or the review archive does not answer.
          */
         post: operations["draft_mail"];
         delete?: never;
@@ -3791,6 +3791,39 @@ export interface components {
              */
             id: number;
         };
+        /** @description A review of a GBP its last covering walk did not list, newest gone first. */
+        GoneReview: {
+            author: string;
+            /** @description The author's Google profile. */
+            author_url: string | null;
+            captured: boolean;
+            /** Format: date-time */
+            first_seen: string;
+            /** Format: date-time */
+            gone_at: string;
+            /**
+             * Format: date-time
+             * @description What `published_raw` was estimated to be.
+             */
+            published_est: string | null;
+            /** @description Google's date as it printed it, relative to when it was read. */
+            published_raw: string | null;
+            /**
+             * Format: uint8
+             * @description 1 to 5.
+             */
+            rating: number | null;
+            /**
+             * Format: date-time
+             * @description The open reinstatement request's.
+             */
+            reinstatement_requested_at: string | null;
+            /** @description By the owner. */
+            replied: boolean;
+            /** @description Google's id of the review. */
+            review_id: string;
+            text: string | null;
+        };
         /** @description `GET /google-categories/{country}`. */
         GoogleCategories: {
             categories: components["schemas"]["GoogleCategory"][];
@@ -4353,6 +4386,8 @@ export interface components {
             /** @description Of its GBP, newest first. */
             attempts: components["schemas"]["VerificationAttempt"][];
             case: components["schemas"]["MailCase"];
+            /** @description Its GBP's reviews missing now; `null`: it is not about reviews. */
+            gone: components["schemas"]["MailGone"] | null;
             /** @description Oldest first. */
             messages: components["schemas"]["MailMessage"][];
             /** @description Where a reply goes; `null`: nothing in it takes one. */
@@ -4417,6 +4452,18 @@ export interface components {
             /** @description `image/jpeg`. */
             type: string;
         };
+        /** @description The reviews of a GBP the review archive sees gone. */
+        MailGone: {
+            /** @description More may be gone: `reviews` is a page, not their count. */
+            more: boolean;
+            reviews: components["schemas"]["GoneReview"][];
+            /** @constant */
+            state: "read";
+        } | {
+            /** @constant */
+            state: "unknown";
+            why: string;
+        };
         /**
          * @description What a message of Google's says.
          *
@@ -4435,7 +4482,7 @@ export interface components {
          *     - `reinstatement_refused`: Support will not bring the reviews back.
          *     - `reinstatement_done`: Support brought all or part of the reviews back.
          *     - `reviews_live_already`: Support sees the reviews live already.
-         *     - `reviews_no_data`: Support has no record of the reviews, or needs to be told which.
+         *     - `reviews_no_data`: Support has no record of the reviews.
          *     - `still_active`: Is the business still open: inactivity, removed or revoked unless answered.
          *     - `invited`: Someone invited this account to manage a profile.
          *     - `ownership_requested`: Someone asks for a profile's ownership.
@@ -4446,8 +4493,8 @@ export interface components {
          *     - `content_removed`: A photo, post or other content was removed.
          *     - `duplicate`: The profile is marked as another's duplicate.
          *     - `acknowledged`: A request was received, nothing more.
-         *     - `routed`: Handed to a specialist or another team.
-         *     - `asks`: Asks for documents, photos, changes or answers before going on.
+         *     - `routed`: Handed to a specialist or another team, who answers.
+         *     - `asks`: Asks for documents, photos, changes or answers before going on: which profile, which reviews.
          *     - `closed`: The case is closed: it accepts no reply, or a survey follows it.
          *     - `unclear`: About a profile, what it says cannot be told.
          *     - `noise`: Performance, promotions, surveys, new reviews, posts.
@@ -6288,6 +6335,7 @@ export type GmbKit = components['schemas']['GmbKit'];
 export type GmbMail = components['schemas']['GmbMail'];
 export type GmbNote = components['schemas']['GmbNote'];
 export type GmbPhoto = components['schemas']['GmbPhoto'];
+export type GoneReview = components['schemas']['GoneReview'];
 export type GoogleCategories = components['schemas']['GoogleCategories'];
 export type GoogleCategory = components['schemas']['GoogleCategory'];
 export type HeadIn = components['schemas']['HeadIn'];
@@ -6343,6 +6391,7 @@ export type MailDraftAsk = components['schemas']['MailDraftAsk'];
 export type MailDraftEdit = components['schemas']['MailDraftEdit'];
 export type MailDraftState = components['schemas']['MailDraftState'];
 export type MailFile = components['schemas']['MailFile'];
+export type MailGone = components['schemas']['MailGone'];
 export type MailKind = components['schemas']['MailKind'];
 export type MailLine = components['schemas']['MailLine'];
 export type MailMessage = components['schemas']['MailMessage'];

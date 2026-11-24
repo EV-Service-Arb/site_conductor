@@ -99,7 +99,7 @@ pub struct ReviewPage {
 }
 
 /// A review of a GBP its last covering walk did not list, newest gone first.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct GoneReview {
 	/// Google's id of the review.

@@ -388,6 +388,7 @@ async fn serve(
 	let mail = mail::Worker {
 		panel: panel.clone(),
 		model: model.clone(),
+		services: services.clone(),
 		by_itself: production,
 		tell: Some(networks.telegram.as_ref().map_or(Locale::En, |tg| tg.locale)),
 	};

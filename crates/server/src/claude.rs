@@ -74,7 +74,7 @@ impl Model {
 	}
 
 	/// What the model answered on `token`; `Err`, Claude refused the token, with what it said.
-	pub(crate) async fn answer(&self, token: &str, body: &Value) -> ApiResult<Result<Value, String>> {
+	pub(crate) async fn answer(&self, token: &str, body: &impl Serialize) -> ApiResult<Result<Value, String>> {
 		let res = self
 			.http
 			.post(format!("{}/v1/messages", self.base))

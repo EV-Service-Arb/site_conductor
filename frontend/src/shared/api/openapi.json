@@ -24505,7 +24505,7 @@
         "tags": [
           "mail"
         ],
-        "summary": "A case of the caller's: its messages, its draft, and the tries to verify its GBP.",
+        "summary": "A case of the caller's: its messages, its draft, the tries to verify its GBP, its missing reviews.",
         "operationId": "mail_case",
         "parameters": [
           {
@@ -24857,7 +24857,7 @@
           "mail"
         ],
         "summary": "Writes a reply to the case now, in place of the one there; nothing is sent.",
-        "description": "409 another message came meanwhile; 503 no Claude to write it, or it does not answer.",
+        "description": "400 nothing in the case takes a reply; 409 another message came meanwhile; 503 no Claude to write it, or it or the review archive does not answer.",
         "operationId": "draft_mail",
         "parameters": [
           {
@@ -34413,6 +34413,95 @@
           "author"
         ]
       },
+      "GoneReview": {
+        "description": "A review of a GBP its last covering walk did not list, newest gone first.",
+        "type": "object",
+        "properties": {
+          "author": {
+            "type": "string"
+          },
+          "author_url": {
+            "description": "The author's Google profile.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "captured": {
+            "type": "boolean"
+          },
+          "first_seen": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "gone_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "published_est": {
+            "description": "What `published_raw` was estimated to be.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "published_raw": {
+            "description": "Google's date as it printed it, relative to when it was read.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rating": {
+            "description": "1 to 5.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0
+          },
+          "reinstatement_requested_at": {
+            "description": "The open reinstatement request's.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "replied": {
+            "description": "By the owner.",
+            "type": "boolean"
+          },
+          "review_id": {
+            "description": "Google's id of the review.",
+            "type": "string"
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "review_id",
+          "author",
+          "author_url",
+          "rating",
+          "text",
+          "published_raw",
+          "published_est",
+          "first_seen",
+          "gone_at",
+          "captured",
+          "replied",
+          "reinstatement_requested_at"
+        ]
+      },
       "GoogleCategories": {
         "description": "`GET /google-categories/{country}`.",
         "type": "object",
@@ -36162,6 +36251,17 @@
           "case": {
             "$ref": "#/components/schemas/MailCase"
           },
+          "gone": {
+            "description": "Its GBP's reviews missing now; `null`: it is not about reviews.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailGone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "messages": {
             "description": "Oldest first.",
             "type": "array",
@@ -36181,7 +36281,8 @@
           "case",
           "messages",
           "recipient",
-          "attempts"
+          "attempts",
+          "gone"
         ]
       },
       "MailCaseEdit": {
@@ -36351,8 +36452,55 @@
           "base64"
         ]
       },
+      "MailGone": {
+        "description": "The reviews of a GBP the review archive sees gone.",
+        "oneOf": [
+          {
+            "description": "Newest gone first.",
+            "type": "object",
+            "properties": {
+              "more": {
+                "description": "More may be gone: `reviews` is a page, not their count.",
+                "type": "boolean"
+              },
+              "reviews": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/GoneReview"
+                }
+              },
+              "state": {
+                "type": "string",
+                "const": "read"
+              }
+            },
+            "required": [
+              "state",
+              "reviews",
+              "more"
+            ]
+          },
+          {
+            "description": "What is gone is not known.",
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "const": "unknown"
+              },
+              "why": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "state",
+              "why"
+            ]
+          }
+        ]
+      },
       "MailKind": {
-        "description": "What a message of Google's says.\n\n- `video_rejected`: The recorded verification video did not pass.\n- `video_in_review`: The recorded verification video is being reviewed.\n- `verified`: The profile is verified.\n- `reverification_required`: The profile has to be verified again.\n- `self_serve`: Support points back at the recorded video or the on-screen prompts.\n- `call_offered`: The live verification call is enabled.\n- `call_failed`: A live verification call was held and did not verify.\n- `options_exhausted`: No way to verify is left on the profile.\n- `account_restricted`: The account, not one profile, is restricted.\n- `reviews_paused`: New reviews are paused: a spike of spam.\n- `reviews_restricted`: Fake or incentivised reviews were found, the profile's reviews restricted.\n- `review_removed`: A review was removed.\n- `reinstatement_refused`: Support will not bring the reviews back.\n- `reinstatement_done`: Support brought all or part of the reviews back.\n- `reviews_live_already`: Support sees the reviews live already.\n- `reviews_no_data`: Support has no record of the reviews, or needs to be told which.\n- `still_active`: Is the business still open: inactivity, removed or revoked unless answered.\n- `invited`: Someone invited this account to manage a profile.\n- `ownership_requested`: Someone asks for a profile's ownership.\n- `management_requested`: Someone asks to manage a profile.\n- `edit_suggested`: Someone suggested an edit: does this look right to you?\n- `edit_rejected`: An edit of ours was not accepted.\n- `changed_by_google`: Google changed the profile.\n- `content_removed`: A photo, post or other content was removed.\n- `duplicate`: The profile is marked as another's duplicate.\n- `acknowledged`: A request was received, nothing more.\n- `routed`: Handed to a specialist or another team.\n- `asks`: Asks for documents, photos, changes or answers before going on.\n- `closed`: The case is closed: it accepts no reply, or a survey follows it.\n- `unclear`: About a profile, what it says cannot be told.\n- `noise`: Performance, promotions, surveys, new reviews, posts.\n- `not_business`: Not about a Business Profile.\n- `impersonation`: Not from Google.",
+        "description": "What a message of Google's says.\n\n- `video_rejected`: The recorded verification video did not pass.\n- `video_in_review`: The recorded verification video is being reviewed.\n- `verified`: The profile is verified.\n- `reverification_required`: The profile has to be verified again.\n- `self_serve`: Support points back at the recorded video or the on-screen prompts.\n- `call_offered`: The live verification call is enabled.\n- `call_failed`: A live verification call was held and did not verify.\n- `options_exhausted`: No way to verify is left on the profile.\n- `account_restricted`: The account, not one profile, is restricted.\n- `reviews_paused`: New reviews are paused: a spike of spam.\n- `reviews_restricted`: Fake or incentivised reviews were found, the profile's reviews restricted.\n- `review_removed`: A review was removed.\n- `reinstatement_refused`: Support will not bring the reviews back.\n- `reinstatement_done`: Support brought all or part of the reviews back.\n- `reviews_live_already`: Support sees the reviews live already.\n- `reviews_no_data`: Support has no record of the reviews.\n- `still_active`: Is the business still open: inactivity, removed or revoked unless answered.\n- `invited`: Someone invited this account to manage a profile.\n- `ownership_requested`: Someone asks for a profile's ownership.\n- `management_requested`: Someone asks to manage a profile.\n- `edit_suggested`: Someone suggested an edit: does this look right to you?\n- `edit_rejected`: An edit of ours was not accepted.\n- `changed_by_google`: Google changed the profile.\n- `content_removed`: A photo, post or other content was removed.\n- `duplicate`: The profile is marked as another's duplicate.\n- `acknowledged`: A request was received, nothing more.\n- `routed`: Handed to a specialist or another team, who answers.\n- `asks`: Asks for documents, photos, changes or answers before going on: which profile, which reviews.\n- `closed`: The case is closed: it accepts no reply, or a survey follows it.\n- `unclear`: About a profile, what it says cannot be told.\n- `noise`: Performance, promotions, surveys, new reviews, posts.\n- `not_business`: Not about a Business Profile.\n- `impersonation`: Not from Google.",
         "type": "string",
         "enum": [
           "suspended",
@@ -36827,7 +36975,7 @@
         "description": "Why a case needs the operator.",
         "oneOf": [
           {
-            "description": "What Google said is the operator's to act on.",
+            "description": "What Google said is the operator's to act on; `asks`, with the reply its draft has ready.",
             "type": "object",
             "properties": {
               "code": {
@@ -36882,7 +37030,7 @@
             ]
           },
           {
-            "description": "Google answers nothing new, however often asked.",
+            "description": "Google answers nothing new, however often asked, or is silent past its word and asked again.",
             "type": "object",
             "properties": {
               "code": {

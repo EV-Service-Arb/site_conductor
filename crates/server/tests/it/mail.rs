@@ -3,9 +3,15 @@
 
 use std::sync::{Arc, Mutex};
 
-use axum::{Json, Router, http::Method, routing::post};
+use axum::{
+	Json, Router,
+	http::{Method, StatusCode},
+	response::IntoResponse,
+	routing::{get, post},
+};
 use jiff::{SignedDuration, Timestamp};
 use sa_core::{
+	feeds::{GONE_MAX, GoneReview},
 	gbp::Country,
 	prices::{Item, ModelTokens, Spender},
 };
@@ -21,10 +27,11 @@ use sa_panel::{
 use sa_server::{
 	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
+	forward::Forward,
 	http,
 	mail::Worker,
 	signin::{SignIn, SignInConfig},
-	testing::{Browser, ORIGIN},
+	testing::{Browser, ORIGIN, services, upstream},
 };
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -33,6 +40,9 @@ const EMAIL: &str = "operator@x.com";
 const SUPPORT: &str = "googlebusinessprofile-support@google.com";
 
 type Sent = Arc<Mutex<Vec<Value>>>;
+
+/// What the review archive answers of the GBP's gone reviews; none, it tracks no such GBP.
+type Archive = Arc<Mutex<Option<Vec<GoneReview>>>>;
 
 /// A Claude API that answers each request with the next of `script`: a text, as JSON.
 async fn claude(script: Vec<Value>) -> (String, Sent) {
@@ -92,6 +102,7 @@ struct World {
 	gmail: i64,
 	gmb: i64,
 	asked: Sent,
+	archive: Archive,
 	_db: TestDb,
 }
 impl World {
@@ -150,9 +161,20 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
+		let archive = Archive::default();
+		let told = archive.clone();
+		let gone = get(move || async move {
+			match told.lock().unwrap().clone() {
+				Some(reviews) => Json(reviews).into_response(),
+				None => StatusCode::NOT_FOUND.into_response(),
+			}
+		});
+		let (base, _) = upstream(Router::new().route(&format!("/api/conductor/gmbs/{gmb}/gone"), gone)).await;
+		let services = services(&base.parse().unwrap());
+		let sign_in = SignIn::new(p.clone(), Concierge::dev(who), config);
 		let app = http::app(
-			SignIn::new(p.clone(), Concierge::dev(who), config),
-			None,
+			sign_in.clone(),
+			Some(Forward::new(sign_in, services.clone())),
 			None,
 			Default::default(),
 			None,
@@ -167,6 +189,7 @@ impl World {
 			worker: Worker {
 				panel: p.clone(),
 				model,
+				services: Some(services),
 				by_itself: true,
 				tell: None,
 			},
@@ -179,6 +202,7 @@ impl World {
 			gmail,
 			gmb,
 			asked,
+			archive,
 			_db: db,
 		}
 	}
@@ -234,14 +258,28 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	)
 	.await;
 	priced(&w.p, &[(Item::from(ModelTokens::Input), 1000), (Item::from(ModelTokens::Output), 1000)]).await;
-	w.arrives(3, "businessprofile-noreply@google.com", "Action required: Submit a new verification video", "Your verification video for Plomberie Dupont -  \nLyon didn’t meet <https://business.google.com/verify/l/15?trk=x>")
-		.await;
-	w.arrives(2, SUPPORT, "[1-1234000056789] Your Request to Google", "About “Plomberie Dupont - Lyon”: please share a photo of the signage.").await;
+	w.arrives(
+		3,
+		"businessprofile-noreply@google.com",
+		"Action required: Submit a new verification video",
+		"Your verification video for Plomberie Dupont -  \nLyon didn’t meet <https://business.google.com/verify/l/15?trk=x>",
+	)
+	.await;
+	w.arrives(
+		2,
+		SUPPORT,
+		"[1-1234000056789] Your Request to Google",
+		"About “Plomberie Dupont - Lyon”: please share a photo of the signage.",
+	)
+	.await;
 	w.worker.read_and_write().await.unwrap();
 	let cases = w.cases().await;
 	assert_eq!(cases.len(), 2);
 	let (case, rejected) = (&cases[0], &cases[1]);
-	assert_eq!((&case["gmb_id"], &case["topic"], &case["asks"]), (&json!(w.gmb), &json!("verification"), &json!(["a photo of the signage"])));
+	assert_eq!(
+		(&case["gmb_id"], &case["topic"], &case["asks"]),
+		(&json!(w.gmb), &json!("verification"), &json!(["a photo of the signage"]))
+	);
 	assert_eq!(case["state"], json!({ "is": "needs_you", "why": { "code": "needs", "needs": ["a photo of the signage"] } }));
 	assert_eq!(case["draft"]["state"], "proposed");
 	assert_eq!(rejected["state"], json!({ "is": "done" }), "the conversation, newer, carries it");
@@ -258,16 +296,12 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 		assert_eq!(writer["output_config"]["format"]["type"], "json_schema");
 		assert_eq!(writer["system"][0]["text"], "You are Claude Code, Anthropic's official CLI for Claude.");
 	}
-	let charged: Vec<String> = w
-		.p
-		.ledger(w.owner, None, 10)
-		.await
-		.unwrap()
-		.unwrap()
-		.into_iter()
-		.filter_map(|(_, e)| e.charged?.label)
-		.collect();
-	assert_eq!(charged, ["A reply to Google written", "Google's mail read", "Google's mail read"], "on the panel's Claude, the gmail's owner pays");
+	let charged: Vec<String> = w.p.ledger(w.owner, None, 10).await.unwrap().unwrap().into_iter().filter_map(|(_, e)| e.charged?.label).collect();
+	assert_eq!(
+		charged,
+		["A reply to Google written", "Google's mail read", "Google's mail read"],
+		"on the panel's Claude, the gmail's owner pays"
+	);
 
 	let (status, detail) = w.call(Method::GET, &format!("/mail/cases/{id}"), None).await;
 	assert_eq!(status, 200);
@@ -279,9 +313,19 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	let (_, waiting) = w.call(Method::GET, "/mail/cases?state=waiting", None).await;
 	assert_eq!(waiting["cases"], json!([]));
 
-	let (status, drafted) = w.call(Method::POST, &format!("/mail/cases/{id}/draft"), Some(json!({ "instruction": "en français, la photo est jointe" }))).await;
+	let (status, drafted) = w
+		.call(
+			Method::POST,
+			&format!("/mail/cases/{id}/draft"),
+			Some(json!({ "instruction": "en français, la photo est jointe" })),
+		)
+		.await;
 	assert_eq!(status, 200, "{drafted}");
-	assert_eq!(drafted["case"]["state"], json!({ "is": "reply_ready" }));
+	assert_eq!(
+		drafted["case"]["state"],
+		json!({ "is": "needs_you", "why": { "code": "kind", "kind": "asks" } }),
+		"ready, and its operator's"
+	);
 	assert!(w.asked.lock().unwrap()[3]["messages"][0]["content"].as_str().unwrap().contains("en français"));
 	let draft = drafted["case"]["draft"]["id"].as_i64().unwrap();
 	let (status, edited) = w.call(Method::PUT, &format!("/mail/drafts/{draft}"), Some(json!({ "body": "La photo est jointe." }))).await;
@@ -325,11 +369,143 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	let (status, corrected) = w
 		.call(Method::PATCH, &format!("/mail/messages/{}", detail["messages"][0]["id"]), Some(json!({ "kind": "call_offered" })))
 		.await;
-	assert_eq!((status, &corrected["messages"][0]["reading"]["kind"], &corrected["messages"][0]["read_by"]), (200, &json!("call_offered"), &json!("person")));
+	assert_eq!(
+		(status, &corrected["messages"][0]["reading"]["kind"], &corrected["messages"][0]["read_by"]),
+		(200, &json!("call_offered"), &json!("person"))
+	);
 	let (status, auto) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmail": w.gmail, "topic": "reviews", "on": true }))).await;
 	assert_eq!((status, &auto["on"]), (200, &json!([{ "gmail_id": w.gmail, "topic": "reviews" }])));
 	let (status, _) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmail": w.gmail, "topic": "suspension", "on": true }))).await;
 	assert_eq!(status, 400);
+}
+
+fn review(author: &str, captured: bool) -> GoneReview {
+	GoneReview {
+		review_id: author.to_lowercase(),
+		author: author.to_owned(),
+		author_url: None,
+		rating: Some(5),
+		text: Some("Fuite\nréparée".to_owned()),
+		published_raw: Some("2 weeks ago".to_owned()),
+		published_est: Some("2026-11-04T00:00:00Z".parse().unwrap()),
+		first_seen: "2026-11-05T00:00:00Z".parse().unwrap(),
+		gone_at: "2026-11-20T00:00:00Z".parse().unwrap(),
+		captured,
+		replied: false,
+		reinstatement_requested_at: (!captured).then(|| "2026-11-21T00:00:00Z".parse().unwrap()),
+	}
+}
+
+#[tokio::test]
+async fn missing_reviews_are_the_archives_for_the_writer_and_the_operator() {
+	let of = |kind: &str| {
+		let mut r = reading(kind);
+		r["topic"] = json!("reviews");
+		r
+	};
+	let mut asks = of("asks");
+	asks["asks"] = json!(["how many are missing", "screenshots"]);
+	let reply = |body: &str, needs: &[&str]| json!({ "body": body, "needs": needs, "nothing": "" });
+	let mut w = World::new(
+		vec![
+			of("acknowledged"),
+			asks,
+			reply("2 reviews, gone since 2026-11-20.", &["a screenshot of Claire Morel's review"]),
+			of("reinstatement_refused"),
+			reply("The reason for each is needed.", &[]),
+			of("reviews_no_data"),
+			reply("Reinstate the 2 reviews gone since 2026-11-20.", &[]),
+			of("reviews_live_already"),
+			of("reinstatement_done"),
+		],
+		true,
+	)
+	.await;
+	priced(&w.p, &[(Item::from(ModelTokens::Input), 0), (Item::from(ModelTokens::Output), 0)]).await;
+	let subject = "[1-1234000056789] Your Request to Google";
+	let (status, _) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmail": w.gmail, "topic": "reviews", "on": true }))).await;
+	assert_eq!(status, 200);
+
+	w.arrives(9, SUPPORT, subject, "We received your report of reviews missing from Plomberie Dupont - Lyon.").await;
+	w.worker.read_and_write().await.unwrap();
+	let case = w.cases().await.remove(0);
+	assert_eq!((&case["state"]["is"], &case["topic"], &case["gmb_id"]), (&json!("waiting"), &json!("reviews"), &json!(w.gmb)));
+	let detail = async |w: &mut World| w.call(Method::GET, &format!("/mail/cases/{}", case["id"]), None).await.1;
+	assert_eq!(detail(&mut w).await["gone"], json!({ "state": "unknown", "why": "the review archive does not track the GBP" }));
+
+	*w.archive.lock().unwrap() = Some(vec![review("Claire Morel", true), review("Hugo Blanc", false)]);
+	w.arrives(8, SUPPORT, subject, "How many, and their screenshots?").await;
+	w.worker.read_and_write().await.unwrap();
+	let last = |w: &World| w.asked.lock().unwrap().last().unwrap()["messages"][0]["content"].as_str().unwrap().to_owned();
+	let context = last(&w);
+	assert!(context.contains("as our archive of it saw them (2):"), "{context}");
+	assert!(
+		context.contains("- Claire Morel (5 stars, posted about 2026-11-04, first seen 2026-11-05, gone since 2026-11-20, a screenshot held): Fuite réparée"),
+		"{context}"
+	);
+	assert!(context.contains("no screenshot, its reinstatement asked of Google on 2026-11-21"), "{context}");
+	let asked = detail(&mut w).await;
+	assert_eq!(
+		asked["case"]["state"]["why"],
+		json!({ "code": "needs", "needs": ["a screenshot of Claire Morel's review"] }),
+		"switched on or not"
+	);
+	assert_eq!((&asked["gone"]["state"], &asked["gone"]["more"]), (&json!("read"), &json!(false)));
+	assert_eq!(asked["gone"]["reviews"][1]["author"], "Hugo Blanc");
+
+	*w.archive.lock().unwrap() = Some((0..GONE_MAX).map(|n| review(&format!("Client {n}"), true)).collect());
+	w.arrives(7, SUPPORT, subject, "We cannot bring them back.").await;
+	w.worker.read_and_write().await.unwrap();
+	assert!(last(&w).contains("(at least 100):"), "a full page is no count");
+	let refused = detail(&mut w).await;
+	assert_eq!(
+		(&refused["case"]["state"]["is"], &refused["gone"]["more"]),
+		(&json!("sending"), &json!(true)),
+		"a refusal is pressed by itself"
+	);
+
+	*w.archive.lock().unwrap() = None;
+	w.arrives(6, SUPPORT, subject, "Our records show none missing.").await;
+	w.worker.read_and_write().await.unwrap();
+	assert!(last(&w).contains("missing reviews: not known, the review archive does not track the GBP"));
+	let unknown = detail(&mut w).await;
+	assert_eq!(
+		unknown["case"]["state"]["why"],
+		json!({ "code": "needs", "needs": ["the list of its missing reviews: the review archive does not track the GBP"] }),
+		"it never goes by itself without them"
+	);
+
+	w.arrives(5, SUPPORT, subject, "They are live on the profile.").await;
+	w.worker.read_and_write().await.unwrap();
+	assert_eq!(
+		detail(&mut w).await["case"]["state"],
+		json!({ "is": "needs_you", "why": { "code": "kind", "kind": "reviews_live_already" } })
+	);
+	w.arrives(4, SUPPORT, subject, "We reinstated them.").await;
+	w.worker.read_and_write().await.unwrap();
+	assert_eq!(detail(&mut w).await["case"]["state"], json!({ "is": "done" }));
+	assert!(w.outbox.sent.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_reply_is_not_written_where_none_goes_nor_while_the_archive_fails() {
+	let mut refused = reading("reinstatement_refused");
+	refused["topic"] = json!("reviews");
+	let mut w = World::new(vec![refused, reading("suspended")], true).await;
+	w.arrives(3, SUPPORT, "[1-1234000056789] Your Request", "We cannot bring the reviews of Plomberie Dupont - Lyon back.")
+		.await;
+	let dead = services(&"http://127.0.0.1:9".parse().unwrap());
+	w.worker.services = Some(dead);
+	w.worker.read_and_write().await.unwrap();
+	let case = w.cases().await.remove(0);
+	assert_eq!((&case["state"]["is"], &case["draft"]), (&json!("reply_due"), &Value::Null), "it waits");
+	w.arrives(2, "businessprofile-noreply@google.com", "your profile has been suspended", "Plomberie Dupont - Lyon is suspended")
+		.await;
+	w.worker.read_and_write().await.unwrap();
+	let notice = w.cases().await.remove(0);
+	let (status, refused) = w.call(Method::POST, &format!("/mail/cases/{}/draft", notice["id"]), Some(json!({ "instruction": null }))).await;
+	assert_eq!((status, &refused["error"]), (400, &json!("nothing in it takes a reply")));
+	assert_eq!(w.asked.lock().unwrap().len(), 2, "nothing but the two readings");
 }
 
 #[tokio::test]
@@ -356,7 +532,8 @@ async fn mail_waits_without_a_claude_and_a_reading_that_never_reads_is_a_persons
 
 #[tokio::test]
 async fn an_agent_sends_only_what_its_person_agreed_to() {
-	let send = json!({ "content": [{ "type": "tool_use", "id": "t1", "name": "call", "input": { "operation": "send_mail_draft", "path": { "id": 1 }, "body": { "body": "x", "files": [] } } }] });
+	let send =
+		json!({ "content": [{ "type": "tool_use", "id": "t1", "name": "call", "input": { "operation": "send_mail_draft", "path": { "id": 1 }, "body": { "body": "x", "files": [] } } }] });
 	let done = json!({ "content": [{ "type": "text", "text": "Confirm to send it." }] });
 	let mut w = World::new(vec![send, done], true).await;
 	let chat = Uuid::now_v7();
