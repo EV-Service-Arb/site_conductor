@@ -95,13 +95,14 @@ impl Panel {
 		if set.as_ref() != Some(&imap.username) || db::cursor(&mut tx, gmail).await? != before {
 			return Ok(false);
 		}
-		let gmbs: Vec<(i64, Vec<String>)> = db::gmbs(&mut tx, gmail)
+		let gmbs: Vec<(i64, String, Vec<String>)> = db::gmbs(&mut tx, gmail)
 			.await?
 			.into_iter()
 			.map(|(id, name, place, address)| {
+				let title = name.clone().expect("gmbs.name is NOT NULL");
 				let line = address.as_deref().map(|a| a.split(',').next().expect("split yields one").trim().to_owned());
 				let names = [name, place, line].into_iter().flatten().map(|n| n.to_lowercase()).filter(|n| n.chars().count() >= NAMES_FROM);
-				(id, names.collect())
+				(id, title, names.collect())
 			})
 			.collect();
 		for m in &batch.mails {
@@ -110,7 +111,12 @@ impl Panel {
 				continue;
 			}
 			let read = m.subject.iter().chain([&m.text]).map(|s| s.to_lowercase()).collect::<Vec<_>>().join("\n");
-			let named: Vec<i64> = gmbs.iter().filter(|(_, names)| names.iter().any(|n| read.contains(n.as_str()))).map(|(id, _)| *id).collect();
+			let named: Vec<(i64, &str)> = gmbs
+				.iter()
+				.filter(|(_, _, names)| names.iter().any(|n| read.contains(n.as_str())))
+				.map(|(id, title, _)| (*id, title.as_str()))
+				.collect();
+			self.tell_google_mail(&mut tx, gmail, &named, m, now).await?;
 			let words = m.text.split_whitespace().collect::<Vec<_>>().join(" ");
 			let snippet = match words.char_indices().nth(SNIPPET) {
 				Some((cut, _)) => format!("{}…", &words[..cut]),
@@ -128,7 +134,7 @@ impl Panel {
 			match named.as_slice() {
 				[] => gmbs_db::log(&mut tx, None, Some(gmail), None, now, &event).await?,
 				named =>
-					for &gmb in named {
+					for &(gmb, _) in named {
 						gmbs_db::log(&mut tx, Some(gmb), Some(gmail), None, now, &event).await?;
 					},
 			}

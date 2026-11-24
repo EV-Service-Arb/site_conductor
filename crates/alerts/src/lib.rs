@@ -59,11 +59,9 @@ pub enum Rule {
 	ReviewGone,
 	ReviewReappeared,
 	ScanFailed,
-	/// A GBP moved to another state, by Google or by someone else than its owner.
-	GbpState,
 	/// Mail from Google in a gmail's inbox.
 	GoogleMail,
-	/// A gmail's inbox, Business Profile grant or proxy no longer answers.
+	/// A gmail's inbox no longer answers.
 	ConnectionLost,
 	TokensLow,
 	BrowserStopped,
@@ -79,7 +77,7 @@ pub enum Rule {
 	SourceSilent,
 	/// A service's feed keeps failing.
 	FeedStalled,
-	/// A Google account's meter reached its stop.
+	/// A Google account's meter reached its stop, or its guard unlinked its billing.
 	MeterHeld,
 }
 
@@ -97,7 +95,7 @@ impl Rule {
 		match self {
 			Self::NewLead | Self::ContactOverdue | Self::Booked | Self::PaymentReceived => Family::Leads,
 			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => Family::Reviews,
-			Self::GbpState | Self::GoogleMail | Self::ConnectionLost => Family::Profiles,
+			Self::GoogleMail | Self::ConnectionLost => Family::Profiles,
 			Self::TokensLow | Self::BrowserStopped | Self::Kickback => Family::Money,
 			Self::AssistantWaiting | Self::AccessGranted | Self::ReleaseOut | Self::TrashPurge => Family::Panel,
 			Self::AccessRequested | Self::SourceSilent | Self::FeedStalled | Self::MeterHeld => Family::Team,
@@ -105,13 +103,10 @@ impl Rule {
 	}
 
 	pub const fn audience(self) -> Audience {
-		match self {
-			Self::GbpState => Audience::GmbOwners,
-			_ => match self.family() {
-				Family::Leads | Family::Team => Audience::Permission,
-				Family::Reviews => Audience::GmbOwners,
-				Family::Profiles | Family::Money | Family::Panel => Audience::Person,
-			},
+		match self.family() {
+			Family::Leads | Family::Team => Audience::Permission,
+			Family::Reviews => Audience::GmbOwners,
+			Family::Profiles | Family::Money | Family::Panel => Audience::Person,
 		}
 	}
 
@@ -121,7 +116,6 @@ impl Rule {
 			Self::NewLead | Self::ContactOverdue => Tier::Urgent,
 			Self::Booked
 			| Self::ReviewGone
-			| Self::GbpState
 			| Self::GoogleMail
 			| Self::ConnectionLost
 			| Self::TokensLow

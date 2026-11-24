@@ -772,6 +772,7 @@ impl Panel {
 	/// were queued.
 	pub async fn alerts_fan_out_own(&self, now: Timestamp, locale: Locale, cabinet: &Url, received: &BTreeMap<String, Timestamp>) -> eyre::Result<usize> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the fan-out")?;
+		self.tell_accesses(&mut conn, now).await?;
 		let mut own = Vec::new();
 		for (key_id, kind, created_at) in db::active_sources(&mut conn).await? {
 			let last = received.get(&key_id).copied();
@@ -803,7 +804,6 @@ impl Panel {
 			};
 			own.push(telling);
 		}
-		self.tell_accesses(&mut conn, now).await?;
 		let mut queued = 0;
 		for t in own {
 			let mut tx = crate::store::begin_write(&mut conn).await?;

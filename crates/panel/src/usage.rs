@@ -259,6 +259,9 @@ impl Panel {
 				ledger::append(&mut tx, user, &entry).await?;
 				charged = true;
 			}
+			if matches!(u.item, Item::Phone(_)) && balance - charge < rate.price() {
+				self.tell_phone_stopped(&mut tx, user, service, u.id, balance - charge, Timestamp::now()).await?;
+			}
 		}
 		eyre::ensure!(db::move_cursor(&mut tx, service, after..page.next).await?, "{service}'s usage cursor moved meanwhile");
 		tx.commit().await.wrap_err("committing a page of usage")?;

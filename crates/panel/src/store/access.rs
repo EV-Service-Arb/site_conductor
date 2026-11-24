@@ -2,7 +2,8 @@
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sqlx::SqliteConnection;
+use sa_auth::PermissionSet;
+use sqlx::{SqliteConnection, types::Json};
 use uuid::Uuid;
 
 use super::{from_db, to_db};
@@ -78,6 +79,21 @@ pub async fn to_tell(conn: &mut SqliteConnection, since: Timestamp, limit: i64) 
 	.await
 	.wrap_err("finding access requests to tell")?;
 	rows.into_iter().map(row).collect()
+}
+
+/// Every request whose user concierge confirmed, with what it last said they hold.
+pub async fn confirmed(conn: &mut SqliteConnection) -> eyre::Result<Vec<(AccessRequest, PermissionSet)>> {
+	type Confirmed = (Uuid, String, String, String, i64, Uuid, Json<PermissionSet>);
+	let rows: Vec<Confirmed> = sqlx::query_as(
+		"SELECT r.user_id, r.need, r.email, r.name, r.requested_at, r.event_id, a.permissions \
+		 FROM access_requests r JOIN alert_access a ON a.user_id = r.user_id WHERE a.permissions IS NOT NULL",
+	)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("reading the access requests of users confirmed")?;
+	rows.into_iter()
+		.map(|(user, need, email, name, at, event, Json(permissions))| Ok((row((user, need, email, name, at, event))?, permissions)))
+		.collect()
 }
 
 fn row((user_id, need, email, name, requested_at, event_id): Row) -> eyre::Result<AccessRequest> {

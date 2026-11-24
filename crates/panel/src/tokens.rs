@@ -217,6 +217,8 @@ impl Panel {
 				};
 				let grant = Owed::Grant { by: by.to_owned(), note: why };
 				db::owe(&mut tx, user, now, n, &grant).await?;
+				let pending = db::pending(&mut tx, user).await?;
+				self.tell_kickback(&mut tx, user, &pending, now).await?;
 				tx.commit().await.wrap_err("committing a grant")?;
 				tracing::info!(user_id = %user, by, n, "tokens granted");
 				return Ok(Ok(balance));
@@ -318,6 +320,7 @@ impl Panel {
 			Some(at) if at == after => {}
 			at => eyre::bail!("a page of charges after {after}, the cursor at {at:?}"),
 		}
+		let mut owed = BTreeSet::new();
 		for c in &page.charges {
 			let mut balances = Vec::with_capacity(c.payers.len());
 			for p in &c.payers {
@@ -348,8 +351,13 @@ impl Panel {
 				db::append(&mut tx, p, &entry).await?;
 				if c.kick_back {
 					db::owe(&mut tx, p, c.at, n, &Owed::Charge(charged.clone())).await?;
+					owed.insert(p);
 				}
 			}
+		}
+		for p in owed {
+			let pending = db::pending(&mut tx, p).await?;
+			self.tell_kickback(&mut tx, p, &pending, now).await?;
 		}
 		eyre::ensure!(db::move_cursor(&mut tx, after..page.next).await?, "the charges' cursor moved meanwhile");
 		tx.commit().await.wrap_err("committing a page of charges")?;
@@ -368,6 +376,7 @@ impl Panel {
 		for (u, _) in users::all(&mut tx).await? {
 			balances.insert(u.user_id, db::renewed(&mut tx, u.user_id, now, &self.renewal).await?);
 		}
+		self.tell_low(&mut tx, &balances, now).await?;
 		let gmbs = gmbs_db::managed(&mut tx).await?;
 		let prices = db::rates(&mut tx)
 			.await?

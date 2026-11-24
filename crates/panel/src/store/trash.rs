@@ -15,8 +15,8 @@ use super::{
 };
 
 /// Kept this long with no row of the owner's.
-const KEEP_DAYS: i64 = 30;
-const DAY_US: i64 = 86_400_000_000;
+pub(super) const KEEP_DAYS: i64 = 30;
+pub(super) const DAY_US: i64 = 86_400_000_000;
 
 const GMB: &str = "SELECT b.id, b.name, b.state, b.gmail_id, g.gmail, b.removed_at, b.place_id, b.address, b.phone, \
 	b.gmail_id IS NOT NULL AND (g.removed_at IS NOT NULL) FROM gmbs b LEFT JOIN gmails g ON g.id = b.gmail_id \

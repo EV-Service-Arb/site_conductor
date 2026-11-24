@@ -26,6 +26,7 @@ pub(crate) mod library;
 pub mod meters;
 pub mod oauth;
 pub mod outbox;
+pub(crate) mod own_alerts;
 pub(crate) mod placement;
 mod queries_cache;
 pub mod sessions;

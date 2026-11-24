@@ -35,7 +35,7 @@ CREATE TABLE alert_inbox (
 	-- The last of its buttons they pressed.
 	pressed TEXT,
 	PRIMARY KEY (user_id, note_id)
-) STRICT, WITHOUT ROWID;
+) STRICT;
 
 CREATE INDEX alert_inbox_by_note ON alert_inbox (note_id);
 CREATE INDEX alert_inbox_unread ON alert_inbox (user_id, tier) WHERE read_at IS NULL;
@@ -46,7 +46,7 @@ CREATE TABLE alert_tiers (
 	rule TEXT NOT NULL,
 	tier TEXT NOT NULL CHECK (tier IN ('info', 'important', 'urgent')),
 	PRIMARY KEY (user_id, rule)
-) STRICT, WITHOUT ROWID;
+) STRICT;
 
 -- A person's hours; minutes since midnight in their time zone.
 CREATE TABLE alert_hours (
@@ -56,7 +56,8 @@ CREATE TABLE alert_hours (
 	quiet_from INTEGER CHECK (quiet_from BETWEEN 0 AND 1439),
 	quiet_to INTEGER CHECK (quiet_to BETWEEN 0 AND 1439),
 	snoozed_until INTEGER,
-	CHECK ((quiet_from IS NULL) = (quiet_to IS NULL) AND quiet_from IS NOT quiet_to OR quiet_from IS NULL)
+	CHECK ((quiet_from IS NULL) = (quiet_to IS NULL)),
+	CHECK (quiet_from <> quiet_to)
 ) STRICT;
 
 CREATE TABLE alert_destinations_new (

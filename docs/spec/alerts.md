@@ -33,15 +33,14 @@ A note's tier: the person's own for the rule, else the note's (a lead that only 
 | leads | payment_received | sites | sa:admin:sources:manage | info |
 | reviews | review_gone | review_archive | the GBPs' owners | important |
 | reviews | review_new, review_changed (≤ 3★: important), review_reappeared, scan_failed | review_archive | the GBPs' owners | info |
-| profiles | gbp_state (Suspended: urgent) | conductor | the GBP's owner | important |
-| profiles | google_mail | conductor | the gmail's owner | important |
-| profiles | connection_lost (inbox, Business Profile, proxy) | conductor | the gmail's owner | important |
+| profiles | google_mail (a suspension: urgent; routine: info) | conductor | the gmail's owner | important |
+| profiles | connection_lost (its inbox fails) | conductor | the gmail's owner | important |
 | money | tokens_low, browser_stopped | conductor | the person | important |
 | money | kickback | conductor | the person | info |
 | panel | assistant_waiting | conductor | the person | important |
 | panel | access_granted, release_out, trash_purge | conductor | the person | info |
 | team | access_requested | conductor | every permission of sa:admin | important |
-| team | source_silent, feed_stalled, meter_held | conductor | sa:admin:sources:manage | important |
+| team | source_silent, feed_stalled, meter_held (billing unlinked: urgent) | conductor | sa:admin:sources:manage | important |
 
 ## Destinations
 

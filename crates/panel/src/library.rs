@@ -172,7 +172,7 @@ impl Panel {
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed));
 		}
-		let released = match released(&mut tx, author, version, release, now).await? {
+		let released = match self.released(&mut tx, author, version, release, now).await? {
 			Ok(r) => r,
 			Err(e) => return Ok(Err(e)),
 		};
@@ -222,7 +222,7 @@ impl Panel {
 			return Ok(Err(Refused::Closed));
 		}
 		let on = match (db::released_as(&mut tx, version).await?, release) {
-			(_, Some(release)) => match released(&mut tx, author, version, release, now).await? {
+			(_, Some(release)) => match self.released(&mut tx, author, version, release, now).await? {
 				Ok(r) => r,
 				Err(e) => return Ok(Err(e)),
 			},
@@ -264,55 +264,57 @@ impl Panel {
 		tx.commit().await.wrap_err("committing a study's withdrawal")?;
 		Ok(Ok(()))
 	}
-}
 
-/// `version` released as `release` says: it must be in the author's history, and a next version
-/// must be on a listing of theirs, of its trade and country, not withdrawn.
-async fn released(conn: &mut sqlx::SqliteConnection, author: Uuid, version: i64, release: Release, now: Timestamp) -> eyre::Result<Result<Released, Refused>> {
-	let words = |s: &str, at_most: usize, what: &str| {
-		let s = s.trim();
-		(s.chars().count() <= at_most)
-			.then(|| s.to_owned())
-			.ok_or_else(|| Refused::Invalid(format!("{what} is at most {at_most} characters")))
-	};
-	if !categories_db::ours(conn, author, version).await? {
-		return Ok(Err(Refused::NotFound));
+	/// `version` released as `release` says: it must be in the author's history, and a next version
+	/// must be on a listing of theirs, of its trade and country, not withdrawn.
+	async fn released(&self, conn: &mut sqlx::SqliteConnection, author: Uuid, version: i64, release: Release, now: Timestamp) -> eyre::Result<Result<Released, Refused>> {
+		let words = |s: &str, at_most: usize, what: &str| {
+			let s = s.trim();
+			(s.chars().count() <= at_most)
+				.then(|| s.to_owned())
+				.ok_or_else(|| Refused::Invalid(format!("{what} is at most {at_most} characters")))
+		};
+		if !categories_db::ours(conn, author, version).await? {
+			return Ok(Err(Refused::NotFound));
+		}
+		let v = categories_db::version(conn, version).await?.expect("one of their moves went to it");
+		let listing = match release {
+			Release::New(n) => {
+				let (title, about, notes) = match (words(&n.title, 100, "a title"), words(&n.about, 4000, "an about"), words(&n.notes, 4000, "a note")) {
+					(Ok(t), Ok(a), Ok(no)) if !t.is_empty() => (t, a, no),
+					(Ok(_), Ok(_), Ok(_)) => return Ok(Err(Refused::Invalid("a listing has a title".to_owned()))),
+					(Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => return Ok(Err(e)),
+				};
+				if let Some(f) = n.forked_from
+					&& db::listing_of(conn, author, f).await?.is_none()
+				{
+					return Ok(Err(Refused::NotFound));
+				}
+				let id = db::add_listing(conn, author, &v.trade, v.country, &title, &about, n.forked_from, now).await?;
+				return Ok(Ok(db::add_release(conn, id, version, &notes, now).await?));
+			}
+			Release::Next { listing, notes } => {
+				let notes = match words(&notes, 4000, "a note") {
+					Ok(n) => n,
+					Err(e) => return Ok(Err(e)),
+				};
+				let Some(l) = db::listing_of(conn, author, listing).await?.filter(|l| l.author == author && l.withdrawn_at.is_none()) else {
+					return Ok(Err(Refused::NotFound));
+				};
+				if (l.trade.as_str(), l.country) != (v.trade.as_str(), v.country) {
+					return Ok(Err(Refused::Invalid(format!(
+						"listing {listing} is of {}·{}, the version of {}·{}",
+						l.trade, l.country, v.trade, v.country
+					))));
+				}
+				if l.latest.version == version {
+					return Ok(Err(Refused::Conflict(format!("listing {listing}'s latest is this version already"))));
+				}
+				(l, notes)
+			}
+		};
+		let released = db::add_release(conn, listing.0.id, version, &listing.1, now).await?;
+		self.tell_release(conn, &listing.0, &released, now).await?;
+		Ok(Ok(released))
 	}
-	let v = categories_db::version(conn, version).await?.expect("one of their moves went to it");
-	let listing = match release {
-		Release::New(n) => {
-			let (title, about, notes) = match (words(&n.title, 100, "a title"), words(&n.about, 4000, "an about"), words(&n.notes, 4000, "a note")) {
-				(Ok(t), Ok(a), Ok(no)) if !t.is_empty() => (t, a, no),
-				(Ok(_), Ok(_), Ok(_)) => return Ok(Err(Refused::Invalid("a listing has a title".to_owned()))),
-				(Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => return Ok(Err(e)),
-			};
-			if let Some(f) = n.forked_from
-				&& db::listing_of(conn, author, f).await?.is_none()
-			{
-				return Ok(Err(Refused::NotFound));
-			}
-			let id = db::add_listing(conn, author, &v.trade, v.country, &title, &about, n.forked_from, now).await?;
-			return Ok(Ok(db::add_release(conn, id, version, &notes, now).await?));
-		}
-		Release::Next { listing, notes } => {
-			let notes = match words(&notes, 4000, "a note") {
-				Ok(n) => n,
-				Err(e) => return Ok(Err(e)),
-			};
-			let Some(l) = db::listing_of(conn, author, listing).await?.filter(|l| l.author == author && l.withdrawn_at.is_none()) else {
-				return Ok(Err(Refused::NotFound));
-			};
-			if (l.trade.as_str(), l.country) != (v.trade.as_str(), v.country) {
-				return Ok(Err(Refused::Invalid(format!(
-					"listing {listing} is of {}·{}, the version of {}·{}",
-					l.trade, l.country, v.trade, v.country
-				))));
-			}
-			if l.latest.version == version {
-				return Ok(Err(Refused::Conflict(format!("listing {listing}'s latest is this version already"))));
-			}
-			(l.id, notes)
-		}
-	};
-	Ok(Ok(db::add_release(conn, listing.0, version, &listing.1, now).await?))
 }

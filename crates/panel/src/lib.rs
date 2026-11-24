@@ -36,6 +36,7 @@ pub mod library;
 pub mod live;
 pub mod meters;
 pub mod oauth;
+mod own_alerts;
 pub mod placement;
 pub mod seal;
 pub mod session;
