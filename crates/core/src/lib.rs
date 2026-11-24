@@ -10,6 +10,7 @@
 //! - [`geo`]: points and rectangles, as Google draws them;
 //! - [`signature`]: how a source signs a batch, and how the conductor checks it;
 //! - [`queries_cache`]: the queries cache's wire;
+//! - [`mail`]: Google's mail about Business Profiles: its kinds, its cases, whose turn one is;
 //! - [`notify`]: the Telegram rules, the conductor's own messages, the buttons' signed data, and
 //!   how a delivery is retried;
 //! - [`prices`]: what costs tokens, tool by tool;
@@ -25,6 +26,7 @@ pub mod gbp;
 pub mod geo;
 pub mod google;
 pub mod ids;
+pub mod mail;
 pub mod meters;
 pub mod notify;
 pub mod prices;
