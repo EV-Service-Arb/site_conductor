@@ -107,6 +107,10 @@
     "en": "Alerts",
     "t": "Оповещения"
   },
+  "account.alerts.hint": {
+    "en": "Where your alerts go, and how soon: your Telegram, email, phone, channels.",
+    "t": "Куда приходят ваши оповещения и как быстро: Telegram, электронная почта, телефон, каналы."
+  },
   "account.business.client": {
     "en": "Client",
     "t": "Клиент"
@@ -258,6 +262,10 @@
   "account.imap.password": {
     "en": "App password",
     "t": "Пароль приложения"
+  },
+  "account.imap.reads": {
+    "en": "Google's mail about its GBPs is read from it every minute, and replies to Google go out through it.",
+    "t": "Письма Google о ваших профилях GBP считываются из неё каждую минуту, а ответы Google отправляются через неё."
   },
   "account.imap.title": {
     "en": "Email · IMAP",
@@ -555,41 +563,589 @@
     "en": "Prices, spending and everyone's balance",
     "t": "Цены, расходы и балансы всех"
   },
+  "alerts.about": {
+    "en": "About",
+    "t": "О разделе"
+  },
   "alerts.add": {
     "en": "Add",
     "t": "Добавить"
+  },
+  "alerts.add.discord": {
+    "en": "a channel",
+    "t": "канал"
+  },
+  "alerts.add.discord.hint": {
+    "en": "In Discord: Edit channel, Integrations, Webhooks, Copy URL. Add sends a test.",
+    "t": "В Discord: Изменить канал, Интеграции, Вебхуки, Копировать URL. «Добавить» отправит тест."
+  },
+  "alerts.add.discord.ping": {
+    "en": "Urgent ones say @here",
+    "t": "Срочные идут с @here"
+  },
+  "alerts.add.discord.url": {
+    "en": "The channel's webhook",
+    "t": "Вебхук канала"
+  },
+  "alerts.add.email": {
+    "en": "your account's address, or another",
+    "t": "адрес вашей учётной записи или другой"
+  },
+  "alerts.add.email.address": {
+    "en": "Address",
+    "t": "Адрес"
+  },
+  "alerts.add.email.confirmed": {
+    "en": "The address is confirmed: alerts go there now.",
+    "t": "Адрес подтверждён: оповещения теперь приходят туда."
+  },
+  "alerts.add.email.hint": {
+    "en": "Your account's address starts at once. Any other is mailed a link: open it signed in as yourself.",
+    "t": "Адрес вашей учётной записи начинает работать сразу. На любой другой придёт ссылка: откройте её, войдя под своей учётной записью."
+  },
+  "alerts.add.email.sent": {
+    "en": "A link is on its way to {address}: alerts start once it is opened.",
+    "t": "Ссылка отправлена на {address}: оповещения начнут приходить, как только её откроют."
+  },
+  "alerts.add.names": {
+    "en": "Only you read it: names, phones and buttons come with it.",
+    "t": "Читаете только вы: вместе с ним приходят имена, телефоны и кнопки."
+  },
+  "alerts.add.needs": {
+    "en": "off on this server: it has no {variable}",
+    "t": "отключено на этом сервере: нет {variable}"
+  },
+  "alerts.add.noNames": {
+    "en": "Whoever is there reads it: no names, phones or buttons.",
+    "t": "Прочитает любой, кто там есть: без имён, телефонов и кнопок."
+  },
+  "alerts.add.notHere": {
+    "en": "off on this server: ask an admin to set it up",
+    "t": "отключено на этом сервере: попросите администратора настроить"
+  },
+  "alerts.add.push": {
+    "en": "this phone or computer, panel closed or not",
+    "t": "этот телефон или компьютер, при открытой и закрытой панели"
+  },
+  "alerts.add.slack": {
+    "en": "a channel",
+    "t": "канал"
+  },
+  "alerts.add.slack.hint": {
+    "en": "In Slack: your app's Incoming Webhooks, Add to a channel, Copy. Add sends a test.",
+    "t": "В Slack: Incoming Webhooks вашего приложения, Добавить в канал, Копировать. «Добавить» отправит тест."
+  },
+  "alerts.add.slack.url": {
+    "en": "The channel's incoming webhook",
+    "t": "Входящий вебхук канала"
+  },
+  "alerts.add.telegram": {
+    "en": "your chat, a channel, group or topic",
+    "t": "ваш чат, канал, группа или тема"
   },
   "alerts.add.telegram.chat": {
     "en": "Channel, group or topic",
     "t": "Канал, группа или тема"
   },
+  "alerts.add.telegram.first": {
+    "en": "Connect your own chat first: the bot checks with it that you run the channel.",
+    "t": "Сначала подключите свой чат: бот проверяет по нему, что канал ведёте вы."
+  },
+  "alerts.add.telegram.hint": {
+    "en": "Make {bot} an admin there first, then its @name, its -100… id, or <group id>/<topic id>. Add sends a test.",
+    "t": "Сначала сделайте {bot} администратором там, затем укажите его @имя, id вида -100… или <id группы>/<id темы>. «Добавить» отправит тест."
+  },
+  "alerts.add.telegram.how": {
+    "en": "Opens the bot: press Start there. It shows up here.",
+    "t": "Откроется бот: нажмите там Start. Он появится здесь."
+  },
+  "alerts.add.telegram.open": {
+    "en": "Open the bot",
+    "t": "Открыть бота"
+  },
   "alerts.add.telegram.own": {
     "en": "Your chat",
     "t": "Ваш чат"
+  },
+  "alerts.add.webhook": {
+    "en": "signed JSON to your https address",
+    "t": "подписанный JSON на ваш https-адрес"
+  },
+  "alerts.add.webhook.hint": {
+    "en": "JSON, HMAC-signed. The secret is shown once, after Add sends a test.",
+    "t": "JSON с подписью HMAC. Секрет показывается один раз, после того как «Добавить» отправит тест."
+  },
+  "alerts.add.webhook.secret": {
+    "en": "What every delivery is signed with (x-signature: t=<unix>,v1=<hex HMAC-SHA256 of t.body>). It is not shown again.",
+    "t": "Чем подписывается каждая доставка (x-signature: t=<unix>,v1=<hex HMAC-SHA256 of t.body>). Повторно не показывается."
+  },
+  "alerts.add.webhook.url": {
+    "en": "Address",
+    "t": "Адрес"
+  },
+  "alerts.add.where": {
+    "en": "Where",
+    "t": "Куда"
+  },
+  "alerts.all": {
+    "en": "All alerts",
+    "t": "Все оповещения"
+  },
+  "alerts.all.n": {
+    "en": "All {n}",
+    "t": "Все: {n}"
+  },
+  "alerts.asItComes": {
+    "en": "As it comes",
+    "t": "По мере поступления"
+  },
+  "alerts.asItComes.what": {
+    "en": "As it comes: {how}.",
+    "t": "По мере поступления: {how}."
+  },
+  "alerts.back": {
+    "en": "Back to the list",
+    "t": "Назад к списку"
+  },
+  "alerts.bell.count": {
+    "en": "Alerts, {n} waiting",
+    "t": "Оповещения, ожидают: {n}"
+  },
+  "alerts.cadence.daily": {
+    "en": "Daily",
+    "t": "Раз в день"
+  },
+  "alerts.cadence.daily.means": {
+    "en": "one message at {time}",
+    "t": "одно сообщение в {time}"
+  },
+  "alerts.cadence.hourly": {
+    "en": "Hourly",
+    "t": "Раз в час"
+  },
+  "alerts.cadence.hourly.means": {
+    "en": "one message an hour",
+    "t": "одно сообщение в час"
+  },
+  "alerts.cadence.now": {
+    "en": "Now",
+    "t": "Сразу"
+  },
+  "alerts.cadence.now.means": {
+    "en": "at once",
+    "t": "немедленно"
+  },
+  "alerts.cadence.off": {
+    "en": "Off",
+    "t": "Выкл."
+  },
+  "alerts.cadence.off.means": {
+    "en": "never; still in the panel",
+    "t": "никогда; остаётся в панели"
+  },
+  "alerts.cadence.unread": {
+    "en": "If unread",
+    "t": "Если не прочитано"
+  },
+  "alerts.cadence.unread.means": {
+    "en": "10 min later, unless you read it in the panel",
+    "t": "через 10 минут, если вы не прочли в панели"
   },
   "alerts.connect": {
     "en": "Connect Telegram",
     "t": "Подключить Telegram"
   },
+  "alerts.copied": {
+    "en": "Copied",
+    "t": "Скопировано"
+  },
+  "alerts.copy": {
+    "en": "Copy",
+    "t": "Копировать"
+  },
+  "alerts.daily": {
+    "en": "Daily message at",
+    "t": "Ежедневное сообщение в"
+  },
+  "alerts.daily.hint": {
+    "en": "What every Daily cell sends, once.",
+    "t": "Что отправляет каждая ячейка «Раз в день» — один раз."
+  },
   "alerts.dead": {
     "en": "Nothing reaches it: {why}. Fix it, then Test.",
     "t": "Сюда ничего не доходит: {why}. Исправьте и нажмите «Проверить»."
+  },
+  "alerts.different": {
+    "en": "Different here",
+    "t": "Здесь иначе"
+  },
+  "alerts.different.add": {
+    "en": "Set an alert apart here",
+    "t": "Выделить оповещение здесь"
+  },
+  "alerts.different.alert": {
+    "en": "Alert",
+    "t": "Оповещение"
+  },
+  "alerts.different.remove": {
+    "en": "{rule}: as its tier",
+    "t": "{rule}: как у его уровня"
+  },
+  "alerts.differs": {
+    "en": "{n} set apart",
+    "t": "Выделено: {n}"
+  },
+  "alerts.done": {
+    "en": "Done",
+    "t": "Готово"
+  },
+  "alerts.facet.any": {
+    "en": "Any of {n}",
+    "t": "Любой из {n}"
+  },
+  "alerts.facet.brands": {
+    "en": "Brands",
+    "t": "Бренды"
+  },
+  "alerts.facet.clear": {
+    "en": "Any",
+    "t": "Любой"
+  },
+  "alerts.facet.find": {
+    "en": "Find",
+    "t": "Найти"
+  },
+  "alerts.facet.gmails": {
+    "en": "Gmails",
+    "t": "Gmail"
+  },
+  "alerts.facet.gmbs": {
+    "en": "GBPs",
+    "t": "Профили GBP"
+  },
+  "alerts.facet.trades": {
+    "en": "Categories",
+    "t": "Категории"
+  },
+  "alerts.family.leads": {
+    "en": "Leads",
+    "t": "Лиды"
+  },
+  "alerts.family.money": {
+    "en": "Money",
+    "t": "Деньги"
+  },
+  "alerts.family.panel": {
+    "en": "Panel",
+    "t": "Панель"
+  },
+  "alerts.family.profiles": {
+    "en": "Profiles",
+    "t": "Профили"
+  },
+  "alerts.family.reviews": {
+    "en": "Reviews",
+    "t": "Отзывы"
+  },
+  "alerts.family.team": {
+    "en": "Team",
+    "t": "Команда"
+  },
+  "alerts.filter.all": {
+    "en": "All",
+    "t": "Все"
+  },
+  "alerts.filtered": {
+    "en": "some GBPs only",
+    "t": "только некоторые GBP"
+  },
+  "alerts.filters": {
+    "en": "Filters",
+    "t": "Фильтры"
+  },
+  "alerts.hint.calendar_lost": {
+    "en": "a brand's bookings not read",
+    "t": "записи бренда не читаются"
+  },
+  "alerts.hint.connection_lost": {
+    "en": "inbox, Business Profile, Maps key, proxy",
+    "t": "почта, Business Profile, ключ Maps, прокси"
+  },
+  "alerts.hint.invoice_lost": {
+    "en": "cancelled or expired unpaid",
+    "t": "отменены или просрочены без оплаты"
+  },
+  "alerts.hours": {
+    "en": "Your hours",
+    "t": "Ваши часы"
+  },
+  "alerts.inbox": {
+    "en": "Inbox",
+    "t": "Входящие"
+  },
+  "alerts.last": {
+    "en": "Last: {what}",
+    "t": "Последнее: {what}"
+  },
+  "alerts.late": {
+    "en": "An urgent alert would reach you late",
+    "t": "Срочное оповещение дошло бы до вас с опозданием"
+  },
+  "alerts.late.what": {
+    "en": "Telegram or push tells you at once.",
+    "t": "Telegram или push сообщат вам сразу."
+  },
+  "alerts.matrix": {
+    "en": "Where and when",
+    "t": "Где и когда"
+  },
+  "alerts.matrix.what": {
+    "en": "Everything is always in the panel. Pick what each place tells you, and how soon.",
+    "t": "Всё всегда есть в панели. Выберите, что сообщает каждое место и как скоро."
+  },
+  "alerts.method.email": {
+    "en": "Email",
+    "t": "Эл. почта"
+  },
+  "alerts.method.push": {
+    "en": "Push",
+    "t": "Push"
+  },
+  "alerts.more": {
+    "en": "{name}: more",
+    "t": "{name}: ещё"
+  },
+  "alerts.none": {
+    "en": "No alerts here",
+    "t": "Здесь нет оповещений"
+  },
+  "alerts.nothing": {
+    "en": "Nothing unread",
+    "t": "Непрочитанных нет"
+  },
+  "alerts.nowhere": {
+    "en": "Nothing reaches you when the panel is closed",
+    "t": "Пока панель закрыта, до вас ничего не дойдёт"
+  },
+  "alerts.nowhere.what": {
+    "en": "An urgent lead would wait until you open it.",
+    "t": "Срочный лид будет ждать, пока вы её не откроете."
+  },
+  "alerts.off": {
+    "en": "Nothing is set up on this server to reach you by.",
+    "t": "На этом сервере ничего не настроено для связи с вами."
+  },
+  "alerts.older": {
+    "en": "Older",
+    "t": "Ранее"
+  },
+  "alerts.onlyFor": {
+    "en": "Only for",
+    "t": "Только для"
+  },
+  "alerts.onlyFor.count": {
+    "en": "{n} of {of} GBPs",
+    "t": "{n} из {of} GBP"
+  },
+  "alerts.onlyFor.how": {
+    "en": "An alert passes when one of its GBPs fits every line. One that names no GBP always passes.",
+    "t": "Оповещение проходит, если один из его GBP подходит под каждую строку. Оповещение без GBP проходит всегда."
+  },
+  "alerts.open": {
+    "en": "Open",
+    "t": "Открыть"
+  },
+  "alerts.panel": {
+    "en": "This panel",
+    "t": "Эта панель"
+  },
+  "alerts.panel.important": {
+    "en": "Toast",
+    "t": "Всплывающее"
+  },
+  "alerts.panel.info": {
+    "en": "Counted",
+    "t": "Учитывается"
+  },
+  "alerts.panel.urgent": {
+    "en": "Takes the hotbar",
+    "t": "Занимает горячую панель"
+  },
+  "alerts.panel.what": {
+    "en": "the bell and the inbox",
+    "t": "колокольчик и входящие"
+  },
+  "alerts.photo": {
+    "en": "The capture it came with",
+    "t": "Снимок, который пришёл вместе с ним"
+  },
+  "alerts.pick": {
+    "en": "Pick an alert to read it here.",
+    "t": "Выберите оповещение, чтобы прочесть его здесь."
+  },
+  "alerts.pressed": {
+    "en": "Recorded",
+    "t": "Записано"
+  },
+  "alerts.push.allow": {
+    "en": "Allow here",
+    "t": "Разрешить здесь"
+  },
+  "alerts.push.here": {
+    "en": "Push on this browser",
+    "t": "Push в этом браузере"
+  },
+  "alerts.push.how": {
+    "en": "Allow notifications when the browser asks. Do the same on your phone; on an iPhone, add the panel to the Home Screen first.",
+    "t": "Разрешите уведомления, когда браузер спросит. Сделайте то же на телефоне; на iPhone сначала добавьте панель на экран «Домой»."
+  },
+  "alerts.push.install": {
+    "en": "On an iPhone or iPad, add the panel to the Home Screen first: Share, then Add to Home Screen. Open it from there and come back here.",
+    "t": "На iPhone или iPad сначала добавьте панель на экран «Домой»: «Поделиться», затем «На экран “Домой”». Откройте её оттуда и вернитесь сюда."
+  },
+  "alerts.push.refused": {
+    "en": "This browser blocks notifications here: allow them in its site settings, then try again.",
+    "t": "Этот браузер блокирует здесь уведомления: разрешите их в настройках сайта и попробуйте снова."
+  },
+  "alerts.quiet": {
+    "en": "Quiet hours",
+    "t": "Тихие часы"
+  },
+  "alerts.quiet.daily": {
+    "en": "daily at {time} · {zone}",
+    "t": "ежедневно в {time} · {zone}"
+  },
+  "alerts.quiet.end": {
+    "en": "End now",
+    "t": "Закончить сейчас"
+  },
+  "alerts.quiet.from": {
+    "en": "Quiet from",
+    "t": "Тишина с"
+  },
+  "alerts.quiet.hint": {
+    "en": "Urgent still comes. The rest arrives at {time} as one message.",
+    "t": "Срочные всё равно приходят. Остальное придёт в {time} одним сообщением."
+  },
+  "alerts.quiet.none": {
+    "en": "No quiet hours",
+    "t": "Нет тихих часов"
+  },
+  "alerts.quiet.off": {
+    "en": "Off: alerts come at any hour.",
+    "t": "Выкл.: оповещения приходят в любое время."
+  },
+  "alerts.quiet.range": {
+    "en": "Quiet {from} to {to}",
+    "t": "Тишина с {from} до {to}"
+  },
+  "alerts.quiet.till": {
+    "en": "Quiet until",
+    "t": "Тишина до"
+  },
+  "alerts.quiet.to": {
+    "en": "to",
+    "t": "до"
+  },
+  "alerts.quiet.until": {
+    "en": "Quiet until {time}",
+    "t": "Тишина до {time}"
+  },
+  "alerts.quiet.what": {
+    "en": "Urgent still comes through. The rest is sent as one message when it ends.",
+    "t": "Срочные всё равно приходят. Остальное отправляется одним сообщением, когда тишина закончится."
+  },
+  "alerts.readAll": {
+    "en": "Mark all read",
+    "t": "Отметить все прочитанными"
+  },
+  "alerts.reads.channel": {
+    "en": "no names, phones or buttons",
+    "t": "без имён, телефонов и кнопок"
+  },
+  "alerts.reads.chat": {
+    "en": "your chat",
+    "t": "ваш чат"
+  },
+  "alerts.reads.own": {
+    "en": "only you read it",
+    "t": "читаете только вы"
   },
   "alerts.remove": {
     "en": "Remove",
     "t": "Убрать"
   },
+  "alerts.remove.title": {
+    "en": "Remove {name}?",
+    "t": "Удалить {name}?"
+  },
+  "alerts.remove.what": {
+    "en": "Nothing more goes there, and what was waiting to is dropped. The alerts stay in the panel.",
+    "t": "Туда больше ничего не уйдёт, а то, что ждало отправки, будет отброшено. Оповещения останутся в панели."
+  },
+  "alerts.retier": {
+    "en": "Change when this reaches me",
+    "t": "Изменить, когда это до меня доходит"
+  },
+  "alerts.retier.are": {
+    "en": "{rule} are",
+    "t": "{rule}:"
+  },
+  "alerts.rule.access_granted": {
+    "en": "Access granted",
+    "t": "Доступ предоставлен"
+  },
   "alerts.rule.access_requested": {
     "en": "Access requests",
     "t": "Запросы доступа"
+  },
+  "alerts.rule.assistant_waiting": {
+    "en": "Assistant waiting for you",
+    "t": "Ассистент ждёт вас"
   },
   "alerts.rule.booked": {
     "en": "Bookings",
     "t": "Записи"
   },
+  "alerts.rule.browser_stopped": {
+    "en": "Stopped browsers",
+    "t": "Остановленные браузеры"
+  },
+  "alerts.rule.calendar_lost": {
+    "en": "Lost calendars",
+    "t": "Потерянные календари"
+  },
+  "alerts.rule.connection_lost": {
+    "en": "Lost connections",
+    "t": "Потерянные подключения"
+  },
   "alerts.rule.contact_overdue": {
     "en": "Leads waiting too long",
     "t": "Заявки, ждущие слишком долго"
+  },
+  "alerts.rule.feed_stalled": {
+    "en": "Stalled feeds",
+    "t": "Зависшие ленты"
+  },
+  "alerts.rule.google_mail": {
+    "en": "Mail from Google",
+    "t": "Письма от Google"
+  },
+  "alerts.rule.invoice_lost": {
+    "en": "Lost invoices",
+    "t": "Потерянные счета"
+  },
+  "alerts.rule.invoice_paid": {
+    "en": "Paid invoices",
+    "t": "Оплаченные счета"
+  },
+  "alerts.rule.kickback": {
+    "en": "Kickbacks",
+    "t": "Возвраты"
+  },
+  "alerts.rule.meter_held": {
+    "en": "Held meters",
+    "t": "Удержанные счётчики"
   },
   "alerts.rule.new_lead": {
     "en": "New leads",
@@ -598,6 +1154,10 @@
   "alerts.rule.payment_received": {
     "en": "Payments",
     "t": "Платежи"
+  },
+  "alerts.rule.release_out": {
+    "en": "New releases",
+    "t": "Новые релизы"
   },
   "alerts.rule.review_changed": {
     "en": "Edited reviews",
@@ -623,17 +1183,221 @@
     "en": "Silent sources",
     "t": "Молчащие источники"
   },
+  "alerts.rule.tokens_low": {
+    "en": "Low tokens",
+    "t": "Мало токенов"
+  },
+  "alerts.rule.trash_purge": {
+    "en": "Trash purges",
+    "t": "Очистка корзины"
+  },
+  "alerts.rules": {
+    "en": "What counts as what",
+    "t": "Что считается чем"
+  },
+  "alerts.rules.access": {
+    "en": "Only what your access can hear of is listed.",
+    "t": "Перечислено только то, о чём может сообщать ваш доступ."
+  },
+  "alerts.rules.changed": {
+    "en": "{n} changed",
+    "t": "Изменено: {n}"
+  },
+  "alerts.rules.default": {
+    "en": "default",
+    "t": "по умолчанию"
+  },
+  "alerts.rules.none": {
+    "en": "Your access has nothing to alert you of.",
+    "t": "Вашему доступу не о чем вас оповещать."
+  },
+  "alerts.rules.reset": {
+    "en": "Back to",
+    "t": "Вернуть к"
+  },
+  "alerts.rules.usual": {
+    "en": "each at its usual tier",
+    "t": "каждое на своём обычном уровне"
+  },
+  "alerts.rules.what": {
+    "en": "Change an alert's tier; it moves column everywhere at once.",
+    "t": "Измените уровень оповещения; оно сразу везде переместится в другой столбец."
+  },
+  "alerts.scope": {
+    "en": "Of the GBPs in the outline's scope. What names no GBP always shows.",
+    "t": "Из GBP в области обзора. То, что не относится ни к одному GBP, показывается всегда."
+  },
+  "alerts.settings": {
+    "en": "Settings",
+    "t": "Настройки"
+  },
+  "alerts.settings.all": {
+    "en": "All settings",
+    "t": "Все настройки"
+  },
+  "alerts.settings.title": {
+    "en": "Alert settings",
+    "t": "Настройки оповещений"
+  },
+  "alerts.snooze": {
+    "en": "Snooze",
+    "t": "Отложить"
+  },
+  "alerts.snooze.evening": {
+    "en": "Until this evening",
+    "t": "До вечера"
+  },
+  "alerts.snooze.hint": {
+    "en": "Urgent still comes.",
+    "t": "Срочные всё равно приходят."
+  },
+  "alerts.snooze.hour": {
+    "en": "Snooze 1 h",
+    "t": "Отложить на 1 ч"
+  },
+  "alerts.snooze.off": {
+    "en": "Off",
+    "t": "Выкл."
+  },
+  "alerts.snooze.on": {
+    "en": "Until {time}",
+    "t": "До {time}"
+  },
+  "alerts.snooze.oneHour": {
+    "en": "1 h",
+    "t": "1 ч"
+  },
+  "alerts.snooze.tomorrow": {
+    "en": "Until tomorrow",
+    "t": "До завтра"
+  },
+  "alerts.snooze.until": {
+    "en": "Until {time}. Urgent still comes.",
+    "t": "До {time}. Срочные всё равно приходят."
+  },
+  "alerts.takeover.fold": {
+    "en": "Fold into the bell",
+    "t": "Свернуть в колокольчик"
+  },
+  "alerts.takeover.hours": {
+    "en": "{n} h",
+    "t": "{n} ч"
+  },
+  "alerts.takeover.minutes": {
+    "en": "{n} min",
+    "t": "{n} мин"
+  },
+  "alerts.takeover.of": {
+    "en": "1 of {n} urgent",
+    "t": "1 из {n} срочных"
+  },
   "alerts.test": {
     "en": "Test",
     "t": "Проверить"
+  },
+  "alerts.test.send": {
+    "en": "Send a test",
+    "t": "Отправить тест"
+  },
+  "alerts.test.sent": {
+    "en": "A test is on its way",
+    "t": "Тест отправлен"
+  },
+  "alerts.tier.important": {
+    "en": "Important",
+    "t": "Важное"
+  },
+  "alerts.tier.important.means": {
+    "en": "today, by you",
+    "t": "сегодня, вами"
+  },
+  "alerts.tier.info": {
+    "en": "Info",
+    "t": "Инфо"
+  },
+  "alerts.tier.info.means": {
+    "en": "nice to know",
+    "t": "полезно знать"
+  },
+  "alerts.tier.urgent": {
+    "en": "Urgent",
+    "t": "Срочное"
+  },
+  "alerts.tier.urgent.means": {
+    "en": "minutes cost money",
+    "t": "минуты стоят денег"
   },
   "alerts.title": {
     "en": "Alerts",
     "t": "Оповещения"
   },
+  "alerts.toast.more": {
+    "en": "{n} more important waiting in the bell",
+    "t": "Ещё важных в колокольчике: {n}"
+  },
+  "alerts.today": {
+    "en": "Today",
+    "t": "Сегодня"
+  },
+  "alerts.told": {
+    "en": "Told",
+    "t": "Сообщено"
+  },
+  "alerts.told.dead": {
+    "en": "did not go out: {why}",
+    "t": "не отправлено: {why}"
+  },
+  "alerts.told.dropped": {
+    "en": "dropped: {why}",
+    "t": "отброшено: {why}"
+  },
+  "alerts.told.pending": {
+    "en": "due {at}",
+    "t": "ожидается {at}"
+  },
+  "alerts.told.read": {
+    "en": "dropped, you read it here",
+    "t": "отброшено, вы прочли здесь"
+  },
   "alerts.topic": {
     "en": "topic {topic}",
     "t": "тема {topic}"
+  },
+  "alerts.tz": {
+    "en": "Time zone",
+    "t": "Часовой пояс"
+  },
+  "alerts.tz.now": {
+    "en": "{time} there now.",
+    "t": "Там сейчас {time}."
+  },
+  "alerts.unread": {
+    "en": "unread",
+    "t": "не прочитано"
+  },
+  "alerts.unreadCount": {
+    "en": "{n} unread",
+    "t": "Непрочитанных: {n}"
+  },
+  "alerts.unreadOnly": {
+    "en": "Unread only",
+    "t": "Только непрочитанные"
+  },
+  "alerts.varies.google_mail": {
+    "en": "a suspension Urgent, else Important",
+    "t": "приостановка — Срочное, иначе Важное"
+  },
+  "alerts.varies.new_lead": {
+    "en": "for today Urgent, comparing prices Info",
+    "t": "на сегодня — Срочное, сравнивает цены — Инфо"
+  },
+  "alerts.varies.review": {
+    "en": "★3 or less Important, else Info",
+    "t": "★3 и ниже — Важное, иначе Инфо"
+  },
+  "alerts.yesterday": {
+    "en": "Yesterday",
+    "t": "Вчера"
   },
   "app.name": {
     "en": "Service-Arb",
@@ -2843,9 +3607,1009 @@
     "en": "This browser gives no location here",
     "t": "Этот браузер не предоставляет данные о местоположении здесь"
   },
+  "mail.asks": {
+    "en": "Google asks",
+    "t": "Google спрашивает"
+  },
+  "mail.auto.confirm": {
+    "en": "{topic}: let replies from {gmail} go by themselves?",
+    "t": "{topic}: пусть ответы от {gmail} уходят сами?"
+  },
+  "mail.auto.confirm.how": {
+    "en": "Each goes 15 minutes after it is written unless you stop it, again after 48 h of silence, at most 6 unanswered. Those already written, and any that needs something of yours, stay by hand.",
+    "t": "Каждый уходит через 15 минут после написания, если вы его не остановите, повторно после 48 ч молчания, не более 6 без ответа. Уже написанные и те, которым нужно что-то от вас, остаются на ручной отправке."
+  },
+  "mail.auto.confirm.on": {
+    "en": "Switch on",
+    "t": "Включить"
+  },
+  "mail.auto.here": {
+    "en": "This conductor sends nothing by itself: production's does.",
+    "t": "Этот conductor сам ничего не отправляет: это делает боевой."
+  },
+  "mail.auto.none": {
+    "en": "No gmails in scope",
+    "t": "Нет gmail-аккаунтов в области"
+  },
+  "mail.auto.reviews": {
+    "en": "Review reinstatement",
+    "t": "Восстановление отзывов"
+  },
+  "mail.auto.reviews.goes": {
+    "en": "They ask Google support for the missing reviews of its {n, plural, one {# verified GBP} other {# verified GBPs}}.",
+    "t": "Они просят поддержку Google вернуть пропавшие отзывы для {n, plural, one {# подтверждённого профиля GBP} few {# подтверждённых профилей GBP} many {# подтверждённых профилей GBP} other {# подтверждённого профиля GBP}}."
+  },
+  "mail.auto.switch": {
+    "en": "{topic} replies from {gmail} go by themselves",
+    "t": "Ответы {topic} от {gmail} уходят сами"
+  },
+  "mail.auto.verification": {
+    "en": "Live verification",
+    "t": "Живая верификация"
+  },
+  "mail.auto.verification.goes": {
+    "en": "They ask Google support for the live call of its {n, plural, one {# verifying GBP} other {# verifying GBPs}}.",
+    "t": "Они просят поддержку Google о живом звонке для {n, plural, one {# профиля GBP на верификации} few {# профилей GBP на верификации} many {# профилей GBP на верификации} other {# профиля GBP на верификации}}."
+  },
+  "mail.cancel": {
+    "en": "Cancel",
+    "t": "Отмена"
+  },
+  "mail.correct": {
+    "en": "GBP, topic",
+    "t": "GBP, тема"
+  },
+  "mail.correct.asSaid": {
+    "en": "As its mail says",
+    "t": "Как сказано в письме"
+  },
+  "mail.correct.elsewhere": {
+    "en": "Under another gmail",
+    "t": "Под другим gmail"
+  },
+  "mail.correct.gbp": {
+    "en": "GBP",
+    "t": "GBP"
+  },
+  "mail.correct.topic": {
+    "en": "Topic",
+    "t": "Тема"
+  },
+  "mail.correct.unknown": {
+    "en": "Not known",
+    "t": "Неизвестно"
+  },
+  "mail.deadline": {
+    "en": "Google's deadline: {at}",
+    "t": "Срок от Google: {at}"
+  },
+  "mail.deadline.passed": {
+    "en": "Google's deadline passed: {at}",
+    "t": "Срок от Google истёк: {at}"
+  },
+  "mail.done": {
+    "en": "Mark done",
+    "t": "Отметить выполненным"
+  },
+  "mail.done.label": {
+    "en": "{subject} marked done",
+    "t": "{subject}: отмечено выполненным"
+  },
+  "mail.done.means": {
+    "en": "Until Google writes again",
+    "t": "Пока Google не напишет снова"
+  },
+  "mail.draft": {
+    "en": "Draft",
+    "t": "Черновик"
+  },
+  "mail.draft.dismiss": {
+    "en": "Dismiss draft",
+    "t": "Отклонить черновик"
+  },
+  "mail.draft.dismissed": {
+    "en": "{subject}: draft dismissed",
+    "t": "{subject}: черновик отклонён"
+  },
+  "mail.draft.needs": {
+    "en": "From you: attach it, or say it in the text",
+    "t": "От вас: приложите это или напишите в тексте"
+  },
+  "mail.draft.restore": {
+    "en": "Bring the dismissed draft back",
+    "t": "Вернуть отклонённый черновик"
+  },
+  "mail.draft.route": {
+    "en": "{gmail} → {to}",
+    "t": "{gmail} → {to}"
+  },
+  "mail.draft.text": {
+    "en": "The reply's text",
+    "t": "Текст ответа"
+  },
+  "mail.files.attach": {
+    "en": "Attach files",
+    "t": "Прикрепить файлы"
+  },
+  "mail.files.remove": {
+    "en": "Take {name} off",
+    "t": "Убрать {name}"
+  },
+  "mail.files.size": {
+    "en": "{size} of {max}",
+    "t": "{size} из {max}"
+  },
+  "mail.forged": {
+    "en": "Not from Google: Gmail could not prove who sent it. Open nothing in it.",
+    "t": "Не от Google: Gmail не смог подтвердить отправителя. Ничего в нём не открывайте."
+  },
+  "mail.gone": {
+    "en": "Missing reviews",
+    "t": "Пропавшие отзывы"
+  },
+  "mail.gone.archive": {
+    "en": "Its reviews in the archive",
+    "t": "Её отзывы в архиве"
+  },
+  "mail.gone.asked": {
+    "en": "asked back {since}",
+    "t": "запрошено снова {since}"
+  },
+  "mail.gone.atLeast": {
+    "en": "At least {n} reviews missing",
+    "t": "Пропало не менее {n} отзывов"
+  },
+  "mail.gone.captured": {
+    "en": "Screenshot held",
+    "t": "Скриншот сохранён"
+  },
+  "mail.gone.n": {
+    "en": "{n} reviews missing",
+    "t": "Пропало отзывов: {n}"
+  },
+  "mail.gone.replied": {
+    "en": "replied to",
+    "t": "есть ответ"
+  },
+  "mail.gone.since": {
+    "en": "missing {since}",
+    "t": "пропал {since}"
+  },
+  "mail.gone.uncaptured": {
+    "en": "No screenshot",
+    "t": "Нет скриншота"
+  },
+  "mail.gone.unknown": {
+    "en": "Not known: {why}.",
+    "t": "Неизвестно: {why}."
+  },
+  "mail.gone.unrated": {
+    "en": "no stars",
+    "t": "без звёзд"
+  },
+  "mail.held": {
+    "en": "Goes by itself at {at}",
+    "t": "Уйдёт сам в {at}"
+  },
+  "mail.held.due": {
+    "en": "due",
+    "t": "пора"
+  },
+  "mail.held.left": {
+    "en": "in {left}",
+    "t": "через {left}"
+  },
+  "mail.held.stop": {
+    "en": "Stop, keep it for me",
+    "t": "Остановить, оставить мне"
+  },
+  "mail.inbox.failing": {
+    "en": "Cannot read {gmail}",
+    "t": "Не удаётся прочитать {gmail}"
+  },
+  "mail.inbox.failing.n": {
+    "en": "Cannot read {n} inboxes",
+    "t": "Не удаётся прочитать ящиков: {n}"
+  },
+  "mail.inbox.reconnect": {
+    "en": "Reconnect",
+    "t": "Подключить заново"
+  },
+  "mail.inbox.set": {
+    "en": "Set its IMAP",
+    "t": "Настроить IMAP"
+  },
+  "mail.inbox.unset": {
+    "en": "Not read: {gmail}",
+    "t": "Не читается: {gmail}"
+  },
+  "mail.inbox.unset.n": {
+    "en": "{n} gmails not read: no IMAP set",
+    "t": "Не читается gmail-аккаунтов: {n}, IMAP не настроен"
+  },
+  "mail.join": {
+    "en": "One with",
+    "t": "Объединить с"
+  },
+  "mail.join.apart": {
+    "en": "Take {n, plural, one {its joined thread} other {its # joined threads}} apart",
+    "t": "Разъединить {n, plural, one {его объединённую цепочку} few {его # объединённые цепочки} many {его # объединённых цепочек} other {его # объединённой цепочки}}"
+  },
+  "mail.join.label": {
+    "en": "{subject} made one with another",
+    "t": "{subject} объединено с другой цепочкой"
+  },
+  "mail.join.none": {
+    "en": "Another thread on the same matter",
+    "t": "Другая цепочка по тому же вопросу"
+  },
+  "mail.kind.access_granted": {
+    "en": "Access granted",
+    "t": "Доступ предоставлен"
+  },
+  "mail.kind.access_lost": {
+    "en": "Access lost",
+    "t": "Доступ потерян"
+  },
+  "mail.kind.account_restricted": {
+    "en": "Account restricted",
+    "t": "Аккаунт ограничен"
+  },
+  "mail.kind.acknowledged": {
+    "en": "Received",
+    "t": "Получено"
+  },
+  "mail.kind.appeal_approved": {
+    "en": "Appeal approved",
+    "t": "Апелляция одобрена"
+  },
+  "mail.kind.appeal_denied": {
+    "en": "Appeal denied",
+    "t": "Апелляция отклонена"
+  },
+  "mail.kind.appeal_received": {
+    "en": "Appeal received",
+    "t": "Апелляция получена"
+  },
+  "mail.kind.appeal_verification": {
+    "en": "Appeal wants verification",
+    "t": "Апелляции нужна верификация"
+  },
+  "mail.kind.asks": {
+    "en": "Asks for something",
+    "t": "Просит что-то сделать"
+  },
+  "mail.kind.call_failed": {
+    "en": "Live call failed",
+    "t": "Живой звонок не удался"
+  },
+  "mail.kind.call_offered": {
+    "en": "Live call offered",
+    "t": "Предложен живой звонок"
+  },
+  "mail.kind.changed_by_google": {
+    "en": "Changed by Google",
+    "t": "Изменено Google"
+  },
+  "mail.kind.closed": {
+    "en": "Closed",
+    "t": "Закрыто"
+  },
+  "mail.kind.code_failed": {
+    "en": "Code failed",
+    "t": "Код не подошёл"
+  },
+  "mail.kind.content_removed": {
+    "en": "Content removed",
+    "t": "Контент удалён"
+  },
+  "mail.kind.duplicate": {
+    "en": "Marked a duplicate",
+    "t": "Помечен как дубликат"
+  },
+  "mail.kind.duplicate_ticket": {
+    "en": "Duplicate request",
+    "t": "Дублирующий запрос"
+  },
+  "mail.kind.edit_rejected": {
+    "en": "Edit rejected",
+    "t": "Правка отклонена"
+  },
+  "mail.kind.edit_suggested": {
+    "en": "Edit suggested",
+    "t": "Предложена правка"
+  },
+  "mail.kind.impersonation": {
+    "en": "Not from Google",
+    "t": "Не от Google"
+  },
+  "mail.kind.invited": {
+    "en": "Invited to manage",
+    "t": "Приглашение к управлению"
+  },
+  "mail.kind.management_requested": {
+    "en": "Management requested",
+    "t": "Запрошено управление"
+  },
+  "mail.kind.noise": {
+    "en": "Routine",
+    "t": "Рутина"
+  },
+  "mail.kind.not_business": {
+    "en": "Not about a GBP",
+    "t": "Не про GBP"
+  },
+  "mail.kind.options_exhausted": {
+    "en": "No way to verify left",
+    "t": "Способов верификации не осталось"
+  },
+  "mail.kind.others_access": {
+    "en": "Access given to another",
+    "t": "Доступ дан другому"
+  },
+  "mail.kind.ownership_requested": {
+    "en": "Ownership requested",
+    "t": "Запрошено владение"
+  },
+  "mail.kind.policy_warning": {
+    "en": "Policy warning",
+    "t": "Предупреждение о правилах"
+  },
+  "mail.kind.reinstatement_done": {
+    "en": "Reviews reinstated",
+    "t": "Отзывы восстановлены"
+  },
+  "mail.kind.reinstatement_partial": {
+    "en": "Part of the reviews back",
+    "t": "Часть отзывов вернулась"
+  },
+  "mail.kind.reinstatement_refused": {
+    "en": "Reinstatement refused",
+    "t": "В восстановлении отказано"
+  },
+  "mail.kind.restriction_lifted": {
+    "en": "Restriction lifted",
+    "t": "Ограничение снято"
+  },
+  "mail.kind.reverification_required": {
+    "en": "To verify again",
+    "t": "Нужна повторная верификация"
+  },
+  "mail.kind.review_removed": {
+    "en": "Review removed",
+    "t": "Отзыв удалён"
+  },
+  "mail.kind.reviews_live_already": {
+    "en": "Sees the reviews live",
+    "t": "Видит отзывы опубликованными"
+  },
+  "mail.kind.reviews_no_data": {
+    "en": "Which reviews?",
+    "t": "Какие отзывы?"
+  },
+  "mail.kind.reviews_paused": {
+    "en": "Reviews paused",
+    "t": "Отзывы приостановлены"
+  },
+  "mail.kind.reviews_restricted": {
+    "en": "Reviews restricted",
+    "t": "Отзывы ограничены"
+  },
+  "mail.kind.routed": {
+    "en": "Passed to a specialist",
+    "t": "Передано специалисту"
+  },
+  "mail.kind.self_serve": {
+    "en": "Pointed back to the video",
+    "t": "Отправлено обратно к видео"
+  },
+  "mail.kind.still_active": {
+    "en": "Still open?",
+    "t": "Всё ещё работает?"
+  },
+  "mail.kind.suspended": {
+    "en": "Suspended",
+    "t": "Заблокирован"
+  },
+  "mail.kind.unclear": {
+    "en": "Unclear",
+    "t": "Неясно"
+  },
+  "mail.kind.verified": {
+    "en": "Verified",
+    "t": "Подтверждён"
+  },
+  "mail.kind.video_in_review": {
+    "en": "Video in review",
+    "t": "Видео на проверке"
+  },
+  "mail.kind.video_rejected": {
+    "en": "Video rejected",
+    "t": "Видео отклонено"
+  },
+  "mail.mend.connect": {
+    "en": "Connect your Claude",
+    "t": "Подключите свой Claude"
+  },
+  "mail.mend.reconnect": {
+    "en": "Reconnect your Claude",
+    "t": "Подключите свой Claude заново"
+  },
+  "mail.mend.tokens": {
+    "en": "Tokens: {n} left",
+    "t": "Токенов осталось: {n}"
+  },
+  "mail.message.any": {
+    "en": "Of any topic",
+    "t": "Любая тема"
+  },
+  "mail.message.byHand": {
+    "en": "set by hand",
+    "t": "задано вручную"
+  },
+  "mail.message.empty": {
+    "en": "No text of its own.",
+    "t": "Собственного текста нет."
+  },
+  "mail.message.kind": {
+    "en": "Kind",
+    "t": "Тип"
+  },
+  "mail.message.nobody": {
+    "en": "No sender",
+    "t": "Нет отправителя"
+  },
+  "mail.message.sealed": {
+    "en": "Its text does not open: {why}",
+    "t": "Текст не открывается: {why}"
+  },
+  "mail.message.unclear": {
+    "en": "What it says could not be told, so its reply never goes by itself. Set its kind if you can tell.",
+    "t": "Не удалось понять, о чём письмо, поэтому ответ на него никогда не уйдёт сам. Укажите тип, если можете его определить."
+  },
+  "mail.message.unread": {
+    "en": "Not read",
+    "t": "Не прочитано"
+  },
+  "mail.message.us": {
+    "en": "You",
+    "t": "Вы"
+  },
+  "mail.method.call": {
+    "en": "Live call",
+    "t": "Живой звонок"
+  },
+  "mail.method.code": {
+    "en": "Code",
+    "t": "Код"
+  },
+  "mail.method.unknown": {
+    "en": "Verification",
+    "t": "Верификация"
+  },
+  "mail.method.video": {
+    "en": "Video",
+    "t": "Видео"
+  },
+  "mail.needs.asked_often": {
+    "en": "asked {n}×, nothing new",
+    "t": "спрашивали {n}×, ничего нового"
+  },
+  "mail.needs.failed": {
+    "en": "not sent",
+    "t": "не отправлено"
+  },
+  "mail.needs.may_have_gone_out": {
+    "en": "check the thread",
+    "t": "проверьте цепочку"
+  },
+  "mail.needs.needs": {
+    "en": "needs {n} from you",
+    "t": "нужно от вас: {n}"
+  },
+  "mail.needs.no_reply": {
+    "en": "takes no reply",
+    "t": "ответ не принимается"
+  },
+  "mail.needs.nothing_to_say": {
+    "en": "no reply written",
+    "t": "ответ не написан"
+  },
+  "mail.needs.stuck": {
+    "en": "waits for Claude",
+    "t": "ждёт Claude"
+  },
+  "mail.needs.unanswered": {
+    "en": "no answer",
+    "t": "нет ответа"
+  },
+  "mail.needs.unread": {
+    "en": "not read",
+    "t": "не прочитано"
+  },
+  "mail.next": {
+    "en": "Next thread",
+    "t": "Следующая цепочка"
+  },
+  "mail.noSubject": {
+    "en": "(no subject)",
+    "t": "(без темы)"
+  },
+  "mail.nothing.all": {
+    "en": "No mail from Google yet",
+    "t": "Писем от Google пока нет"
+  },
+  "mail.nothing.elsewhere": {
+    "en": "{n} in All",
+    "t": "{n} во вкладке «Все»"
+  },
+  "mail.nothing.needs_you": {
+    "en": "Nothing needs you",
+    "t": "Ничего не требует вас"
+  },
+  "mail.nothing.waiting": {
+    "en": "Nothing waits on Google",
+    "t": "Ничего не ждёт Google"
+  },
+  "mail.nothing.why": {
+    "en": "It is read from each gmail's inbox every minute, once its IMAP is set.",
+    "t": "Письма читаются из ящика каждого gmail раз в минуту, как только настроен его IMAP."
+  },
+  "mail.outcome.failed": {
+    "en": "failed",
+    "t": "не удалось"
+  },
+  "mail.outcome.in_review": {
+    "en": "in review",
+    "t": "на проверке"
+  },
+  "mail.outcome.offered": {
+    "en": "offered",
+    "t": "предложено"
+  },
+  "mail.outcome.rejected": {
+    "en": "rejected",
+    "t": "отклонено"
+  },
+  "mail.outcome.verified": {
+    "en": "verified",
+    "t": "подтверждено"
+  },
+  "mail.pick": {
+    "en": "Pick a thread to read it here.",
+    "t": "Выберите цепочку, чтобы прочитать её здесь."
+  },
+  "mail.prev": {
+    "en": "Previous thread",
+    "t": "Предыдущая цепочка"
+  },
+  "mail.removed": {
+    "en": "This thread is gone",
+    "t": "Этой цепочки больше нет"
+  },
+  "mail.reopen": {
+    "en": "Reopen",
+    "t": "Открыть снова"
+  },
+  "mail.reopen.label": {
+    "en": "{subject} reopened",
+    "t": "{subject} открыто снова"
+  },
+  "mail.reply": {
+    "en": "Reply",
+    "t": "Ответить"
+  },
+  "mail.routed": {
+    "en": "A specialist is to answer by {until}. Silent past it, one reply asks again.",
+    "t": "Специалист должен ответить до {until}. Если он промолчит, один ответ спросит снова."
+  },
+  "mail.routed.pressed": {
+    "en": "Asked again. With no answer by {until}, it needs you.",
+    "t": "Спросили снова. Если ответа не будет до {until}, это потребует вас."
+  },
+  "mail.send": {
+    "en": "Send",
+    "t": "Отправить"
+  },
+  "mail.send.asIs": {
+    "en": "Send as it is",
+    "t": "Отправить как есть"
+  },
+  "mail.send.confirm": {
+    "en": "Send the reply to {to}?",
+    "t": "Отправить ответ на {to}?"
+  },
+  "mail.send.confirm.bare": {
+    "en": "From {gmail}, with no files.",
+    "t": "От {gmail}, без файлов."
+  },
+  "mail.send.confirm.final": {
+    "en": "It cannot be taken back.",
+    "t": "Это нельзя отменить."
+  },
+  "mail.send.confirm.lacking": {
+    "en": "Still asked for, unless the text answers it: {needs}.",
+    "t": "Всё ещё запрошено, если текст не отвечает на это: {needs}."
+  },
+  "mail.send.confirm.with": {
+    "en": "From {gmail}, with {files}.",
+    "t": "От {gmail}, с файлами: {files}."
+  },
+  "mail.send.empty": {
+    "en": "The reply is empty",
+    "t": "Ответ пуст"
+  },
+  "mail.send.files": {
+    "en": "Send to Google · {n, plural, one {# file} other {# files}}",
+    "t": "Отправить в Google · {n, plural, one {# файл} few {# файла} many {# файлов} other {# файла}}"
+  },
+  "mail.send.google": {
+    "en": "Send to Google",
+    "t": "Отправить в Google"
+  },
+  "mail.send.key": {
+    "en": "Send the reply",
+    "t": "Отправить ответ"
+  },
+  "mail.send.n": {
+    "en": "Send · {n, plural, one {# file} other {# files}}",
+    "t": "Отправить · {n, plural, one {# файл} few {# файла} many {# файлов} other {# файла}}"
+  },
+  "mail.send.noRecipient": {
+    "en": "Nothing here takes a reply",
+    "t": "Здесь нет адресата для ответа"
+  },
+  "mail.send.tooLarge": {
+    "en": "The files are over {max} in all",
+    "t": "Файлы вместе превышают {max}"
+  },
+  "mail.sending": {
+    "en": "Being sent to {to}",
+    "t": "Отправляется на {to}"
+  },
+  "mail.sent": {
+    "en": "Sent to {to} · {at}",
+    "t": "Отправлено на {to} · {at}"
+  },
+  "mail.settled.hand": {
+    "en": "Marked done.",
+    "t": "Отмечено выполненным."
+  },
+  "mail.settled.here": {
+    "en": "Settled by what Google said here.",
+    "t": "Решено тем, что Google сказал здесь."
+  },
+  "mail.settled.later": {
+    "en": "Settled by other mail of the GBP: {kind}, {at}.",
+    "t": "Решено другим письмом по этому GBP: {kind}, {at}."
+  },
+  "mail.settled.move": {
+    "en": "Settled by the GBP's move here: {kind}, {at}.",
+    "t": "Решено действием по GBP здесь: {kind}, {at}."
+  },
+  "mail.settled.open": {
+    "en": "Open it",
+    "t": "Открыть"
+  },
+  "mail.show": {
+    "en": "Threads listed",
+    "t": "Показанные цепочки"
+  },
+  "mail.show.all": {
+    "en": "All",
+    "t": "Все"
+  },
+  "mail.show.needs_you": {
+    "en": "Needs you",
+    "t": "Требуют вас"
+  },
+  "mail.show.waiting": {
+    "en": "Waiting",
+    "t": "Ожидают"
+  },
+  "mail.spam": {
+    "en": "in Spam",
+    "t": "в спаме"
+  },
+  "mail.state.deadline": {
+    "en": "by {at}",
+    "t": "до {at}"
+  },
+  "mail.state.done": {
+    "en": "done · {since}",
+    "t": "выполнено · {since}"
+  },
+  "mail.state.held": {
+    "en": "goes at {at}",
+    "t": "уйдёт в {at}"
+  },
+  "mail.state.overdue": {
+    "en": "overdue since {at}",
+    "t": "просрочено с {at}"
+  },
+  "mail.state.reply_due": {
+    "en": "reply due · {since}",
+    "t": "нужен ответ · {since}"
+  },
+  "mail.state.reply_ready": {
+    "en": "reply ready · {since}",
+    "t": "ответ готов · {since}"
+  },
+  "mail.state.routed": {
+    "en": "with a specialist until {at}",
+    "t": "у специалиста до {at}"
+  },
+  "mail.state.sending": {
+    "en": "sending",
+    "t": "отправляется"
+  },
+  "mail.state.waiting": {
+    "en": "with Google until {at}",
+    "t": "у Google до {at}"
+  },
+  "mail.stuck": {
+    "en": "{n, plural, one {# thread waits} other {# threads wait}}: {why}",
+    "t": "{n, plural, one {# цепочка ждёт} few {# цепочки ждут} many {# цепочек ждут} other {# цепочки ждут}}: {why}"
+  },
+  "mail.tab.automatic": {
+    "en": "Automatic replies",
+    "t": "Автоответы"
+  },
+  "mail.tab.automatic.description": {
+    "en": "Which gmails answer Google by themselves",
+    "t": "Какие gmail отвечают Google сами"
+  },
+  "mail.tab.threads": {
+    "en": "Threads",
+    "t": "Цепочки"
+  },
+  "mail.tab.threads.description": {
+    "en": "Each conversation and notice, and whose turn it is",
+    "t": "Каждая переписка и уведомление, и чей сейчас ход"
+  },
+  "mail.thread.open": {
+    "en": "Open thread",
+    "t": "Открыть цепочку"
+  },
   "mail.thread.opened": {
     "en": "Opened in the gmail's browser",
     "t": "Открыто в браузере gmail"
+  },
+  "mail.thread.where": {
+    "en": "In {gmail}'s running browser",
+    "t": "В запущенном браузере {gmail}"
+  },
+  "mail.timeline": {
+    "en": "Messages",
+    "t": "Сообщения"
+  },
+  "mail.topic.access": {
+    "en": "Access",
+    "t": "Доступ"
+  },
+  "mail.topic.activity": {
+    "en": "Activity",
+    "t": "Активность"
+  },
+  "mail.topic.other": {
+    "en": "Other",
+    "t": "Другое"
+  },
+  "mail.topic.profile": {
+    "en": "Profile",
+    "t": "Профиль"
+  },
+  "mail.topic.reviews": {
+    "en": "Reviews",
+    "t": "Отзывы"
+  },
+  "mail.topic.suspension": {
+    "en": "Suspension",
+    "t": "Блокировка"
+  },
+  "mail.topic.verification": {
+    "en": "Verification",
+    "t": "Верификация"
+  },
+  "mail.unread.mend": {
+    "en": "Read it below and set its kind.",
+    "t": "Прочитайте его ниже и укажите тип."
+  },
+  "mail.unsure": {
+    "en": "May have gone out to {to}",
+    "t": "Возможно, ушло на {to}"
+  },
+  "mail.which": {
+    "en": "Which GBP?",
+    "t": "Какой GBP?"
+  },
+  "mail.which.label": {
+    "en": "{subject} given its GBP",
+    "t": "{subject}: GBP указан"
+  },
+  "mail.which.named": {
+    "en": "{subject}: {gbp}",
+    "t": "{subject}: {gbp}"
+  },
+  "mail.who.google": {
+    "en": "Google",
+    "t": "Google"
+  },
+  "mail.who.support": {
+    "en": "Google support",
+    "t": "Поддержка Google"
+  },
+  "mail.why.access_lost": {
+    "en": "The gmail can no longer manage the profile.",
+    "t": "Этот gmail больше не может управлять профилем."
+  },
+  "mail.why.account_restricted": {
+    "en": "Google restricted the gmail itself, not one profile.",
+    "t": "Google ограничил сам gmail, а не один профиль."
+  },
+  "mail.why.appeal_denied": {
+    "en": "Google denied the appeal.",
+    "t": "Google отклонил апелляцию."
+  },
+  "mail.why.appeal_verification": {
+    "en": "The appeal goes on once it is verified further: do it from the profile.",
+    "t": "Апелляция продолжится после дополнительной верификации: сделайте это из профиля."
+  },
+  "mail.why.asked_often": {
+    "en": "Asked {n} times, and Google answers nothing new: the next is yours to send.",
+    "t": "Спрашивали {n} раз, а Google не отвечает ничего нового: следующее сообщение за вами."
+  },
+  "mail.why.asks": {
+    "en": "Google asks for something, and the reply is written: check it and send it.",
+    "t": "Google о чём-то просит, ответ написан: проверьте и отправьте его."
+  },
+  "mail.why.call_failed": {
+    "en": "A live call was held and did not verify it.",
+    "t": "Живой звонок состоялся, но не подтвердил профиль."
+  },
+  "mail.why.call_offered": {
+    "en": "The live call is enabled: take it from the profile, at the place.",
+    "t": "Живой звонок включён: примите его из профиля, на месте."
+  },
+  "mail.why.closed": {
+    "en": "Google closed it with nothing given: open another request, or mark it done.",
+    "t": "Google закрыл обращение, ничего не дав: откройте другой запрос или отметьте выполненным."
+  },
+  "mail.why.code_failed": {
+    "en": "The code did not verify it: start another way from the profile.",
+    "t": "Код не подтвердил профиль: начните другим способом из профиля."
+  },
+  "mail.why.deadline": {
+    "en": "Google set a date: {at}.",
+    "t": "Google назначил дату: {at}."
+  },
+  "mail.why.duplicate": {
+    "en": "Google marked it another profile's duplicate.",
+    "t": "Google признал его дубликатом другого профиля."
+  },
+  "mail.why.duplicate_ticket": {
+    "en": "Google closed it as a duplicate of a request not known here: if that one is listed, make them one under GBP, topic.",
+    "t": "Google закрыл его как дубликат запроса, неизвестного здесь: если тот есть в списке, объедините их в одну цепочку по GBP и теме."
+  },
+  "mail.why.edit_suggested": {
+    "en": "Somebody suggested an edit: accept or refuse it on the profile.",
+    "t": "Кто-то предложил правку: примите или отклоните её в профиле."
+  },
+  "mail.why.failed": {
+    "en": "The reply did not go: {error}",
+    "t": "Ответ не ушёл: {error}"
+  },
+  "mail.why.management_requested": {
+    "en": "Somebody asks to manage it: accept or refuse it on the profile.",
+    "t": "Кто-то просит управление профилем: примите или отклоните это в профиле."
+  },
+  "mail.why.may_have_gone_out": {
+    "en": "The reply may have gone out, and its copy is not in the inbox: check the thread, and answer there if it did not go.",
+    "t": "Возможно, ответ ушёл, но его копии нет во входящих: проверьте цепочку и, если он не ушёл, ответьте там."
+  },
+  "mail.why.needs": {
+    "en": "Needs from you: {what}",
+    "t": "Нужно от вас: {what}"
+  },
+  "mail.why.no_reply": {
+    "en": "Google asks in a mail that takes no reply: answer it where it says.",
+    "t": "Google спрашивает в письме, на которое нельзя ответить: ответьте там, где сказано."
+  },
+  "mail.why.nothing_to_say": {
+    "en": "No reply was written: {why}",
+    "t": "Ответ не написан: {why}"
+  },
+  "mail.why.others_access": {
+    "en": "Somebody else was given access: take it away on the profile if it was none of yours.",
+    "t": "Доступ дали кому-то ещё: если это были не вы, уберите его в профиле."
+  },
+  "mail.why.ownership_requested": {
+    "en": "Somebody asks for its ownership: accept or refuse it on the profile.",
+    "t": "Кто-то просит владение профилем: примите или отклоните это в профиле."
+  },
+  "mail.why.policy_warning": {
+    "en": "Google warns of a policy broken on the profile.",
+    "t": "Google предупреждает о нарушении правил в профиле."
+  },
+  "mail.why.reverification_required": {
+    "en": "Google wants it verified again: start it from the profile.",
+    "t": "Google требует подтвердить профиль заново: начните это из профиля."
+  },
+  "mail.why.reviews_paused": {
+    "en": "Google paused new reviews: it saw a spike of spam.",
+    "t": "Google приостановил новые отзывы: он заметил всплеск спама."
+  },
+  "mail.why.reviews_restricted": {
+    "en": "Google found fake or incentivised reviews and restricted the profile's.",
+    "t": "Google обнаружил фальшивые или стимулированные отзывы и ограничил отзывы профиля."
+  },
+  "mail.why.silent": {
+    "en": "Google's specialist stayed silent past the time given, and when asked again.",
+    "t": "Специалист Google промолчал после назначенного срока и после повторного вопроса."
+  },
+  "mail.why.still_active": {
+    "en": "Google asks whether it is still open, and removes it unless answered.",
+    "t": "Google спрашивает, работает ли ещё компания, и удалит профиль, если не ответить."
+  },
+  "mail.why.suspended": {
+    "en": "Google suspended the profile: the appeal is sent from Google's own form.",
+    "t": "Google заблокировал профиль: апелляция отправляется через собственную форму Google."
+  },
+  "mail.why.unanswered": {
+    "en": "Google went silent, and nothing here takes a reply.",
+    "t": "Google замолчал, а ответить здесь нельзя."
+  },
+  "mail.why.unread": {
+    "en": "Not read yet.",
+    "t": "Ещё не прочитано."
+  },
+  "mail.why.unread.failed": {
+    "en": "It could not be read: {error}",
+    "t": "Не удалось прочитать: {error}"
+  },
+  "mail.why.video_rejected": {
+    "en": "Google rejected the recorded video, and no open conversation asks for the live call.",
+    "t": "Google отклонил записанное видео, и ни одна открытая переписка не просит живой звонок."
+  },
+  "mail.write": {
+    "en": "Write a reply",
+    "t": "Написать ответ"
+  },
+  "mail.write.again": {
+    "en": "Rewrite",
+    "t": "Переписать"
+  },
+  "mail.write.broke": {
+    "en": "No tokens left",
+    "t": "Токены закончились"
+  },
+  "mail.write.busy": {
+    "en": "Writing",
+    "t": "Пишется"
+  },
+  "mail.write.change": {
+    "en": "What to change, optional",
+    "t": "Что изменить, необязательно"
+  },
+  "mail.write.cost": {
+    "en": "≈ {n} tokens",
+    "t": "≈ {n} токенов"
+  },
+  "mail.write.instruction": {
+    "en": "What it should say",
+    "t": "Что он должен сказать"
+  },
+  "mail.write.own": {
+    "en": "on your Claude",
+    "t": "на вашем Claude"
+  },
+  "mail.write.own.self": {
+    "en": "Write it yourself",
+    "t": "Напишите сами"
+  },
+  "mail.write.say": {
+    "en": "What it should say, optional",
+    "t": "Что он должен сказать, необязательно"
   },
   "move.cancel": {
     "en": "Cancel",
@@ -2866,6 +4630,14 @@
   "nav.alerts": {
     "en": "Alerts",
     "t": "Оповещения"
+  },
+  "nav.email": {
+    "en": "Email",
+    "t": "Эл. почта"
+  },
+  "nav.email.description": {
+    "en": "Google's mail about the GBPs, and the replies",
+    "t": "Письма Google о профилях GBP и ответы на них"
   },
   "nav.gbps": {
     "en": "GBPs",
@@ -4855,6 +6627,14 @@
     "en": "Email rules on its gmail: re-submit the appeal, move its state on Google's decision mail",
     "t": "Правила почты для его gmail: повторно подать апелляцию, менять состояние по письму Google с решением"
   },
+  "window.appeal.sent": {
+    "en": "Appeals",
+    "t": "Апелляции"
+  },
+  "window.appeal.sent.none": {
+    "en": "No appeal in Google's mail.",
+    "t": "В почте Google нет апелляций."
+  },
   "window.browser.afterNext": {
     "en": "After Next on step 8, it is on Google: verifying.",
     "t": "После «Далее» на шаге 8 профиль попадает в Google: верификация."
@@ -5150,6 +6930,10 @@
   "window.connections.ready": {
     "en": "{n} of {of} ready",
     "t": "{n} из {of} готово"
+  },
+  "window.header.email": {
+    "en": "Google: {said} · {ago}",
+    "t": "Google: {said} · {ago}"
   },
   "window.header.inView": {
     "en": "{at}/{n} in view",
@@ -5611,9 +7395,21 @@
     "en": "Appeal",
     "t": "Обжаловать"
   },
+  "window.reviews.appealDone": {
+    "en": "Mark appealed",
+    "t": "Отметить как поданную апелляцию"
+  },
   "window.reviews.appealPlanned": {
     "en": "Send the appeal to Google from here",
     "t": "Отправить апелляцию в Google отсюда"
+  },
+  "window.reviews.appealSent": {
+    "en": "appealed {ago}",
+    "t": "апелляция подана {ago}"
+  },
+  "window.reviews.case": {
+    "en": "Their case",
+    "t": "Их случай"
   },
   "window.reviews.draft": {
     "en": "Draft a reply with an agent",
@@ -5630,6 +7426,10 @@
   "window.reviews.draftReply": {
     "en": "Draft reply",
     "t": "Составить ответ"
+  },
+  "window.reviews.goneAt": {
+    "en": "went missing {ago}",
+    "t": "пропал {ago}"
   },
   "window.reviews.lastRun": {
     "en": "last run {ago} · {status}",
@@ -5651,6 +7451,10 @@
     "en": "Suspended · Reinstating · To remove",
     "t": "Заблокированные · Восстанавливаются · На удаление"
   },
+  "window.reviews.needsActionNote": {
+    "en": "missing from Google, or flagged by us",
+    "t": "нет в Google или помечено нами"
+  },
   "window.reviews.new7d": {
     "en": "New 7d",
     "t": "Новые за 7 д"
@@ -5666,6 +7470,10 @@
   "window.reviews.perDay": {
     "en": "New reviews per day",
     "t": "Новые отзывы в день"
+  },
+  "window.reviews.reinstatement": {
+    "en": "With Google support",
+    "t": "В поддержке Google"
   },
   "window.reviews.reinstating": {
     "en": "Reinstating",
@@ -5931,9 +7739,29 @@
     "en": "Its own page",
     "t": "Своя страница"
   },
+  "window.verification.after": {
+    "en": "Live call asked of support",
+    "t": "Живой звонок, о котором попросили поддержку"
+  },
+  "window.verification.after.none": {
+    "en": "No open thread asks for it.",
+    "t": "Ни одна открытая переписка этого не просит."
+  },
   "window.verification.attempts": {
     "en": "Attempts",
     "t": "Попытки"
+  },
+  "window.verification.attempts.nameless": {
+    "en": "{n} of {gmail} name no GBP",
+    "t": "{n} из {gmail} не называют ни одного GBP"
+  },
+  "window.verification.attempts.none": {
+    "en": "None in Google's mail.",
+    "t": "В почте Google ничего нет."
+  },
+  "window.verification.banner.email": {
+    "en": "Google wrote: {said} · {ago}",
+    "t": "Google написал: {said} · {ago}"
   },
   "window.verification.banner.none": {
     "en": "Nothing from Google yet",
@@ -5942,6 +7770,10 @@
   "window.verification.banner.state": {
     "en": "{from} → {to} · {ago}",
     "t": "{from} → {to} · {ago}"
+  },
+  "window.verification.emails": {
+    "en": "Google's other emails",
+    "t": "Другие письма Google"
   },
   "window.verification.kit": {
     "en": "Verification kit",

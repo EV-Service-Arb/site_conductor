@@ -1,6 +1,6 @@
 "use client";
 
-import { Button, cn, toast } from "@evinvest/uikit";
+import { Button, Kbd, cn, toast } from "@evinvest/uikit";
 import { Phone } from "lucide-react";
 import { useState } from "react";
 
@@ -46,13 +46,11 @@ export function When({ at }: { at: string }) {
   );
 }
 
-/** What an alert asks to be done, as its message's buttons: the first is the one to press. */
-export function AlertButtons({ alert, className, onPressed }: { alert: Alert; className?: string; onPressed?: () => void }) {
+/** Presses an alert's buttons, one at a time. */
+export function usePress(alert: Alert, onPressed?: () => void): { busy: boolean; press: (button: string) => Promise<void> } {
   const t = useT();
-  const size = useButtonSize();
   const unread = useUnread();
   const [busy, setBusy] = useState(false);
-  if (alert.buttons.length === 0) return null;
   const press = async (button: string) => {
     setBusy(true);
     try {
@@ -66,12 +64,21 @@ export function AlertButtons({ alert, className, onPressed }: { alert: Alert; cl
       unread.reload();
     }
   };
+  return { busy, press };
+}
+
+/** What an alert asks to be done, as its message's buttons: the first is the one to press. `keycaps`: what presses each, where the page binds them. */
+export function AlertButtons({ alert, className, onPressed, keycaps = [] }: { alert: Alert; className?: string; onPressed?: () => void; keycaps?: readonly (string | undefined)[] }) {
+  const size = useButtonSize();
+  const { busy, press } = usePress(alert, onPressed);
+  if (alert.buttons.length === 0) return null;
   return (
     <div className={cn("flex flex-wrap gap-2", className)}>
       {alert.buttons.map((b, i) => (
         <Button key={b.id} type="button" size={size("sm")} variant={i === 0 ? (alert.tier === "urgent" ? "destructive" : "primary") : "outline"} disabled={busy} onClick={() => void press(b.id)}>
           {i === 0 && alert.family === "leads" && <Phone aria-hidden className="size-4" />}
           {b.label}
+          {keycaps[i] !== undefined && <Kbd className="max-md:hidden">{keycaps[i]}</Kbd>}
         </Button>
       ))}
     </div>

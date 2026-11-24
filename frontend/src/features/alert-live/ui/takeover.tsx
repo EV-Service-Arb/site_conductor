@@ -1,10 +1,10 @@
 "use client";
 
-import { Button, type HotbarProps } from "@evinvest/uikit";
+import { Button, type HotbarProps, useBinding, useKeymap } from "@evinvest/uikit";
 import { ExternalLink, Phone, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { AlertButtons, alerts as keys, lines, phoneOf, readAlert, useNamedGmbs, useNow, useUnread } from "@/entities/alerts";
+import { AlertButtons, alerts as keys, lines, phoneOf, readAlert, useNamedGmbs, useNow, usePress, useUnread } from "@/entities/alerts";
 import { openWindow } from "@/entities/gmb";
 import type { Alert } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
@@ -73,6 +73,13 @@ function Actions({ alert, onFold }: { alert: Alert; onFold: () => void }) {
     if (alert.link === null) openWindow({ kind: "alerts", at: { open: alert.id } });
     else go(alert.link);
   };
+  const { busy, press } = usePress(alert);
+  const [first, second] = alert.buttons;
+  const firstName = first?.label ?? t(keys.open, "Open");
+  useBinding({ on: { key: "Enter" }, id: "alert-first", run: { label: firstName, run: busy ? null : first === undefined ? open : () => void press(first.id) } });
+  useBinding({ on: { key: "h" }, id: "alert-second", run: { label: second?.label ?? firstName, run: busy || second === undefined ? null : () => void press(second.id) } });
+  const { bound } = useKeymap();
+  const keycaps = ["alert-first", "alert-second"].map((id) => bound.get(id)?.sequence);
   return (
     <span className="flex shrink-0 items-center gap-2 pl-1">
       {phone !== null && (
@@ -84,7 +91,7 @@ function Actions({ alert, onFold }: { alert: Alert; onFold: () => void }) {
         </Button>
       )}
       {/* a phone has room for the one to press; the rest are in the bell */}
-      <AlertButtons key={alert.id} alert={alert} className="flex-nowrap max-md:[&>:not(:first-child)]:hidden" />
+      <AlertButtons key={alert.id} alert={alert} keycaps={keycaps} className="flex-nowrap max-md:[&>:not(:first-child)]:hidden" />
       {alert.buttons.length === 0 && (
         <Button type="button" size="sm" onClick={open}>
           <ExternalLink aria-hidden className="size-4" />

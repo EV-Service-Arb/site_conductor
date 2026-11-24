@@ -1,7 +1,7 @@
 "use client";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Skeleton, Switch, cn, toast } from "@evinvest/uikit";
-import { BellOff, CalendarClock, Globe, Info, Moon, Undo2 } from "lucide-react";
+import { Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Skeleton, Switch, cn, toast } from "@evinvest/uikit";
+import { ArrowLeft, BellOff, CalendarClock, ChevronRight, Globe, Info, Moon, Undo2 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { FAMILIES, FAMILY_ICON, FAMILY_NAME, RULE_HINT, RULE_NAME, TIERS, TIER_LOOK, TIER_NAME, VARIES, alerts as keys, clock, late, nextAt, quietOf, setHours, unreached, useAlerts, useNow } from "@/entities/alerts";
@@ -10,6 +10,7 @@ import { api, ok } from "@/shared/api";
 import type { AlertHours, AlertRule, Alerts, Tier } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { go, useAt } from "@/shared/lib/location";
+import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useControlSize } from "@/shared/ui/touch";
@@ -35,6 +36,13 @@ export function AlertSettings({ page }: { page: boolean }) {
     }
   };
   useConfirm(alerts.reload);
+  const phone = !useMediaQuery(DESKTOP_QUERY);
+  // a phone shows the matrix, the rest a press away
+  const [open, setPart] = useState<"hours" | "rules" | null>(null);
+  const part = phone ? open : null;
+  const hours = alerts.status === "ok" ? alerts.data.hours : null;
+  const quiet = hours === null ? null : quietOf(hours);
+  const changed = alerts.status === "ok" ? alerts.data.rules.filter((r) => r.tier !== null).length : 0;
   return (
     <div className={cn(page && "mx-auto w-full max-w-300")}>
       <div className="@container">
@@ -45,16 +53,28 @@ export function AlertSettings({ page }: { page: boolean }) {
             <ErrorState failure={alerts.failure} onRetry={alerts.reload} />
           ) : (
             <>
-              <Reached alerts={alerts.data} />
-              <HoursBar hours={alerts.data.hours} busy={busy} act={act} />
-              <section className="space-y-3">
-                <Heading title={t(keys.matrix, "Where and when")} what={t(keys.matrix.what, "Everything is always in the panel. Pick what each place tells you, and how soon.")} />
-                <Matrix alerts={alerts.data} busy={busy} act={act} />
-              </section>
-              <section className="space-y-3">
-                <Heading title={t(keys.rules, "What counts as what")} what={t(keys.rules.what, "Change an alert's tier; it moves column everywhere at once.")} />
-                <Rules rules={alerts.data.rules} busy={busy} act={act} />
-              </section>
+              {part === null && <Reached alerts={alerts.data} />}
+              {part !== null && (
+                <Button type="button" variant="ghost" size="touch" className="-mx-2 justify-self-start self-start" onClick={() => setPart(null)}>
+                  <ArrowLeft aria-hidden className="size-5" />
+                  {t(keys.settings.all, "All settings")}
+                </Button>
+              )}
+              {!phone || part === "hours" ? <HoursBar hours={alerts.data.hours} busy={busy} act={act} /> : part === null && <Into title={quiet === null ? t(keys.quiet.none, "No quiet hours") : t(keys.quiet.range, "Quiet {from} to {to}", { from: clock(quiet[0]), to: clock(quiet[1]) })} what={t(keys.quiet.daily, "daily at {time} · {zone}", { time: clock(hours?.daily ?? 9 * 60), zone: hours?.tz ?? "UTC" })} onClick={() => setPart("hours")} />}
+              {(!phone || part === null) && (
+                <section className="space-y-3">
+                  <Heading title={t(keys.matrix, "Where and when")} what={t(keys.matrix.what, "Everything is always in the panel. Pick what each place tells you, and how soon.")} />
+                  <Matrix alerts={alerts.data} busy={busy} act={act} />
+                </section>
+              )}
+              {!phone || part === "rules" ? (
+                <section className="space-y-3">
+                  <Heading title={t(keys.rules, "What counts as what")} what={t(keys.rules.what, "Change an alert's tier; it moves column everywhere at once.")} />
+                  <Rules rules={alerts.data.rules} busy={busy} act={act} />
+                </section>
+              ) : (
+                part === null && <Into title={t(keys.rules, "What counts as what")} what={changed === 0 ? t(keys.rules.usual, "each at its usual tier") : t(keys.rules.changed, "{n} changed", { n: changed })} onClick={() => setPart("rules")} />
+              )}
             </>
           )}
         </div>
@@ -82,6 +102,18 @@ function useConfirm(reload: () => void) {
       (e: unknown) => notifyFailure(e, t),
     );
   }, [token, reload, t]);
+}
+
+function Into({ title, what, onClick }: { title: string; what: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className="flex w-full items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring">
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-ink">{title}</span>
+        <span className="block text-xs text-ink-soft">{what}</span>
+      </span>
+      <ChevronRight aria-hidden className="size-4 text-ink-soft" />
+    </button>
+  );
 }
 
 function Heading({ title, what }: { title: string; what: string }) {
