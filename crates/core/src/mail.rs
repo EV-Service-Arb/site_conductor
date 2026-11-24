@@ -45,7 +45,7 @@ pub enum Topic {
 }
 
 /// What a message of Google's says.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, schemars::JsonSchema, strum::EnumMessage, strum::EnumString, strum::IntoStaticStr, strum::VariantArray)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, strum::EnumMessage, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, strum::VariantArray)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[schemars(rename = "MailKind")]
@@ -1225,8 +1225,8 @@ mod tests {
 
 	#[test]
 	fn a_profile_is_known_by_its_one_link_and_its_longest_name() {
-		let notice = "Submit new video\n<https://business.google.com/verify/l/00284230971258484020?trk=x>\n…\n<https://business.google.com/verify/l/00284230971258484020?trk=y>";
-		assert_eq!(listing(notice).as_deref(), Some("00284230971258484020"), "as written, its zeros too");
+		let notice = "Submit new video\n<https://business.google.com/verify/l/00000000000000000002?trk=x>\n…\n<https://business.google.com/verify/l/00000000000000000002?trk=y>";
+		assert_eq!(listing(notice).as_deref(), Some("00000000000000000002"), "as written, its zeros too");
 		assert_eq!(listing("http://business.google.com/n/11987/profile?fid=&trk=z").as_deref(), Some("11987"));
 		assert_eq!(listing("business.google.com/n/1/profile business.google.com/n/2/profile"), None, "a digest of several");
 		assert_eq!(listing("https://business.google.com/settings"), None);

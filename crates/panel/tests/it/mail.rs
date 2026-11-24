@@ -242,12 +242,12 @@ async fn rejected_videos_are_attempts_of_the_gbp_named_or_known_by_its_link() {
 	let now = "2026-10-08T12:00:00Z";
 	// Gmail threads the notices of every profile together
 	for (at, text) in [
-		("2026-10-05T09:00:00Z", rejected("", "15597583944401176782")),
+		("2026-10-05T09:00:00Z", rejected("", "10000000000000000001")),
 		(
 			"2026-10-06T09:00:00Z",
-			rejected(" for Plomberie Dupont -  \nLyon, Est (at 9 Av. Basse, 69003 Lyon)", "15597583944401176782"),
+			rejected(" for Plomberie Dupont -  \nLyon, Est (at 9 Av. Basse, 69003 Lyon)", "10000000000000000001"),
 		),
-		("2026-10-07T09:00:00Z", rejected("", "00284230971258484020")),
+		("2026-10-07T09:00:00Z", rejected("", "00000000000000000002")),
 	] {
 		w.arrives(notice(at, 0xaa, REJECTED, &text)).await;
 		w.reads(now, Kind::VideoRejected, |r| r.reasons = vec!["No view of surrounding area".into()]).await;
