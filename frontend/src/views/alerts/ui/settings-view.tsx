@@ -1,7 +1,7 @@
 "use client";
 
-import { Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Skeleton, Switch, cn, toast } from "@evinvest/uikit";
-import { ArrowLeft, BellOff, CalendarClock, Globe, Inbox, Info, Moon, Undo2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Skeleton, Switch, cn, toast } from "@evinvest/uikit";
+import { BellOff, CalendarClock, Globe, Info, Moon, Undo2 } from "lucide-react";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { FAMILIES, FAMILY_ICON, FAMILY_NAME, RULE_HINT, RULE_NAME, TIERS, TIER_LOOK, TIER_NAME, VARIES, alerts as keys, clock, late, nextAt, quietOf, setHours, unreached, useAlerts, useNow } from "@/entities/alerts";
@@ -9,7 +9,7 @@ import { ConnectTelegram, PushHere } from "@/features/add-destination";
 import { api, ok } from "@/shared/api";
 import type { AlertHours, AlertRule, Alerts, Tier } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
-import { ViewLink, go, useAt } from "@/shared/lib/location";
+import { go, useAt } from "@/shared/lib/location";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useControlSize } from "@/shared/ui/touch";
@@ -19,7 +19,7 @@ import { Matrix } from "./matrix";
 export type Act = (write: () => Promise<unknown>) => Promise<void>;
 
 /** Where the caller's alerts go, how soon, and which count as what. */
-export function AlertSettingsView() {
+export function AlertSettings({ page }: { page: boolean }) {
   const t = useT();
   const alerts = useAlerts();
   const [busy, setBusy] = useState(false);
@@ -36,23 +36,9 @@ export function AlertSettingsView() {
   };
   useConfirm(alerts.reload);
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex items-center gap-2 border-b border-border px-4 py-2">
-        <Button asChild variant="ghost" size="sm" icon>
-          <ViewLink to={{ view: "alerts", params: {} }} aria-label={t(keys.inbox, "Inbox")}>
-            <ArrowLeft aria-hidden className="size-4" />
-          </ViewLink>
-        </Button>
-        <h1 className="flex-1 text-base font-semibold text-ink">{t(keys.settings.title, "Alert settings")}</h1>
-        <Button asChild variant="outline" size="sm" className="max-md:hidden">
-          <ViewLink to={{ view: "alerts", params: {} }}>
-            <Inbox aria-hidden className="size-4" />
-            {t(keys.inbox, "Inbox")}
-          </ViewLink>
-        </Button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="@container mx-auto flex w-full max-w-300 flex-col gap-6 px-4 py-6 md:px-8">
+    <div className={cn(page && "mx-auto w-full max-w-300")}>
+      <div className="@container">
+        <div className={cn("flex w-full flex-col gap-6 px-4", page ? "py-6 md:px-8" : "py-4")}>
           {alerts.status === "loading" ? (
             <Skeleton className="h-60 w-full" />
           ) : alerts.status === "error" ? (

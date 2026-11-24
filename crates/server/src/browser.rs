@@ -172,6 +172,10 @@ impl Connected {
 		})
 	}
 
+	pub(crate) fn browsers(&self) -> &Browsers {
+		&self.browsers
+	}
+
 	/// What the gmail's browser runs for now, and whether its next launch plays a film.
 	/// A page of the runner's usage feed after `after`: its status and body.
 	pub(crate) async fn usage(&self, after: i64, limit: usize) -> eyre::Result<(StatusCode, Vec<u8>)> {

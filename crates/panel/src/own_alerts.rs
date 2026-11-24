@@ -4,6 +4,7 @@
 //! ```text
 //! google_mail        a case turned to a person ([`crate::mail`])
 //! connection_lost    an inbox that has failed for 15 min       \
+//!                    a grant, key or proxy refused twice        \
 //! feed_stalled       a service's notes that failed for 10 min   > said when it starts, again after a day
 //! meter_held         a Google account's guard unlinking billing /
 //!                    a meter at its stop                       once a period
@@ -24,6 +25,7 @@ use sa_alerts::{Rule, Tier};
 use sa_auth::Service;
 use sa_core::notify::{MAX_NAME, Rendered, one_line};
 use sqlx::SqliteConnection;
+use strum::{AsRefStr, Display, EnumString};
 use url::form_urlencoded;
 use uuid::Uuid;
 
@@ -34,7 +36,7 @@ use crate::{
 	library::{Listing, Released},
 	meters::{Gauge, Lever},
 	store::{
-		connections as connections_db, gmbs as gmbs_db, own_alerts as db,
+		alerts as alerts_db, connections as connections_db, gmbs as gmbs_db, own_alerts as db,
 		tokens::{Kickback, Owed},
 	},
 };
@@ -57,10 +59,36 @@ const PURGE_KEPT: i64 = 7;
 /// The longest an outside text runs.
 const QUOTE: usize = 200;
 
+/// A gmail's connection that no longer answers.
+#[derive(AsRefStr, Clone, Copy, Debug, Display, EnumString, Eq, Ord, PartialEq, PartialOrd)]
+#[strum(serialize_all = "snake_case")]
+pub enum Lost {
+	#[strum(serialize = "imap")] // what its events were named by first
+	Inbox,
+	Business,
+	MapsKey,
+	Proxy,
+}
+impl Lost {
+	/// How it is said, what it costs.
+	const fn said(self) -> (&'static str, &'static str) {
+		match self {
+			Self::Inbox => ("Inbox not read", "Mail from Google is missed until it connects again."),
+			Self::Business => ("Business Profile grant refused", "Nothing is read or written through it until it is granted again."),
+			Self::MapsKey => ("Maps key refused", "Places are bought on the shared keys, in tokens, until it is replaced."),
+			Self::Proxy => ("Proxy not working", "Its browser does not start until it works again or is replaced."),
+		}
+	}
+}
+
 fn text(s: &str) -> Rendered {
 	let mut out = Rendered::default();
 	out.push(s);
 	out
+}
+
+fn chat_link(chat: Uuid) -> String {
+	format!("/assistant?chat={chat}")
 }
 
 impl Panel {
@@ -78,19 +106,20 @@ impl Panel {
 		Ok((!told).then(|| of(0)))
 	}
 
-	/// Gmail `gmail`'s inbox has failed for a while, with `why`.
-	pub async fn alerts_inbox_lost(&self, gmail: i64, why: &str, now: Timestamp) -> eyre::Result<()> {
-		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for an inbox lost")?;
-		let Some(event) = self.again(&mut conn, Rule::ConnectionLost, &["imap", &gmail.to_string()], now).await? else {
+	/// Gmail `gmail`'s `lost` has failed for a while, with `why`.
+	pub async fn alerts_connection_lost(&self, gmail: i64, lost: Lost, why: &str, now: Timestamp) -> eyre::Result<()> {
+		let (title, cost) = lost.said();
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a connection lost")?;
+		let Some(event) = self.again(&mut conn, Rule::ConnectionLost, &[lost.as_ref(), &gmail.to_string()], now).await? else {
 			return Ok(());
 		};
 		let mut tx = crate::store::begin_write(&mut conn).await?;
 		let Some(owner) = gmbs_db::gmail_owner(&mut tx, gmail).await? else {
 			return Ok(()); // removed meanwhile
 		};
-		let mut said = text("Inbox not read: ");
+		let mut said = text(&format!("{title}: "));
 		said.code(&one_line(&connections_db::address(&mut tx, gmail).await?, 60));
-		said.push("\nMail from Google is missed until it connects again. ");
+		said.push(&format!("\n{cost} "));
 		said.code(&one_line(why, QUOTE));
 		let telling = Telling {
 			person: Some(owner),
@@ -99,7 +128,7 @@ impl Panel {
 			..Telling::new(Rule::ConnectionLost, event, now, said)
 		};
 		self.tell(&mut tx, &telling, now).await?;
-		tx.commit().await.wrap_err("committing an inbox lost")
+		tx.commit().await.wrap_err("committing a connection lost")
 	}
 
 	/// `service`'s notes have not been read for a while, with `why`.
@@ -108,7 +137,9 @@ impl Panel {
 		let Some(event) = self.again(&mut conn, Rule::FeedStalled, &[service.as_str()], now).await? else {
 			return Ok(());
 		};
-		let open = text(&format!("No alerts from {service}: its feed fails\nNothing it has to tell reaches anyone until it is read again."));
+		let open = text(&format!(
+			"No alerts from {service}: its feed fails\nNothing it has to tell reaches anyone until it is read again."
+		));
 		let mut private = open.clone();
 		private.push("\n");
 		private.code(&one_line(why, QUOTE));
@@ -132,10 +163,16 @@ impl Panel {
 			let a_day = charged.div_euclid(PACE_DAYS) - self.renewal.daily;
 			let (stage, said) = match balance {
 				_ if charged == 0 => continue,
-				..=0 => ("out", "You are out of tokens\nWhat costs tokens is refused, and walks of your GBPs wait, until you hold some.".to_owned()),
+				..=0 => (
+					"out",
+					"You are out of tokens\nWhat costs tokens is refused, and walks of your GBPs wait, until you hold some.".to_owned(),
+				),
 				_ if a_day > 0 && balance < a_day * LOW_DAYS => (
 					"low",
-					format!("{balance} tokens left, under {LOW_DAYS} days at your pace\nYou spent {charged} over the last {PACE_DAYS} days; {} renew a day.", self.renewal.daily),
+					format!(
+						"{balance} tokens left, under {LOW_DAYS} days at your pace\nYou spent {charged} over the last {PACE_DAYS} days; {} renew a day.",
+						self.renewal.daily
+					),
 				),
 				_ => continue,
 			};
@@ -189,13 +226,20 @@ impl Panel {
 		Ok(())
 	}
 
+	/// `user` went on in `chat`: what waited there no longer does.
+	pub async fn alerts_assistant_answered(&self, user: Uuid, chat: Uuid, now: Timestamp) -> eyre::Result<()> {
+		let mut tx = self.store.begin_write().await?;
+		alerts_db::read_linked(&mut tx, user, Rule::AssistantWaiting, &chat_link(chat), now).await?;
+		tx.commit().await.wrap_err("committing an assistant's wait over")
+	}
+
 	/// `user`'s answer `answer` in chat `chat` ended proposing `what`, after they may have left it.
 	pub async fn alerts_assistant_waits(&self, user: Uuid, chat: Uuid, answer: &str, what: &str, now: Timestamp) -> eyre::Result<()> {
 		let mut said = text("The assistant waits for you to agree\n");
 		said.code(&one_line(what, MAX_NAME));
 		let telling = Telling {
 			person: Some(user),
-			link: Some(format!("/assistant?chat={chat}")),
+			link: Some(chat_link(chat)),
 			..Telling::new(Rule::AssistantWaiting, derived_event_id(&["assistant_waiting", answer]), now, said)
 		};
 		let mut tx = self.store.begin_write().await?;
@@ -224,7 +268,10 @@ impl Panel {
 				said.push("\n");
 				said.code(&one_line(&released.notes, QUOTE));
 			}
-			let query = form_urlencoded::Serializer::new(String::new()).append_pair("trade", &trade).append_pair("country", &country).finish();
+			let query = form_urlencoded::Serializer::new(String::new())
+				.append_pair("trade", &trade)
+				.append_pair("country", &country)
+				.finish();
 			let telling = Telling {
 				person: Some(owner),
 				link: Some(format!("/?{query}")),

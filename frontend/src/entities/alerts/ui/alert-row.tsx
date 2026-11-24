@@ -4,6 +4,7 @@ import { Button, cn, toast } from "@evinvest/uikit";
 import { Phone } from "lucide-react";
 import { useState } from "react";
 
+import { type AlertsAt, type WinKey, openWindow, pageOf } from "@/entities/gmb";
 import type { Alert } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { ViewLink } from "@/shared/lib/location";
@@ -77,19 +78,21 @@ export function AlertButtons({ alert, className, onPressed }: { alert: Alert; cl
   );
 }
 
-/** One alert in a list: a link that opens it, its buttons beside. */
-export function AlertRow({ alert, current = false, buttons = true, onOpen }: { alert: Alert; current?: boolean; buttons?: boolean; onOpen?: () => void }) {
+/** One alert in a list, `within` the inbox as it is narrowed: a link that opens it, its buttons beside. */
+export function AlertRow({ alert, within = {}, current = false, buttons = true, onOpen }: { alert: Alert; within?: Exclude<AlertsAt, { settings: true }>; current?: boolean; buttons?: boolean; onOpen?: () => void }) {
   const t = useT();
   const settings = useAlerts();
   const { title, sub } = lines(alert, useNamedGmbs());
   const read = alert.read_at !== null;
+  const opened: WinKey = { kind: "alerts", at: { ...within, open: alert.id } };
   return (
     <div data-alert={alert.id} className={cn("relative rounded-md px-2.5 py-2 hover:bg-hover/50", alert.tier === "urgent" && !read && "bg-tint-error-wash hover:bg-tint-error-fill", current && "bg-hover")}>
       <div className="flex gap-2.5">
         <AlertMark alert={alert} />
         <div className="min-w-0 flex-1">
           <ViewLink
-            to={{ view: "alerts", params: { open: alert.id } }}
+            to={pageOf(opened)}
+            open={() => openWindow(opened, current || within.open !== undefined ? "replace" : "push")}
             {...(onOpen && { onClick: onOpen })}
             aria-current={current || undefined}
             className={cn("block truncate text-sm outline-none after:absolute after:inset-0 after:rounded-md focus-visible:after:ring-2 focus-visible:after:ring-ring", read ? "text-ink-mid" : "font-medium text-ink")}

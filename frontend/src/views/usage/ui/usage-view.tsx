@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle, PageFrame, Skeleton } from "@evinvest/uikit";
 
+import { openWindow } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import type { Permission } from "@/shared/api/schema";
 import { UsageFigures } from "@/entities/tokens";
@@ -35,7 +36,7 @@ export function UsageView() {
       <Access />
       <UsageCard />
       <Section title={t(account.integrations, "Integrations")}>
-        <ViewLink className="text-sm text-ink hover:underline" to={{ view: "alert_settings", params: {} }}>
+        <ViewLink className="text-sm text-ink hover:underline" to={{ view: "alert_settings", params: {} }} open={() => openWindow({ kind: "alerts", at: { settings: true } })}>
           {t(account.alerts, "Alerts")}
         </ViewLink>
         <p className="text-sm text-ink-soft">{t(account.alerts.hint, "Where your alerts go, and how soon: your Telegram, email, phone, channels.")}</p>

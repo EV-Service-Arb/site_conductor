@@ -23,8 +23,11 @@ use zeroize::Zeroizing;
 
 pub use crate::store::connections::{Business, Checked, Connection, Imap, MapsKey};
 use crate::{
-	Panel, Refused, business, imap,
+	Panel, Refused,
+	browsers::Browsers,
+	business, imap,
 	inbox::Folder,
+	own_alerts::Lost,
 	seal::{BUSINESS_STATE_AAD, gmail_business_grant_aad, gmail_business_secret_aad, gmail_imap_aad, gmail_maps_key_aad},
 	store::{
 		browsers as browsers_db,
@@ -41,6 +44,12 @@ const PLACES: &str = "places";
 
 /// How long a Business Profile consent may take, from its URL handed out to Google's redirect.
 const CONSENT_WITHIN: jiff::SignedDuration = jiff::SignedDuration::from_mins(15);
+
+/// A connection that answered is asked again after this.
+const ASK_EVERY: jiff::SignedDuration = jiff::SignedDuration::from_hours(24);
+
+/// One that did not.
+const ASK_FAILING: jiff::SignedDuration = jiff::SignedDuration::from_mins(15);
 
 /// One lock per person whose buys reach the rotation; see [`Held`].
 pub(crate) type Purses = Arc<Mutex<std::collections::HashMap<Uuid, Arc<tokio::sync::Mutex<()>>>>>;
@@ -295,6 +304,38 @@ impl Panel {
 		db::checked(&mut tx, id, which, &Checked { at: now, error }).await?;
 		tx.commit().await.wrap_err("committing a check")?;
 		self.connections(owner, id).await
+	}
+
+	/// The grants, keys and proxies to ask again: those that answered not asked since [`ASK_EVERY`], those
+	/// that did not since [`ASK_FAILING`].
+	pub async fn connections_unasked(&self, now: Timestamp) -> eyre::Result<Vec<(Uuid, i64, Lost)>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the connections to ask")?;
+		db::unasked(&mut conn, now - ASK_EVERY, now - ASK_FAILING).await
+	}
+
+	/// One of them asked, and what it said recorded: why it does not answer, if it does not. A proxy is
+	/// asked through `b`; without it, or once the connection is gone, there is nothing to ask.
+	pub async fn ask_again(&self, b: Option<&Browsers>, owner: Uuid, gmail: i64, lost: Lost, now: Timestamp) -> eyre::Result<Option<String>> {
+		let asked = match lost {
+			Lost::Inbox => self.check(owner, gmail, Connection::Imap, now).await?,
+			Lost::Business => self.check(owner, gmail, Connection::Business, now).await?,
+			Lost::MapsKey => self.check(owner, gmail, Connection::MapsKey, now).await?,
+			Lost::Proxy => {
+				let Some(b) = b else { return Ok(None) };
+				match self.check_browser(b, owner, gmail, now).await? {
+					Ok(()) => self.connections(owner, gmail).await?,
+					Err(r) => Err(r),
+				}
+			}
+		};
+		let Ok(c) = asked else { return Ok(None) }; // removed meanwhile, or tokens are closed
+		let checked = match lost {
+			Lost::Inbox => c.imap.map(|i| i.checked),
+			Lost::Business => c.business.and_then(|b| b.checked),
+			Lost::MapsKey => c.maps_key.map(|(k, _)| k.checked),
+			Lost::Proxy => c.browser.map(|b| b.checked),
+		};
+		Ok(checked.and_then(|c| c.error))
 	}
 
 	pub async fn disconnect(&self, owner: Uuid, id: i64, which: Connection) -> eyre::Result<Result<(), Refused>> {

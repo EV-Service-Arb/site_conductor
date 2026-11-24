@@ -16,10 +16,9 @@ use sa_alerts::Button;
 use sa_auth::PermissionSet;
 use sa_core::notify::{self, ChatId, OutboxId, Rendered, Reply};
 use sha2::{Digest, Sha256};
+pub use social_networks_adapters::notify::telegram::{Account, CallbackId, Chat, ChatInfo, Target, Update};
 use uuid::Uuid;
 use zeroize::Zeroizing;
-
-pub use social_networks_adapters::notify::telegram::{Account, CallbackId, Chat, ChatInfo, Target, Update};
 
 pub use crate::store::telegram::Kind;
 use crate::{
@@ -80,23 +79,13 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 	/// A message's buttons in `chat_id`: `(label, signed data)`.
 	pub(crate) fn buttons(&self, chat_id: ChatId, message: OutboxId, buttons: &[Button]) -> Vec<(String, String)> {
 		let key = self.panel.key.telegram_callback_key();
-		buttons
-			.iter()
-			.map(|b| (b.label.clone(), notify::callback_data(&key, chat_id, message, &b.id)))
-			.collect()
+		buttons.iter().map(|b| (b.label.clone(), notify::callback_data(&key, chat_id, message, &b.id))).collect()
 	}
 
 	/// Adds a channel, a group or a forum topic, as `named`, as a destination of the
 	/// user's: only once the bot sees it, the user administers it (asked with their private chat's
 	/// id — they link that first) and a test went out there. Nothing is stored otherwise.
-	pub async fn add_chat(
-		&self,
-		user: Uuid,
-		permissions: &PermissionSet,
-		display: &str,
-		named: tg_types::TelegramDestination,
-		now: Timestamp,
-	) -> eyre::Result<Result<i64, Refused>> {
+	pub async fn add_chat(&self, user: Uuid, permissions: &PermissionSet, display: &str, named: tg_types::TelegramDestination, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
 		let refuse = |why: String| Ok(Err(Refused::Invalid(why)));
 		let (chat, topic) = match &named {
 			tg_types::TelegramDestination::Channel(id) | tg_types::TelegramDestination::Group(id) => (id.chat_id_param(), None),
@@ -130,8 +119,10 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		}
 		drop(conn);
 		let to = Address::Telegram(Target { chat_id: info.id, topic_id: topic });
-		if let Err(f) = self.outlets.send_to(&to, &self.test_message()).await {
-			return refuse(format!("the bot cannot post in {chat}: {}", failure_text(&f)));
+		match self.send_test(user, &to, now).await? {
+			Ok(()) => {}
+			Err(Refused::Invalid(why)) => return refuse(format!("the bot cannot post in {chat}: {why}")),
+			Err(r) => return Ok(Err(r)),
 		}
 		let mut tx = self.panel.store.begin_write().await?;
 		if db::chat_taken(&mut tx, info.id, topic).await? {

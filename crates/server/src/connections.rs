@@ -1,9 +1,14 @@
 //! A gmail's connections (`sa_panel::connections`), its owner's only: its inbox, its own Maps key
 //! and its Business Profile client and grant, checked before they are stored and never answered
 //! back; its browser is [`crate::browser`]'s.
-//! In `serve`, each inbox followed for its mail with Google (`sa_panel::inbox`).
+//! In `serve`, each inbox followed for its mail with Google (`sa_panel::inbox`), and the rest asked
+//! whether they still answer.
 
-use std::{collections::BTreeMap, time::Duration};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	sync::Mutex,
+	time::Duration,
+};
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
 use ev_lib::api::{Body, Ids, JsonSchema};
@@ -13,6 +18,7 @@ use sa_panel::{
 	browsers::Provider,
 	connections::{Business, Checked, Connection, Connections, Imap, MapsKey, NewImap},
 	inbox::Gmail,
+	own_alerts::Lost,
 };
 use serde::{Deserialize, Serialize};
 use tokio::sync::watch;
@@ -20,7 +26,7 @@ use zeroize::Zeroizing;
 
 use crate::{
 	api::{ApiResult, Id},
-	browser::{BrowserDto, ExitDto},
+	browser::{BrowserDto, Connected, ExitDto},
 	http::{ApiRoute, ApiState, USER},
 	signin::Caller,
 	tokens::PriceDto,
@@ -32,8 +38,40 @@ const FOLLOW_EVERY: Duration = Duration::from_secs(60);
 /// An inbox failing this long is lost: its owner is told.
 const LOST_AFTER: SignedDuration = SignedDuration::from_mins(15);
 
+/// What is due of the other connections is asked this often.
+const WATCH_EVERY: Duration = Duration::from_secs(60);
+
 /// Where Google sends a Business Profile consent back to.
 pub(crate) const BUSINESS_CALLBACK: &str = "/auth/google/business";
+
+/// Asks every gmail's grant, Maps key and proxy whether it still answers, until `shutdown` turns true:
+/// one that did not twice running is told of. Nothing here ends `serve`.
+pub async fn watch(panel: Panel, browsers: Option<Connected>, shutdown: watch::Receiver<bool>) {
+	let failed = Mutex::new(BTreeSet::new());
+	crate::every(WATCH_EVERY, shutdown, "asking the gmails' connections", || async {
+		for (owner, gmail, lost) in panel.connections_unasked(Timestamp::now()).await? {
+			let now = Timestamp::now();
+			let why = match panel.ask_again(browsers.as_ref().map(Connected::browsers), owner, gmail, lost, now).await {
+				Ok(why) => why,
+				// ours: the others are asked all the same
+				Err(e) => {
+					crate::report(&e.wrap_err(format!("gmail {gmail}'s {lost}")), "asking a gmail's connection");
+					continue;
+				}
+			};
+			let Some(why) = why else {
+				failed.lock().expect("nothing panics under it").remove(&(gmail, lost));
+				continue;
+			};
+			let again = !failed.lock().expect("nothing panics under it").insert((gmail, lost));
+			if again {
+				panel.alerts_connection_lost(gmail, lost, &why, now).await?;
+			}
+		}
+		Ok(())
+	})
+	.await;
+}
 
 /// Reads every gmail's inbox past its cursor until `shutdown` turns true. Nothing here ends `serve`.
 pub async fn follow(panel: Panel, mut shutdown: watch::Receiver<bool>) {
@@ -64,7 +102,7 @@ pub async fn follow(panel: Panel, mut shutdown: watch::Receiver<bool>) {
 						}
 						tracing::debug!(gmail_id = gmail, error = %e, "its inbox still fails");
 						if now.duration_since(since) >= LOST_AFTER
-							&& let Err(e) = panel.alerts_inbox_lost(gmail, &format!("{e:#}"), now).await
+							&& let Err(e) = panel.alerts_connection_lost(gmail, Lost::Inbox, &format!("{e:#}"), now).await
 						{
 							crate::report(&e, "telling of an inbox lost");
 						}

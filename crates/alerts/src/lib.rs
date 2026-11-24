@@ -2,7 +2,7 @@
 //! conductor.
 
 use jiff::Timestamp;
-use sa_auth::{Leads, PermissionSet, SA_ADMIN, Service, Sources};
+use sa_auth::{Invoices, Leads, PermissionSet, Places, SA_ADMIN, Service, Sources};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -54,6 +54,11 @@ pub enum Rule {
 	ContactOverdue,
 	Booked,
 	PaymentReceived,
+	InvoicePaid,
+	/// An invoice cancelled or expired, unpaid.
+	InvoiceLost,
+	/// A brand's Google Calendar no longer answers: its bookings are not read.
+	CalendarLost,
 	ReviewNew,
 	ReviewChanged,
 	ReviewGone,
@@ -93,7 +98,7 @@ impl Rule {
 
 	pub const fn family(self) -> Family {
 		match self {
-			Self::NewLead | Self::ContactOverdue | Self::Booked | Self::PaymentReceived => Family::Leads,
+			Self::NewLead | Self::ContactOverdue | Self::Booked | Self::PaymentReceived | Self::InvoicePaid | Self::InvoiceLost | Self::CalendarLost => Family::Leads,
 			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => Family::Reviews,
 			Self::GoogleMail | Self::ConnectionLost => Family::Profiles,
 			Self::TokensLow | Self::BrowserStopped | Self::Kickback => Family::Money,
@@ -115,6 +120,8 @@ impl Rule {
 		match self {
 			Self::NewLead | Self::ContactOverdue => Tier::Urgent,
 			Self::Booked
+			| Self::InvoiceLost
+			| Self::CalendarLost
 			| Self::ReviewGone
 			| Self::GoogleMail
 			| Self::ConnectionLost
@@ -126,6 +133,7 @@ impl Rule {
 			| Self::FeedStalled
 			| Self::MeterHeld => Tier::Important,
 			Self::PaymentReceived
+			| Self::InvoicePaid
 			| Self::ReviewNew
 			| Self::ReviewChanged
 			| Self::ReviewReappeared
@@ -141,6 +149,8 @@ impl Rule {
 	pub fn open_to(self, permissions: &PermissionSet) -> bool {
 		match self {
 			Self::NewLead | Self::ContactOverdue | Self::Booked => permissions.may(Leads::Edit),
+			Self::InvoicePaid | Self::InvoiceLost => permissions.may(Invoices::Create),
+			Self::CalendarLost => permissions.may(Places::Edit),
 			Self::PaymentReceived | Self::SourceSilent | Self::FeedStalled | Self::MeterHeld => permissions.may(Sources::Manage),
 			Self::AccessRequested => SA_ADMIN.members.iter().all(|member| permissions.iter().any(|held| held == *member)),
 			_ => true,
@@ -334,7 +344,11 @@ mod tests {
 		assert!(!Rule::AccessRequested.open_to(&operator));
 		assert!(Rule::VARIANTS.iter().all(|r| r.open_to(&admin)));
 		for rule in Rule::VARIANTS {
-			assert_eq!(rule.open_to(&nobody), rule.audience() != Audience::Permission, "{rule}: owning the GMB, being the person is the hub's to check");
+			assert_eq!(
+				rule.open_to(&nobody),
+				rule.audience() != Audience::Permission,
+				"{rule}: owning the GMB, being the person is the hub's to check"
+			);
 		}
 	}
 

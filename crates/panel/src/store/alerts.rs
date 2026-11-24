@@ -6,7 +6,7 @@ use std::ops::Range;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_alerts::{Button, Rule, Tier};
+use sa_alerts::{Button, Family, Rule, Tier};
 use sa_auth::{PermissionSet, Service};
 use sa_core::alerts::{Cadence, Cadences, Filter, Method, Subject};
 use sqlx::{SqliteConnection, types::Json};
@@ -33,7 +33,19 @@ type DestinationRow = (
 	Option<Vec<u8>>,
 );
 
-type NoteRow = (i64, String, Uuid, Option<String>, Vec<u8>, Vec<u8>, Json<Vec<i64>>, Option<String>, Option<String>, Json<Vec<Button>>, i64);
+type NoteRow = (
+	i64,
+	String,
+	Uuid,
+	Option<String>,
+	Vec<u8>,
+	Vec<u8>,
+	Json<Vec<i64>>,
+	Option<String>,
+	Option<String>,
+	Json<Vec<Button>>,
+	i64,
+);
 
 // ── access ──────────────────────────────────────────────────────────────────────────────
 
@@ -184,15 +196,7 @@ pub struct Sealed<'a> {
 }
 
 /// A new destination of the user's; `None` when the address is one of theirs already.
-pub async fn add(
-	conn: &mut SqliteConnection,
-	user: Uuid,
-	method: Method,
-	private: bool,
-	title: Option<&str>,
-	address: Option<Sealed<'_>>,
-	now: Timestamp,
-) -> eyre::Result<Option<i64>> {
+pub async fn add(conn: &mut SqliteConnection, user: Uuid, method: Method, private: bool, title: Option<&str>, address: Option<Sealed<'_>>, now: Timestamp) -> eyre::Result<Option<i64>> {
 	let c = Cadences::starting(method, private);
 	sqlx::query_scalar(
 		"INSERT INTO alert_destinations (user_id, method, private, title, urgent, important, info, filter, address_sealed, data_key_fp, address_tag, created_at) \
@@ -309,48 +313,19 @@ pub async fn silence(conn: &mut SqliteConnection, id: i64) -> eyre::Result<()> {
 	Ok(())
 }
 
-fn destination(
-	(id, user_id, method, private, title, urgent, important, info, Json(filter), dead, Json(rules), kind, chat_id, topic_id, address, fp): DestinationRow,
-) -> eyre::Result<Destination> {
-	let cadence = |c: String| c.parse::<Cadence>().wrap_err("a stored cadence");
-	Ok(Destination {
-		id,
-		user_id,
-		method: method.parse().wrap_err("a stored method")?,
-		private,
-		title,
-		cadences: Cadences {
-			urgent: cadence(urgent)?,
-			important: cadence(important)?,
-			info: cadence(info)?,
-		},
-		filter,
-		dead,
-		rules,
-		chat: match (kind, chat_id) {
-			(Some(kind), Some(id)) => Some(Chat {
-				kind: kind.parse().wrap_err("a stored chat's kind")?,
-				id,
-				topic_id,
-			}),
-			_ => None,
-		},
-		address: address.zip(fp),
-	})
-}
-
 /// Counts a link about to be mailed to the address, unless the user had `per_user` mailed within the
-/// hour, or the address was mailed `per_address` within the day; whether it may be.
-pub async fn count_proof(conn: &mut SqliteConnection, user: Uuid, address_tag: &[u8; 32], per_user: i64, per_address: i64, now: Timestamp) -> eyre::Result<bool> {
+/// hour, or the address was mailed `per_address` within the day: its row, for [`uncount_proof`];
+/// `None`: it may not be.
+pub async fn count_proof(conn: &mut SqliteConnection, user: Uuid, address_tag: &[u8; 32], per_user: i64, per_address: i64, now: Timestamp) -> eyre::Result<Option<i64>> {
 	let hours = |n| to_db(now - jiff::SignedDuration::from_hours(n));
 	sqlx::query("DELETE FROM alert_proofs WHERE at <= $1")
 		.bind(hours(24))
 		.execute(&mut *conn)
 		.await
 		.wrap_err("pruning the proofs")?;
-	let counted = sqlx::query(
+	sqlx::query_scalar(
 		"INSERT INTO alert_proofs (user_id, address_tag, at) SELECT $1, $2, $3 \
-		 WHERE (SELECT count(*) FROM alert_proofs WHERE user_id = $1 AND at > $4) < $5 AND (SELECT count(*) FROM alert_proofs WHERE address_tag = $2) < $6",
+		 WHERE (SELECT count(*) FROM alert_proofs WHERE user_id = $1 AND at > $4) < $5 AND (SELECT count(*) FROM alert_proofs WHERE address_tag = $2) < $6 RETURNING rowid",
 	)
 	.bind(user)
 	.bind(address_tag.as_slice())
@@ -358,11 +333,54 @@ pub async fn count_proof(conn: &mut SqliteConnection, user: Uuid, address_tag: &
 	.bind(hours(1))
 	.bind(per_user)
 	.bind(per_address)
-	.execute(&mut *conn)
+	.fetch_optional(&mut *conn)
 	.await
-	.wrap_err("counting a proof")?
-	.rows_affected();
+	.wrap_err("counting a proof")
+}
+
+pub async fn uncount_proof(conn: &mut SqliteConnection, proof: i64) -> eyre::Result<()> {
+	sqlx::query("DELETE FROM alert_proofs WHERE rowid = $1")
+		.bind(proof)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("uncounting a proof")?;
+	Ok(())
+}
+
+/// Counts a test about to go out for the user, unless `per_minute` did within the minute; whether it may.
+pub async fn count_test(conn: &mut SqliteConnection, user: Uuid, per_minute: i64, now: Timestamp) -> eyre::Result<bool> {
+	sqlx::query("DELETE FROM alert_tests WHERE at <= $1")
+		.bind(to_db(now - jiff::SignedDuration::from_mins(1)))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("pruning the tests")?;
+	let counted = sqlx::query("INSERT INTO alert_tests (user_id, at) SELECT $1, $2 WHERE (SELECT count(*) FROM alert_tests WHERE user_id = $1) < $3")
+		.bind(user)
+		.bind(to_db(now))
+		.bind(per_minute)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("counting a test")?
+		.rows_affected();
 	Ok(counted == 1)
+}
+
+/// Whether the user's own address was made a destination yet.
+pub async fn mail_started(conn: &mut SqliteConnection, user: Uuid) -> eyre::Result<bool> {
+	sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM alert_access WHERE user_id = $1 AND mail_started)")
+		.bind(user)
+		.fetch_one(&mut *conn)
+		.await
+		.wrap_err("reading whether a user's mail started")
+}
+
+pub async fn start_mail(conn: &mut SqliteConnection, user: Uuid) -> eyre::Result<()> {
+	sqlx::query("UPDATE alert_access SET mail_started = 1 WHERE user_id = $1")
+		.bind(user)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("recording a user's mail started")?;
+	Ok(())
 }
 
 // ── a person's hours and tiers ──────────────────────────────────────────────────────────
@@ -378,18 +396,6 @@ pub struct Hours {
 	#[schemars(with = "Option<[u16; 2]>")] // a tuple's schema is one ajv refuses
 	pub quiet: Option<(u16, u16)>,
 	pub snoozed_until: Option<Timestamp>,
-}
-
-impl Default for Hours {
-	/// Until their panel says where they are.
-	fn default() -> Self {
-		Self {
-			tz: "UTC".to_owned(),
-			daily: 9 * 60,
-			quiet: None,
-			snoozed_until: None,
-		}
-	}
 }
 
 /// The user's hours; `None` until they, or their panel, set them.
@@ -523,17 +529,7 @@ pub async fn subjects(conn: &mut SqliteConnection, ids: &[i64]) -> eyre::Result<
 	.wrap_err("reading a note's GMBs")?;
 	Ok(rows
 		.into_iter()
-		.map(|(id, owner, gmail, trade, brand)| {
-			(
-				owner,
-				Subject {
-					gmb: Some(id),
-					gmail,
-					trade,
-					brand,
-				},
-			)
-		})
+		.map(|(id, owner, gmail, trade, brand)| (owner, Subject { gmb: Some(id), gmail, trade, brand }))
 		.collect())
 }
 
@@ -616,22 +612,6 @@ pub async fn note(conn: &mut SqliteConnection, id: i64) -> eyre::Result<Note> {
 	note_of(row)
 }
 
-fn note_of((id, rule, event_id, tier, body_sealed, data_key_fp, Json(gmbs), link, photo, Json(buttons), noted_at): NoteRow) -> eyre::Result<Note> {
-	Ok(Note {
-		id,
-		rule: rule.parse().wrap_err_with(|| format!("note {id}'s rule"))?,
-		event_id,
-		tier: tier.map(|t| t.parse()).transpose().wrap_err_with(|| format!("note {id}'s tier"))?,
-		body_sealed,
-		data_key_fp,
-		gmbs,
-		link,
-		photo,
-		buttons,
-		noted_at: from_db(noted_at)?,
-	})
-}
-
 // ── the inbox ───────────────────────────────────────────────────────────────────────────
 
 /// A note in a person's inbox.
@@ -650,7 +630,9 @@ pub struct Sought {
 	pub id: Option<i64>,
 	pub tier: Option<Tier>,
 	pub unread: bool,
-	pub gmb: Option<i64>,
+	pub family: Option<Family>,
+	/// Those about one of these, or about no GMB of the user's.
+	pub gmbs: Option<Vec<i64>>,
 	pub before: Option<i64>,
 }
 
@@ -667,21 +649,37 @@ pub async fn receive(conn: &mut SqliteConnection, user: Uuid, note: i64, tier: T
 
 /// The user's notes of `rules`, newest first.
 pub async fn inbox(conn: &mut SqliteConnection, user: Uuid, rules: &[Rule], s: &Sought, limit: i64) -> eyre::Result<Vec<Received>> {
-	type Row = (i64, String, Uuid, Option<String>, Vec<u8>, Vec<u8>, Json<Vec<i64>>, Option<String>, Option<String>, Json<Vec<Button>>, i64, String, Option<i64>, Option<String>);
+	type Row = (
+		i64,
+		String,
+		Uuid,
+		Option<String>,
+		Vec<u8>,
+		Vec<u8>,
+		Json<Vec<i64>>,
+		Option<String>,
+		Option<String>,
+		Json<Vec<Button>>,
+		i64,
+		String,
+		Option<i64>,
+		Option<String>,
+	);
 	let rows: Vec<Row> = sqlx::query_as(concat!(
 		"SELECT ",
 		note_columns!(),
 		", i.tier, i.read_at, i.pressed FROM alert_inbox i JOIN alert_notes n ON n.id = i.note_id \
 		 WHERE i.user_id = $1 AND n.rule IN (SELECT value FROM json_each($2)) AND ($3 IS NULL OR i.note_id = $3) AND ($4 IS NULL OR i.tier = $4) \
-		 AND (NOT $5 OR i.read_at IS NULL) AND ($6 IS NULL OR EXISTS (SELECT 1 FROM json_each(n.gmbs) j WHERE j.value = $6)) \
+		 AND (NOT $5 OR i.read_at IS NULL) AND ($6 IS NULL OR EXISTS (SELECT 1 FROM json_each(n.gmbs) j JOIN json_each($6) s ON s.value = j.value) \
+		 OR NOT EXISTS (SELECT 1 FROM json_each(n.gmbs) j JOIN gmbs b ON b.id = j.value WHERE b.owner = $1 AND b.removed_at IS NULL)) \
 		 AND ($7 IS NULL OR i.note_id < $7) ORDER BY i.note_id DESC LIMIT $8"
 	))
 	.bind(user)
-	.bind(Json(rules))
+	.bind(Json(rules.iter().filter(|r| s.family.is_none_or(|f| r.family() == f)).collect::<Vec<_>>()))
 	.bind(s.id)
 	.bind(s.tier.map(|t| t.as_ref().to_owned()))
 	.bind(s.unread)
-	.bind(s.gmb)
+	.bind(s.gmbs.as_deref().map(Json))
 	.bind(s.before)
 	.bind(limit)
 	.fetch_all(&mut *conn)
@@ -730,6 +728,23 @@ pub async fn read(conn: &mut SqliteConnection, user: Uuid, ids: Option<&[i64]>, 
 	super::outbox::drop_read(conn, user, now).await
 }
 
+/// Marks read the user's notes of `rule` that open `link`.
+pub async fn read_linked(conn: &mut SqliteConnection, user: Uuid, rule: Rule, link: &str, now: Timestamp) -> eyre::Result<()> {
+	let read = sqlx::query("UPDATE alert_inbox SET read_at = $4 WHERE user_id = $1 AND read_at IS NULL AND note_id IN (SELECT id FROM alert_notes WHERE rule = $2 AND link = $3)")
+		.bind(user)
+		.bind(rule.as_ref())
+		.bind(link)
+		.bind(to_db(now))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("marking a link's notes read")?
+		.rows_affected();
+	if read == 0 {
+		return Ok(());
+	}
+	super::outbox::drop_read(conn, user, now).await
+}
+
 pub async fn pressed(conn: &mut SqliteConnection, user: Uuid, note: i64, button: &str) -> eyre::Result<()> {
 	sqlx::query("UPDATE alert_inbox SET pressed = $3 WHERE user_id = $1 AND note_id = $2")
 		.bind(user)
@@ -775,4 +790,62 @@ pub async fn move_feed(conn: &mut SqliteConnection, service: Service, moved: Ran
 		.wrap_err_with(|| format!("moving {service}'s feed cursor"))?
 		.rows_affected();
 	Ok(moved == 1)
+}
+
+fn destination(
+	(id, user_id, method, private, title, urgent, important, info, Json(filter), dead, Json(rules), kind, chat_id, topic_id, address, fp): DestinationRow,
+) -> eyre::Result<Destination> {
+	let cadence = |c: String| c.parse::<Cadence>().wrap_err("a stored cadence");
+	Ok(Destination {
+		id,
+		user_id,
+		method: method.parse().wrap_err("a stored method")?,
+		private,
+		title,
+		cadences: Cadences {
+			urgent: cadence(urgent)?,
+			important: cadence(important)?,
+			info: cadence(info)?,
+		},
+		filter,
+		dead,
+		rules,
+		chat: match (kind, chat_id) {
+			(Some(kind), Some(id)) => Some(Chat {
+				kind: kind.parse().wrap_err("a stored chat's kind")?,
+				id,
+				topic_id,
+			}),
+			_ => None,
+		},
+		address: address.zip(fp),
+	})
+}
+
+impl Default for Hours {
+	/// Until their panel says where they are.
+	fn default() -> Self {
+		Self {
+			tz: "UTC".to_owned(),
+			daily: 9 * 60,
+			quiet: None,
+			snoozed_until: None,
+		}
+	}
+}
+
+fn note_of((id, rule, event_id, tier, body_sealed, data_key_fp, Json(gmbs), link, photo, Json(buttons), noted_at): NoteRow) -> eyre::Result<Note> {
+	Ok(Note {
+		id,
+		rule: rule.parse().wrap_err_with(|| format!("note {id}'s rule"))?,
+		event_id,
+		tier: tier.map(|t| t.parse()).transpose().wrap_err_with(|| format!("note {id}'s tier"))?,
+		body_sealed,
+		data_key_fp,
+		gmbs,
+		link,
+		photo,
+		buttons,
+		noted_at: from_db(noted_at)?,
+	})
 }

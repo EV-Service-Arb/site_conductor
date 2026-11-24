@@ -267,6 +267,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/alerts/webhooks", FRESH.needs(Own::Credentials), add_webhook),
 		ApiRoute::new(M::PUT, "/alerts/destinations/{id}", USER, set_destination),
 		ApiRoute::new(M::POST, "/alerts/destinations/{id}/test", USER, test_destination),
+		ApiRoute::new(M::POST, "/alerts/destinations/{id}/left", USER, left_browser),
 		ApiRoute::new(M::DELETE, "/alerts/destinations/{id}", USER, remove_destination),
 	]
 }
@@ -301,6 +302,12 @@ async fn answer(panel: &Panel, a: Option<&Alerting>, caller: &Caller) -> ApiResu
 
 /// How the caller's alerts are set: their destinations, each rule's tier, their hours.
 async fn alerts(State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>) -> ApiResult<Json<AlertsDto>> {
+	let mails = a.as_ref().is_some_and(|a| a.hub.outlets.email.is_some());
+	if mails && caller.email_verified && caller.actor.is_none() {
+		panel
+			.alerts_start_mail(caller.user_id, &caller.permissions, display(&caller), &caller.email.to_lowercase(), Timestamp::now())
+			.await?;
+	}
 	Ok(Json(answer(&panel, a.as_ref(), &caller).await?))
 }
 
@@ -320,19 +327,22 @@ pub(crate) struct InboxQuery {
 	tier: Option<Tier>,
 	#[serde(default)]
 	unread: bool,
-	/// About this GBP.
-	gmb: Option<i64>,
+	family: Option<Family>,
+	/// GBPs' ids, comma-separated: those about one of these, or about none of the caller's.
+	gmbs: Option<String>,
 	/// Older than this one.
 	before: Option<i64>,
 }
 
 /// The caller's alerts, newest first, 50 at a time.
 async fn alert_inbox(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<InboxQuery>) -> ApiResult<Json<InboxDto>> {
+	let gmbs = q.gmbs.map(|ids| ids.split(',').filter(|id| !id.is_empty()).map(str::parse).collect::<Result<Vec<i64>, _>>());
 	let sought = Sought {
 		id: None,
 		tier: q.tier,
 		unread: q.unread,
-		gmb: q.gmb,
+		family: q.family,
+		gmbs: gmbs.transpose().map_err(|e| Refused::Invalid(format!("gmbs: {e}")))?,
 		before: q.before,
 	};
 	let alerts = panel.alerts_inbox(caller.user_id, &caller.permissions, &sought).await?;
@@ -348,10 +358,7 @@ async fn alert_inbox(State(panel): State<Panel>, Extension(caller): Extension<Ca
 }
 
 async fn one(panel: &Panel, caller: &Caller, id: i64) -> ApiResult<Alert> {
-	let sought = Sought {
-		id: Some(id),
-		..Sought::default()
-	};
+	let sought = Sought { id: Some(id), ..Sought::default() };
 	let found = panel.alerts_inbox(caller.user_id, &caller.permissions, &sought).await?;
 	Ok(found.into_iter().next().ok_or(Refused::NotFound)?)
 }
@@ -510,7 +517,16 @@ async fn set_destination(
 
 /// Sends a test message to a destination; one that arrives revives it. 400 with what its network said.
 async fn test_destination(State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<NoContent> {
-	hub(a)?.hub.test(caller.user_id, id).await??;
+	hub(a)?.hub.test(caller.user_id, id, Timestamp::now()).await??;
+	Ok(NoContent)
+}
+
+/// The browser behind a push destination is signed out of: nothing goes there until it subscribes
+/// again. 404 no such push destination.
+async fn left_browser(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<NoContent> {
+	if !panel.alerts_push_left(caller.user_id, id, Timestamp::now()).await? {
+		return Err(Refused::NotFound.into());
+	}
 	Ok(NoContent)
 }
 
@@ -577,7 +593,13 @@ pub(crate) struct AddEmail {
 }
 
 /// Adds the caller's own verified address as a destination; any other is mailed a link that does.
-async fn add_email(_: Outward, State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddEmail>) -> ApiResult<Created<AlertsDto>> {
+async fn add_email(
+	_: Outward,
+	State(panel): State<Panel>,
+	State(a): State<Option<Alerting>>,
+	Extension(caller): Extension<Caller>,
+	Body(b): Body<AddEmail>,
+) -> ApiResult<Created<AlertsDto>> {
 	let a = hub(a)?;
 	let address = b.address.trim().to_lowercase();
 	if caller.email_verified && address == caller.email.to_lowercase() {
@@ -681,7 +703,18 @@ async fn add_push(_: Outward, State(panel): State<Panel>, State(a): State<Option
 		auth: b.auth,
 	};
 	let a = hub(a)?;
-	match a.hub.add(caller.user_id, &caller.permissions, display(&caller), &to, one_line(&b.title, MAX_NAME).as_str(), Timestamp::now()).await? {
+	match a
+		.hub
+		.add(
+			caller.user_id,
+			&caller.permissions,
+			display(&caller),
+			&to,
+			one_line(&b.title, MAX_NAME).as_str(),
+			Timestamp::now(),
+		)
+		.await?
+	{
 		Ok(_) | Err(Refused::Conflict(_)) => Ok(Created(answer(&panel, Some(&a), &caller).await?)),
 		Err(refused) => Err(refused.into()),
 	}
@@ -731,9 +764,9 @@ struct Unsubscribe {
 }
 
 async fn unsubscribe(State(panel): State<Panel>, Query(q): Query<Unsubscribe>) -> Response {
-	match panel.alerts_unsubscribe(&q.token).await {
+	match panel.alerts_unsubscribe(&q.token, Timestamp::now()).await {
 		Ok(true) => "Unsubscribed.".into_response(),
-		Ok(false) => (StatusCode::BAD_REQUEST, "Not a link of ours.").into_response(),
+		Ok(false) => (StatusCode::BAD_REQUEST, "Not a link of ours, or an old one: set your alerts in the panel.").into_response(),
 		Err(e) => {
 			crate::report(&e, "alerts: an unsubscription");
 			StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -745,7 +778,14 @@ async fn unsubscribe(State(panel): State<Panel>, Query(q): Query<Unsubscribe>) -
 async fn unsubscribe_page() -> Response {
 	const PAGE: &str = "<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width\"><title>Unsubscribe</title>\
 		<form method=post><p>Stop these alerts to this address?<p><button>Unsubscribe</button></form>";
-	([(header::CONTENT_TYPE, "text/html; charset=utf-8"), (header::CONTENT_SECURITY_POLICY, "default-src 'none'; form-action 'self'; frame-ancestors 'none'")], PAGE).into_response()
+	(
+		[
+			(header::CONTENT_TYPE, "text/html; charset=utf-8"),
+			(header::CONTENT_SECURITY_POLICY, "default-src 'none'; form-action 'self'; frame-ancestors 'none'"),
+		],
+		PAGE,
+	)
+		.into_response()
 }
 
 // ── the hub's work in `serve` ───────────────────────────────────────────────────────────

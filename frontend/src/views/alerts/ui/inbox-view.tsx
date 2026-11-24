@@ -2,39 +2,37 @@
 
 import { Button, SectionLabel, Skeleton, Switch, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
 import { useResource } from "@evinvest/api/react";
-import { ArrowLeft, Bell, CheckCheck, ChevronRight, Inbox, Settings, SlidersHorizontal } from "lucide-react";
+import { ArrowLeft, CheckCheck, ChevronRight, Inbox, Settings, SlidersHorizontal } from "lucide-react";
 import { type KeyboardEvent, useState } from "react";
 
 import { AlertRow, FAMILIES, FAMILY_ICON, FAMILY_NAME, TIERS, TIER_LOOK, TIER_NAME, alerts as keys, readAll, useUnread } from "@/entities/alerts";
-import { inScope, useGmails, useScope } from "@/entities/gmb";
+import { type AlertsAt, inScope, openWindow, useGmails, useScope } from "@/entities/gmb";
 import { api, ok } from "@/shared/api";
 import type { Alert, AlertInbox, Family, Tier } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
-import { type Params, ViewLink, go, useAt } from "@/shared/lib/location";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
+import { useButtonSize } from "@/shared/ui/touch";
 
 import { AlertDetail } from "./alert-detail";
 
-type Sought = Params<"alerts"> & { unread: boolean };
+type At = Exclude<AlertsAt, { settings: true }>;
+type Sought = At & { unread: boolean };
 
 /**
  * The caller's alerts: what to look among, the list by day, and the one opened — three panes, two or one by the room there is
  * (the outline and the assistant take theirs); in one, the list or the one opened.
  */
-export function AlertsView() {
-  const at = useAt();
-  if (at.view !== "alerts") throw new Error("the alerts' view on another's");
-  const sought = { ...at.params, unread: at.params.unread ?? false };
+export function Alerts({ at, page }: { at: At; page: boolean }) {
+  const sought = { ...at, unread: at.unread ?? false };
   const opened = sought.open;
   return (
-    <div className="@container flex min-h-0 flex-1 flex-col">
-      <Head className={cn(opened !== undefined && "@max-xl:hidden")} />
+    <div className={cn("@container flex flex-col", page ? "min-h-0 flex-1" : "h-[min(40rem,75svh)]")}>
       <div className="flex min-h-0 flex-1">
         <Filters sought={sought} />
         <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col @xl:max-w-72 @xl:border-r @xl:border-border @3xl:max-w-96 @5xl:max-w-110", opened !== undefined && "@max-xl:hidden")}>
           <Chips sought={sought} />
-          <List key={`${sought.tier ?? ""} ${sought.unread}`} sought={sought} />
+          <Narrowed sought={sought} />
         </div>
         <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", opened === undefined && "@max-xl:hidden")}>
           {opened === undefined ? (
@@ -51,26 +49,10 @@ export function AlertsView() {
   );
 }
 
-/** Keys of the view, those left out as they are: an `undefined` takes one out. */
-function seek(sought: Sought, change: { [K in keyof Sought]?: Sought[K] | undefined }): void {
-  const next = Object.fromEntries(Object.entries({ ...sought, open: undefined, ...change }).filter(([, v]) => v !== undefined)) as Sought;
-  go({ view: "alerts", params: next }, "replace");
-}
-
-function Back({ sought }: { sought: Sought }) {
+/** The window's name, and what is done from anywhere in it. */
+export function AlertsTitle({ at }: { at: AlertsAt }) {
   const t = useT();
-  return (
-    <div className="flex items-center gap-1 border-b border-border px-2 py-1.5 @xl:hidden">
-      <Button type="button" variant="ghost" size="touch" icon aria-label={t(keys.back, "Back to the list")} onClick={() => seek(sought, {})}>
-        <ArrowLeft aria-hidden className="size-5" />
-      </Button>
-      <p className="text-base font-semibold text-ink">{t(keys.title, "Alerts")}</p>
-    </div>
-  );
-}
-
-function Head({ className }: { className?: string }) {
-  const t = useT();
+  const size = useButtonSize();
   const unread = useUnread();
   const [busy, setBusy] = useState(false);
   const newest = unread.status === "ok" ? unread.data.alerts[0]?.id : undefined;
@@ -85,21 +67,43 @@ function Head({ className }: { className?: string }) {
       unread.reload();
     }
   };
+  if (at.settings === true)
+    return (
+      <span className="flex min-w-0 flex-1 items-center gap-1">
+        <Button type="button" variant="ghost" size={size("sm")} icon aria-label={t(keys.inbox, "Inbox")} onClick={() => openWindow({ kind: "alerts", at: {} })}>
+          <ArrowLeft aria-hidden />
+        </Button>
+        <span className="truncate">{t(keys.settings.title, "Alert settings")}</span>
+      </span>
+    );
   return (
-    <header className={cn("flex items-center gap-2 border-b border-border px-4 py-2", className)}>
-      <Bell aria-hidden className="size-4 text-ink-soft" />
-      <h1 className="flex-1 text-base font-semibold text-ink">{t(keys.title, "Alerts")}</h1>
-      <Button type="button" variant="ghost" size="sm" disabled={busy || newest === undefined} onClick={() => newest !== undefined && void all(newest)}>
-        <CheckCheck aria-hidden className="size-4" />
-        <span className="@max-xl:sr-only">{t(keys.readAll, "Mark all read")}</span>
+    <span className="flex min-w-0 flex-1 items-center gap-1">
+      <span className="flex-1 truncate">{t(keys.title, "Alerts")}</span>
+      <Button type="button" variant="ghost" size={size("sm")} icon disabled={busy || newest === undefined} aria-label={t(keys.readAll, "Mark all read")} title={t(keys.readAll, "Mark all read")} onClick={() => newest !== undefined && void all(newest)}>
+        <CheckCheck aria-hidden />
       </Button>
-      <Button asChild variant="outline" size="sm">
-        <ViewLink to={{ view: "alert_settings", params: {} }}>
-          <Settings aria-hidden className="size-4" />
-          <span className="@max-xl:sr-only">{t(keys.settings, "Settings")}</span>
-        </ViewLink>
+      <Button type="button" variant="ghost" size={size("sm")} icon aria-label={t(keys.settings.title, "Alert settings")} title={t(keys.settings.title, "Alert settings")} onClick={() => openWindow({ kind: "alerts", at: { settings: true } })}>
+        <Settings aria-hidden />
       </Button>
-    </header>
+    </span>
+  );
+}
+
+/** The inbox narrowed otherwise: what is left out by the change is as it was. */
+function seek(sought: Sought, change: { [K in keyof Sought]?: Sought[K] | undefined }): void {
+  const next = Object.fromEntries(Object.entries({ ...sought, open: undefined, ...change }).filter(([, v]) => v !== undefined)) as At;
+  openWindow({ kind: "alerts", at: next }, "replace");
+}
+
+function Back({ sought }: { sought: Sought }) {
+  const t = useT();
+  return (
+    <div className="flex items-center gap-1 border-b border-border px-2 py-1.5 @xl:hidden">
+      <Button type="button" variant="ghost" size="touch" icon aria-label={t(keys.back, "Back to the list")} onClick={() => seek(sought, {})}>
+        <ArrowLeft aria-hidden className="size-5" />
+      </Button>
+      <p className="text-sm text-ink-soft">{t(keys.back, "Back to the list")}</p>
+    </div>
   );
 }
 
@@ -204,15 +208,29 @@ function Chips({ sought }: { sought: Sought }) {
   );
 }
 
-const query = (tier: Tier | undefined, unread: boolean) => ({ unread, ...(tier !== undefined && { tier }) });
+interface Query {
+  unread: boolean;
+  tier?: Tier;
+  family?: Family;
+  gmbs?: string;
+}
 
-/** The server's page, the older ones after it; family and the outline's scope narrow what is loaded. */
-function List({ sought }: { sought: Sought }) {
-  const t = useT();
-  const locale = useLocale();
+/** The list, anew for each way it is narrowed; the outline's scope narrows it by the GBPs in it. */
+function Narrowed({ sought }: { sought: Sought }) {
   const scope = useScope();
   const gmails = useGmails();
-  const first = useResource(api, "/alerts/inbox", { params: { query: query(sought.tier, sought.unread) } });
+  const scoped = scope.gmails !== null || scope.categories !== null || scope.brands !== null;
+  if (scoped && gmails.status !== "ok") return <Skeleton className="m-3 h-60" />;
+  const gmbs = scoped && gmails.status === "ok" ? gmails.data.gmbs.filter((b) => inScope(b, scope)).map((b) => b.id) : null;
+  const query: Query = { unread: sought.unread, ...(sought.tier !== undefined && { tier: sought.tier }), ...(sought.family !== undefined && { family: sought.family }), ...(gmbs !== null && { gmbs: gmbs.join(",") }) };
+  return <List key={JSON.stringify(query)} sought={sought} query={query} />;
+}
+
+/** The server's page, the older ones after it. */
+function List({ sought, query }: { sought: Sought; query: Query }) {
+  const t = useT();
+  const locale = useLocale();
+  const first = useResource(api, "/alerts/inbox", { params: { query } });
   const [older, setOlder] = useState<readonly Alert[]>([]);
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -225,18 +243,12 @@ function List({ sought }: { sought: Sought }) {
     );
   const head = first.data.alerts;
   const all = [...head, ...older.filter((o) => !head.some((h) => h.id === o.id))];
-  const gmbs = gmails.status === "ok" ? gmails.data.gmbs : null;
-  const shown = all.filter((a) => {
-    if (sought.family !== undefined && a.family !== sought.family) return false;
-    const named = gmbs?.filter((b) => a.gmbs.includes(b.id)) ?? [];
-    return named.length === 0 || named.some((b) => inScope(b, scope));
-  });
   const last = all.at(-1);
   const load = async () => {
     if (last === undefined) return;
     setBusy(true);
     try {
-      const page = await ok(api.GET("/alerts/inbox", { params: { query: { ...query(sought.tier, sought.unread), before: last.id } } }));
+      const page = await ok(api.GET("/alerts/inbox", { params: { query: { ...query, before: last.id } } }));
       setOlder((was) => [...was, ...page.alerts]);
       if (page.alerts.length < PAGE) setOver(true);
     } catch (e) {
@@ -245,10 +257,10 @@ function List({ sought }: { sought: Sought }) {
       setBusy(false);
     }
   };
-  const days = byDay(shown, locale, t(keys.today, "Today"), t(keys.yesterday, "Yesterday"));
+  const days = byDay(all, locale, t(keys.today, "Today"), t(keys.yesterday, "Yesterday"));
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-1.5" onKeyDown={step}>
-      {shown.length === 0 && <p className="px-3 py-10 text-center text-sm text-ink-soft">{sought.unread ? t(keys.nothing, "Nothing unread") : t(keys.none, "No alerts here")}</p>}
+      {all.length === 0 && <p className="px-3 py-10 text-center text-sm text-ink-soft">{sought.unread ? t(keys.nothing, "Nothing unread") : t(keys.none, "No alerts here")}</p>}
       {days.map(({ day, alerts }) => (
         <section key={day}>
           <SectionLabel as="h2" className="px-2.5 pt-3 pb-1.5">
@@ -256,7 +268,7 @@ function List({ sought }: { sought: Sought }) {
           </SectionLabel>
           <div className="flex flex-col gap-0.5">
             {alerts.map((a) => (
-              <AlertRow key={a.id} alert={a} current={a.id === sought.open} />
+              <AlertRow key={a.id} alert={a} within={sought} current={a.id === sought.open} />
             ))}
           </div>
         </section>

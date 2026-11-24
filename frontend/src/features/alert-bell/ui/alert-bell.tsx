@@ -1,17 +1,24 @@
 "use client";
 
 import { Button, NavDot, Popover, PopoverContent, PopoverTrigger, Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, cn } from "@evinvest/uikit";
+import { useResource } from "@evinvest/api/react";
 import { Bell, BellOff, Check, CheckCheck, ChevronRight, Inbox, Moon, Settings, Unplug } from "lucide-react";
 import { type ReactNode, useState } from "react";
 
-import { AlertRow, TIERS, TIER_LOOK, TIER_NAME, alerts as keys, readAll, setHours, unreached, useAlerts, useQuiet, useUnread } from "@/entities/alerts";
+import { AlertRow, TIERS, TIER_LOOK, TIER_NAME, When, alerts as keys, lines, readAll, setHours, unreached, useAlerts, useNamedGmbs, useQuiet, useUnread } from "@/entities/alerts";
+import { type WinKey, openWindow, pageOf } from "@/entities/gmb";
 import { ConnectTelegram, PushHere } from "@/features/add-destination";
+import { api } from "@/shared/api";
 import type { AlertInbox, Tier } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { ViewLink } from "@/shared/lib/location";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
+
+const INBOX: WinKey = { kind: "alerts", at: {} };
+const SETTINGS: WinKey = { kind: "alerts", at: { settings: true } };
+const unreadOf = (tier: Tier): WinKey => ({ kind: "alerts", at: { tier, unread: true } });
 
 /** Rows a tier shows here before its heading only counts them. */
 const SHOWN: Record<Tier, number> = { urgent: 5, important: 4, info: 3 };
@@ -154,10 +161,18 @@ function Standing({ busy, act, onClose }: { busy: boolean; act: Act; onClose: ()
 
 function Nothing() {
   const t = useT();
+  const gmbs = useNamedGmbs();
+  const inbox = useResource(api, "/alerts/inbox");
+  const last = inbox.status === "ok" ? inbox.data.alerts[0] : undefined;
   return (
     <div className="flex flex-col items-center gap-2 px-4 py-12 text-center">
       <Check aria-hidden className="size-5 text-positive" />
       <p className="text-sm font-medium text-ink">{t(keys.nothing, "Nothing unread")}</p>
+      {last !== undefined && (
+        <p className="max-w-full truncate text-xs text-ink-soft">
+          {t(keys.last, "Last: {what}", { what: lines(last, gmbs).title })} · <When at={last.at} />
+        </p>
+      )}
     </div>
   );
 }
@@ -173,7 +188,8 @@ function Groups({ inbox, onOpen }: { inbox: AlertInbox; onOpen: () => void }) {
         return (
           <section key={tier} aria-label={TIER_NAME[tier](t)}>
             <ViewLink
-              to={{ view: "alerts", params: { tier, unread: true } }}
+              to={pageOf(unreadOf(tier))}
+              open={() => openWindow(unreadOf(tier))}
               onClick={onOpen}
               className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-sm outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring"
             >
@@ -205,11 +221,11 @@ function Foot({ busy, act, onClose }: { busy: boolean; act: Act; onClose: () => 
   const snooze = () => void act(() => setHours(hours, { snoozed_until: new Date(Date.now() + 3_600_000).toISOString() }).then(alerts.reload));
   return (
     <div className="flex items-center gap-1 border-t border-border px-2 py-2">
-      <ViewLink to={{ view: "alerts", params: {} }} onClick={onClose} className={FOOT}>
+      <ViewLink to={pageOf(INBOX)} open={() => openWindow(INBOX)} onClick={onClose} className={FOOT}>
         <Inbox aria-hidden className="size-4" />
         {t(keys.all, "All alerts")}
       </ViewLink>
-      <ViewLink to={{ view: "alert_settings", params: {} }} onClick={onClose} className={FOOT}>
+      <ViewLink to={pageOf(SETTINGS)} open={() => openWindow(SETTINGS)} onClick={onClose} className={FOOT}>
         <Settings aria-hidden className="size-4" />
         {t(keys.settings, "Settings")}
       </ViewLink>

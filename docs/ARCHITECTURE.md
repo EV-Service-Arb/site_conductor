@@ -594,6 +594,7 @@ POST   /alerts/email{,/confirm}                  own:credentials, fresh
 POST   /alerts/{discord,slack,push,webhooks}   own:credentials, fresh
 PUT    /alerts/destinations/{id}
 POST   /alerts/destinations/{id}/test
+POST   /alerts/destinations/{id}/left           a push's browser is signed out of
 DELETE /alerts/destinations/{id}
 GET    /gmails
 POST   /gmails
@@ -1375,7 +1376,9 @@ a note's: the person's own for the rule, else the note's, else the rule's
 rule                                                          from            audience                              tier
 new_lead, contact_overdue                                     sites           sa:sites:work:leads:edit              urgent
 booked                                                        sites           sa:sites:work:leads:edit              important
+invoice_lost, calendar_lost                                   sites           …invoices:create, …places:edit        important
 payment_received                                              sites           sa:admin:sources:manage               info
+invoice_paid                                                  sites           sa:sites:work:invoices:create         info
 review_gone                                                   review_archive  the owners of the GMBs it names       important
 review_new, review_changed, review_reappeared, scan_failed    review_archive  (the same)                            info
 google_mail, connection_lost                                  conductor       the gmail's owner                     important
@@ -1403,7 +1406,8 @@ feed (2 s)        GET <service>/api/conductor/notifications?after=<cursor>&limit
                   as its rule says, its buttons callable) and told, the cursor moved to the page's
                   `next`; a note that fails fails the page, the cursor stays (loud, never skipped); 404:
                   a service not cut over, said once, asked again every 60 s
-own               told in the write that made it so, or found due every 2 s (`own_alerts`); Google's mail
+own               told in the write that made it so, or found due every 2 s (`own_alerts`); a gmail's grant,
+                  Maps key and proxy asked daily, failing every 15 min, told when they fail twice running; Google's mail
                   every 60 s: a case turned to a person or to a specialist of Google's, or settled in it, once
                   per message and turn, for 6 days; the oldest an hour unread
 told              once per (rule, event): kept 30 days, sealed; in the inbox of each person of its
@@ -1431,10 +1435,11 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   only after `getChat` sees it, `getChatMember` says the user's own Telegram account (their
   private chat's id; linked first) administers it, and a test went out there: a refusal stores
   nothing. One destination per chat and topic.
-- **Mail** goes through `SMTP_*`; each carries a one-click unsubscribe (RFC 8058,
+- **Mail** goes through `SMTP_*`; the account's own address is a destination from the first read of
+  the settings with mail on, once. Each carries a one-click unsubscribe (RFC 8058, 90 days,
   `POST /api/alerts/unsubscribe?token=`, open: the sealed token is its only say; a GET is a page with the
   button, since mail scanners open links). Another address is proved by a link mailed there and opened
-  signed in as who asked: at most 5 an hour by one person, 3 a day to one address.
+  signed in as who asked: at most 5 an hour by one person, 3 a day to one address. Tests: 10 a minute by one person.
 - **Push** is to a key made of `PANEL_DATA_KEY`; a browser is one person's, whoever subscribed last.
 - **A webhook** is only ever connected to at a public address, and never redirected; a delivery is
   signed `x-signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>">`.

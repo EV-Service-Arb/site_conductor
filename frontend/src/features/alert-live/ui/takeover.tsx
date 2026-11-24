@@ -5,6 +5,7 @@ import { ExternalLink, Phone, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AlertButtons, alerts as keys, lines, phoneOf, readAlert, useNamedGmbs, useNow, useUnread } from "@/entities/alerts";
+import { openWindow } from "@/entities/gmb";
 import type { Alert } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
 import { go } from "@/shared/lib/location";
@@ -69,7 +70,8 @@ function Actions({ alert, onFold }: { alert: Alert; onFold: () => void }) {
   const phone = phoneOf(alert.text);
   const open = () => {
     void readAlert(alert.id).then(unread.reload, (e: unknown) => notifyFailure(e, t));
-    go(alert.link ?? { view: "alerts", params: { open: alert.id } });
+    if (alert.link === null) openWindow({ kind: "alerts", at: { open: alert.id } });
+    else go(alert.link);
   };
   return (
     <span className="flex shrink-0 items-center gap-2 pl-1">

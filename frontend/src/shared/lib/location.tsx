@@ -158,15 +158,16 @@ export function usePath(): string {
   return useSyncExternalStore(subscribe, () => window.location.pathname, () => "/");
 }
 
-/** A link to a view, by name or by its href: a plain click moves the store, any other the browser's. */
-export function ViewLink({ to, href: given, onClick, ...rest }: ({ to: At; href?: never } | { href: string; to?: never }) & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) {
+/** A link to a view, by name or by its href: a plain click moves the store (or is `open`'s, a window shown otherwise than as its page), any other the browser's. */
+export function ViewLink({ to, href: given, open, onClick, ...rest }: ({ to: At; href?: never } | { href: string; to?: never }) & { open?: (() => void) | undefined } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) {
   const carried = useCarried();
   const target = to === undefined ? given : href(VIEWS, to, carried);
   const click = (e: MouseEvent<HTMLAnchorElement>) => {
     onClick?.(e);
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || rest.target === "_blank") return;
     e.preventDefault();
-    go(target);
+    if (open === undefined) go(target);
+    else open();
   };
   return <a href={target} onClick={click} {...rest} />;
 }

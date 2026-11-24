@@ -3,13 +3,16 @@
 import { useSyncExternalStore } from "react";
 
 import { type Country, type Tab, countryValues } from "@/shared/api/schema";
-import { type At, type Home, go, setHome, useAt, viewed } from "@/shared/lib/location";
+import { type At, type Home, type Params, go, setHome, useAt, viewed } from "@/shared/lib/location";
 
 /** Where in a review kit: `kit` its slug (`""`: the list); a GBP of it, or a pool (`<gcid>.<country>`). */
 export type KitAt = { kit: string; gmb?: number | undefined; pool?: string | undefined };
 
 /** What the Add a GBP panel opens with: the outline's gmail and trade, when it is scoped to one. */
 export type Adding = NonNullable<Home["add"]>;
+
+/** Where in the alerts' window: the inbox as narrowed, the one opened; or the settings. */
+export type AlertsAt = { settings: true } | (Params<"alerts"> & { settings?: never });
 
 /** A window over the map, or as its own page: what it shows, its tab and where in it. */
 export type WinKey =
@@ -20,13 +23,14 @@ export type WinKey =
   | { kind: "categories" }
   | { kind: "library"; listing: number | null }
   | { kind: "trash" }
+  | { kind: "alerts"; at: AlertsAt }
   | { kind: "add"; at: Adding }
   | { kind: "kit"; at: KitAt };
 export type Kind = WinKey["kind"];
 export type KeyOf<K extends Kind> = Extract<WinKey, { kind: K }>;
 
 /** Every Home key a window reads: one floats at a time, so opening one writes its own and clears the rest. */
-const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, step: undefined, categories: undefined, library: undefined, trash: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
+const NO_WINDOW = { gmb: undefined, trade: undefined, country: undefined, brand: undefined, account: undefined, tab: undefined, step: undefined, categories: undefined, library: undefined, trash: undefined, alerts: undefined, alert: undefined, alert_tier: undefined, alert_family: undefined, alert_unread: undefined, alert_settings: undefined, add: undefined, kit: undefined, kit_gmb: undefined, kit_pool: undefined, kit_edit: undefined } as const;
 
 interface Route<K extends Kind> {
   fromHome(h: Home): KeyOf<K> | null;
@@ -108,6 +112,20 @@ export const WINDOWS = {
     fromPage: (at) => (at.view === "trash" ? { kind: "trash" } : null),
     subject: () => "trash",
   },
+  alerts: {
+    fromHome: (h) => {
+      if (h.alerts !== true) return null;
+      if (h.alert_settings === true) return { kind: "alerts", at: { settings: true } };
+      return { kind: "alerts", at: { ...(h.alert !== undefined && { open: h.alert }), ...(h.alert_tier !== undefined && { tier: h.alert_tier }), ...(h.alert_family !== undefined && { family: h.alert_family }), ...(h.alert_unread !== undefined && { unread: h.alert_unread }) } };
+    },
+    toHome: ({ at }) => (at.settings === true ? { alerts: true, alert_settings: true } : { alerts: true, alert: at.open, alert_tier: at.tier, alert_family: at.family, alert_unread: at.unread }),
+    page: ({ at }) => (at.settings === true ? { view: "alert_settings", params: {} } : { view: "alerts", params: at }),
+    fromPage: (at) => {
+      if (at.view === "alert_settings") return { kind: "alerts", at: { settings: true } };
+      return at.view === "alerts" ? { kind: "alerts", at: at.params } : null;
+    },
+    subject: () => "alerts",
+  },
   add: {
     fromHome: (h) => (h.add !== undefined ? { kind: "add", at: h.add } : null),
     toHome: (k) => ({ add: k.at }),
@@ -178,8 +196,8 @@ export function pageWindow(k: WinKey, how: "push" | "replace" = "push"): void {
 }
 
 /** As its page where a window's page is shown, else over the map. */
-export function openWindow(k: WinKey): void {
-  if (shownAt(viewed().at)?.page === true) return pageWindow(k);
+export function openWindow(k: WinKey, how: "push" | "replace" = "push"): void {
+  if (shownAt(viewed().at)?.page === true) return pageWindow(k, how);
   floatWindow(k);
 }
 

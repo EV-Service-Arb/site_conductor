@@ -25,7 +25,10 @@ const OFFER: Record<Method, { name: (t: T) => string; what: (t: T) => string }> 
   webhook: { name: () => "Webhook", what: (t) => t(keys.add.webhook, "signed JSON to your https address") },
 };
 
-/** + Add: the methods this server has, each one's step a dialog with one field or one button. */
+/** What a server's operator sets for it to have the method; the rest need nothing. */
+const NEEDS: { [K in Method]?: string } = { telegram: "TELEGRAM_BOT_TOKEN", email: "SMTP_PASSWORD" };
+
+/** + Add: every method, those this server lacks with why, each one's step a dialog with one field or one button. */
 export function AddDestination({ className }: { className?: string }) {
   const t = useT();
   const me = useMe();
@@ -34,12 +37,13 @@ export function AddDestination({ className }: { className?: string }) {
   const [adding, setAdding] = useState<Method | null>(null);
   if (alerts.status !== "ok" || !api.mayCall("post", "/alerts/email", me.permissions)) return null;
   const { data } = alerts;
-  const offered = METHODS.filter((k) => data.methods.includes(k) && (k !== "push" || (pushable() !== "no" && me.acting === null)));
+  const offered = METHODS.filter((k) => k !== "push" || (pushable() !== "no" && me.acting === null));
+  const admin = api.mayCall("get", "/sources", me.permissions);
   const done = () => {
     setAdding(null);
     alerts.reload();
   };
-  if (offered.length === 0) return <p className="text-sm text-ink-soft">{t(keys.off, "Nothing is set up on this server to reach you by.")}</p>;
+  if (data.methods.length === 0) return <p className="text-sm text-ink-soft">{t(keys.off, "Nothing is set up on this server to reach you by.")}</p>;
   return (
     <>
       <DropdownMenu>
@@ -52,12 +56,14 @@ export function AddDestination({ className }: { className?: string }) {
         <DropdownMenuContent align="start" className="w-80">
           {offered.map((k) => {
             const Icon = METHOD_ICON[k];
+            const off = !data.methods.includes(k);
+            const needs = NEEDS[k];
             return (
-              <DropdownMenuItem key={k} onClick={() => setAdding(k)} className="gap-3 py-2">
+              <DropdownMenuItem key={k} disabled={off} onClick={() => setAdding(k)} className="gap-3 py-2">
                 <Icon className="size-4 shrink-0" />
                 <span className="flex min-w-0 flex-col">
                   <span className="text-ink">{OFFER[k].name(t)}</span>
-                  <span className="text-xs text-ink-soft">{OFFER[k].what(t)}</span>
+                  <span className="text-xs text-ink-soft">{!off ? OFFER[k].what(t) : admin && needs !== undefined ? t(keys.add.needs, "off on this server: it has no {variable}", { variable: needs }) : t(keys.add.notHere, "off on this server: ask an admin to set it up")}</span>
                 </span>
               </DropdownMenuItem>
             );

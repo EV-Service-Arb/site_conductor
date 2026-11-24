@@ -2,13 +2,15 @@
 
 import { useResource } from "@evinvest/api/react";
 import { Skeleton } from "@evinvest/uikit";
-import { type LucideIcon, Library, Mail, MapPin, Plus, QrCode, Store, Tag, Trash2 } from "lucide-react";
+import { type LucideIcon, Bell, Library, Mail, MapPin, Plus, QrCode, Store, Tag, Trash2 } from "lucide-react";
 import { type ComponentType, useEffect } from "react";
 
+import { alerts as alertKeys } from "@/entities/alerts";
 import { type KeyOf, type Kind, type WinKey, closeWindow, categoryName, gmbs as gmbsKeys, googleName, kit as kitKeys, narrowed, scopeKeys, trades as tradesKeys, trash as trashKeys, under, useBrands, useCategories, useGmails, useTrade, useTrades, useTrash } from "@/entities/gmb";
 import { AddPanel } from "@/features/add-gmb";
 import { api } from "@/shared/api";
 import { type T, useLocale, useT } from "@/shared/i18n";
+import { AlertSettings, Alerts, AlertsTitle } from "@/views/alerts";
 import { AccountWindow } from "@/views/home/ui/account-window";
 import { BrandWindow } from "@/views/home/ui/brand-window";
 import { GbpBody, GbpTitle } from "@/views/home/ui/gbp-window";
@@ -134,6 +136,12 @@ export const FACES = {
     },
     Body: TrashBody,
   },
+  alerts: {
+    icon: Bell,
+    width: (k) => (k.at.settings === true ? 1000 : 900),
+    Title: ({ k }) => <AlertsTitle at={k.at} />,
+    Body: ({ k, page }) => (k.at.settings === true ? <AlertSettings page={page} /> : <Alerts at={k.at} page={page} />),
+  },
   add: {
     icon: Plus,
     width: 448,
@@ -158,6 +166,7 @@ const LABEL = {
   categories: (t) => t(scopeKeys.categories, "Categories"),
   library: (t) => t(tradesKeys.library, "Library"),
   trash: (t) => t(trashKeys.title, "Trash"),
+  alerts: (t) => t(alertKeys.title, "Alerts"),
   add: (t) => t(gmbsKeys.gmb.add, "Add a GBP"),
   kits: (t) => t(kitKeys.list, "Review kits"),
 } satisfies Record<string, (t: T) => string>;
@@ -189,6 +198,7 @@ export function useWindowLabel(): (k: WinKey) => string {
       case "categories":
       case "library":
       case "trash":
+      case "alerts":
       case "add":
         return LABEL[k.kind](t);
       case "kit":

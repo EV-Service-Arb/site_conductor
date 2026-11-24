@@ -11,7 +11,7 @@ export { ISSUES, ISSUE_NAME, type Issue, type Tags, issueCounts, issueOf, issueT
 export { type Listed, byView, narrowed, under } from "./model/narrow";
 export { readyCount } from "./model/readiness";
 export { type OnMap, draftAt, openOrFocus, setOnMap, useOnMap } from "./model/on-map";
-export { type Adding, type KeyOf, type Kind, type KitAt, type Shown, type WinKey, WINDOWS, closeWindow, editKit, floatWindow, hideWindow, keepOpen, openWindow, pageOf, pageWindow, peek, poolOf, shownAt, subjectOf, useKitEdit, useOpenWindows, usePeeked, useShown } from "./model/windows";
+export { type Adding, type AlertsAt, type KeyOf, type Kind, type KitAt, type Shown, type WinKey, WINDOWS, closeWindow, editKit, floatWindow, hideWindow, keepOpen, openWindow, pageOf, pageWindow, peek, poolOf, shownAt, subjectOf, useKitEdit, useOpenWindows, usePeeked, useShown } from "./model/windows";
 export { type Pattern, type Scope, chooseBrandScope, chooseCategoryScope, chooseGmailScope, covers, inCategories, inScope, useScope } from "./model/scope";
 export { PublishSelection, type Selection, select, setFilter, setOnly, useSelection } from "./model/selection";
 export { HeadBadges, TradeName, TradePicker } from "./ui/trade-picker";

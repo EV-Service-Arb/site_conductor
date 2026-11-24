@@ -46,6 +46,9 @@ const PROOFS_PER_USER: i64 = 5;
 /// And an address is mailed in a day, whoever asks.
 const PROOFS_PER_ADDRESS: i64 = 3;
 
+/// Tests sent for a person in a minute: an added address's and each asked for.
+const TESTS_PER_MINUTE: i64 = 10;
+
 /// What one delivery pass did.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct Delivered {
@@ -145,7 +148,7 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 			},
 		};
 		if destination.method == Method::Email {
-			message.unsubscribe = Some(self.unsubscribe(destination.id)?);
+			message.unsubscribe = Some(self.unsubscribe(destination.id, now)?);
 		}
 		let together = told.len() > 1;
 		let photo = first.note.photo.clone().filter(|_| !together).map(|p| (first.due.rule, p));
@@ -178,7 +181,13 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 			Err(f) => f,
 		};
 		let error = failure_text(&failure);
-		tracing::warn!(destination = destination.id, method = destination.method.as_ref(), messages = told.len(), error, "alerts: a send failed");
+		tracing::warn!(
+			destination = destination.id,
+			method = destination.method.as_ref(),
+			messages = told.len(),
+			error,
+			"alerts: a send failed"
+		);
 		for t in &told {
 			out = out.add(self.failed(&mut conn, &t.due, &destination, &failure, &error, now).await?);
 		}
@@ -212,10 +221,7 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 					db::dead(conn, to.id, error, now).await?;
 					tracing::info!(user_id = %d.user_id, destination = to.id, "alerts: nothing reaches a destination; marked dead");
 				}
-				Delivered {
-					dead: 1,
-					..Delivered::default()
-				}
+				Delivered { dead: 1, ..Delivered::default() }
 			}
 		})
 	}
@@ -269,16 +275,16 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		self.origin.join(path).expect("a path on an origin").into()
 	}
 
-	fn unsubscribe(&self, destination: i64) -> eyre::Result<Url> {
+	fn unsubscribe(&self, destination: i64, now: Timestamp) -> eyre::Result<Url> {
 		let mut url = self.origin.join("/api/alerts/unsubscribe").expect("a path on an origin");
-		url.query_pairs_mut().append_pair("token", &self.panel.alerts_unsubscribe_token(destination)?);
+		url.query_pairs_mut().append_pair("token", &self.panel.alerts_unsubscribe_token(destination, now)?);
 		Ok(url)
 	}
 
 	/// A destination of the user's at `address`, once a test went out there: a refusal stores nothing.
 	pub async fn add(&self, user: Uuid, permissions: &PermissionSet, display: &str, address: &Address, title: &str, now: Timestamp) -> eyre::Result<Result<i64, Refused>> {
-		if let Err(f) = self.outlets.send_to(address, &self.test_message()).await {
-			return Ok(Err(Refused::Invalid(format!("the test did not go out: {}", failure_text(&f)))));
+		if let Err(r) = self.send_test(user, address, now).await? {
+			return Ok(Err(r));
 		}
 		self.panel.alerts_add(user, permissions, display, address, title, now).await
 	}
@@ -288,9 +294,9 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 	pub async fn prove_email(&self, user: Uuid, address: &str, page: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		let tag = self.panel.key.alert_address_tag(Method::Email.as_ref(), address);
 		let mut tx = self.panel.store.begin_write().await?;
-		if !db::count_proof(&mut tx, user, &tag, PROOFS_PER_USER, PROOFS_PER_ADDRESS, now).await? {
+		let Some(proof) = db::count_proof(&mut tx, user, &tag, PROOFS_PER_USER, PROOFS_PER_ADDRESS, now).await? else {
 			return Ok(Err(Refused::Unavailable("too many links mailed: try again later".into())));
-		}
+		};
 		tx.commit().await.wrap_err("committing a proof")?;
 		let mut url = self.origin.join(page).expect("a path on an origin");
 		url.query_pairs_mut().append_pair("confirm", &self.panel.alerts_email_token(user, address, now)?);
@@ -302,9 +308,29 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 			..self.test_message()
 		};
 		let to = Address::Email { to: address.to_owned() };
-		Ok(match self.outlets.send_to(&to, &message).await {
+		let Err(f) = self.outlets.send_to(&to, &message).await else {
+			return Ok(Ok(()));
+		};
+		// a mailbox that is not there was asked of whoever names it: it counts
+		if !matches!(f, Failure::Gone(_)) {
+			let mut tx = self.panel.store.begin_write().await?;
+			db::uncount_proof(&mut tx, proof).await?;
+			tx.commit().await.wrap_err("committing a proof not mailed")?;
+		}
+		Ok(Err(Refused::Invalid(format!("the mail did not go out: {}", failure_text(&f)))))
+	}
+
+	/// A test to `address`, where it is the user's: refused with what its network said, and past
+	/// [`TESTS_PER_MINUTE`].
+	pub(crate) async fn send_test(&self, user: Uuid, address: &Address, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		let mut tx = self.panel.store.begin_write().await?;
+		if !db::count_test(&mut tx, user, TESTS_PER_MINUTE, now).await? {
+			return Ok(Err(Refused::Unavailable("too many tests: try again in a minute".into())));
+		}
+		tx.commit().await.wrap_err("committing a test")?;
+		Ok(match self.outlets.send_to(address, &self.test_message()).await {
 			Ok(_) => Ok(()),
-			Err(f) => Err(Refused::Invalid(format!("the mail did not go out: {}", failure_text(&f)))),
+			Err(f) => Err(Refused::Invalid(format!("the test did not go out: {}", failure_text(&f)))),
 		})
 	}
 
@@ -325,14 +351,14 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 	}
 
 	/// Sends a test to one of the user's destinations; one that arrives makes it reached again.
-	pub async fn test(&self, user: Uuid, destination: i64) -> eyre::Result<Result<(), Refused>> {
+	pub async fn test(&self, user: Uuid, destination: i64, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		let mut conn = self.panel.store.pool().acquire().await.wrap_err("a connection to test a destination")?;
 		let Some(d) = db::destination_of(&mut conn, user, destination).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
 		drop(conn);
-		if let Err(f) = self.outlets.send_to(&self.panel.alerts_address(&d)?, &self.test_message()).await {
-			return Ok(Err(Refused::Invalid(format!("the test did not go out: {}", failure_text(&f)))));
+		if let Err(r) = self.send_test(user, &self.panel.alerts_address(&d)?, now).await? {
+			return Ok(Err(r));
 		}
 		// A chat's title is what the bot sees once it is in: an imported one's is learned here; one
 		// Telegram does not describe keeps what it had, the test having reached it all the same.

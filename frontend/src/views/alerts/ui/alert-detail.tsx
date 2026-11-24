@@ -187,7 +187,7 @@ function Retier({ alert }: { alert: Alert }) {
     <section className="space-y-2 border-t border-border pt-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-ink">{t(keys.retier, "Change when this reaches me")}</h3>
-        <ViewLink to={{ view: "alert_settings", params: {} }} className="inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink">
+        <ViewLink to={{ view: "alert_settings", params: {} }} open={() => openWindow({ kind: "alerts", at: { settings: true } })} className="inline-flex items-center gap-1 text-sm text-ink-soft hover:text-ink">
           {t(keys.settings, "Settings")}
           <ChevronRight aria-hidden className="size-4" />
         </ViewLink>

@@ -36,6 +36,16 @@ pub enum View {
 		library: Option<String>,
 		/// The trash's window.
 		trash: bool,
+		/// The alerts' window.
+		alerts: bool,
+		/// The alert open in it.
+		alert: Option<i64>,
+		alert_tier: Option<sa_alerts::Tier>,
+		alert_family: Option<sa_alerts::Family>,
+		/// The unread alone.
+		alert_unread: bool,
+		/// Where they go and when, not the inbox.
+		alert_settings: bool,
 		/// The Add a GBP panel, with what it starts from.
 		add: Option<Add>,
 		/// The review kit floating over the map: its slug; empty, the list (or, with `kit_edit`, a new one).

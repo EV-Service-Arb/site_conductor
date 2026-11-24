@@ -51,6 +51,9 @@ export const RULE_NAME: Named<Rule> = {
   contact_overdue: (t) => t(alerts.rule.contact_overdue, "Leads waiting too long"),
   booked: (t) => t(alerts.rule.booked, "Bookings"),
   payment_received: (t) => t(alerts.rule.payment_received, "Payments"),
+  invoice_paid: (t) => t(alerts.rule.invoice_paid, "Paid invoices"),
+  invoice_lost: (t) => t(alerts.rule.invoice_lost, "Lost invoices"),
+  calendar_lost: (t) => t(alerts.rule.calendar_lost, "Lost calendars"),
   review_new: (t) => t(alerts.rule.review_new, "New reviews"),
   review_changed: (t) => t(alerts.rule.review_changed, "Edited reviews"),
   review_gone: (t) => t(alerts.rule.review_gone, "Removed reviews"),
@@ -80,7 +83,9 @@ export const VARIES: Partial<Named<Rule>> = {
 };
 
 export const RULE_HINT: Partial<Named<Rule>> = {
-  connection_lost: (t) => t(alerts.hint.connection_lost, "inbox, Business Profile, proxy"),
+  invoice_lost: (t) => t(alerts.hint.invoice_lost, "cancelled or expired unpaid"),
+  calendar_lost: (t) => t(alerts.hint.calendar_lost, "a brand's bookings not read"),
+  connection_lost: (t) => t(alerts.hint.connection_lost, "inbox, Business Profile, Maps key, proxy"),
 };
 
 export const CADENCE_NAME: Named<Cadence> = {

@@ -173,14 +173,24 @@ impl Setup {
 		{
 			let mut leads = self.leads.0.lock().unwrap();
 			let seq = leads.len() + 1;
-			leads.push(json!({"seq": seq, "rule": "new_lead", "event_id": Uuid::now_v7(), "created_at": now, "skip_user": null, "buttons": [],
-				"text": {"text": "New lead", "entities": []}, "text_pii": {"text": "New lead\n+33 6", "entities": []}, "link": format!("/sites/leads?n={seq}")}));
+			leads.push(
+				json!({"seq": seq, "rule": "new_lead", "event_id": Uuid::now_v7(), "created_at": now, "skip_user": null, "buttons": [],
+				"text": {"text": "New lead", "entities": []}, "text_pii": {"text": "New lead\n+33 6", "entities": []}, "link": format!("/sites/leads?n={seq}")}),
+			);
 		}
 		self.hub.take_feed(Service::Sites, now).await.unwrap().unwrap()
 	}
 
 	async fn dead(&self, id: i64) -> Option<String> {
-		self.panel.alerts(self.user, &operator()).await.unwrap().destinations.into_iter().find(|d| d.id == id).unwrap().dead
+		self.panel
+			.alerts(self.user, &operator())
+			.await
+			.unwrap()
+			.destinations
+			.into_iter()
+			.find(|d| d.id == id)
+			.unwrap()
+			.dead
 	}
 }
 
@@ -209,9 +219,16 @@ async fn a_channel_reads_no_contact_details() {
 	s.networks.taken();
 	s.networks.refuse(slack("https://hooks.slack.test/b"), Failure::Refused("no such hook".into()));
 	let refused = s.hub.add(s.user, &operator(), "Olga", &slack("https://hooks.slack.test/b"), "x", now).await.unwrap();
-	assert!(matches!(refused, Err(Refused::Invalid(m)) if m.contains("no such hook")), "what a test does not reach is not stored");
-	let stored: Vec<Vec<u8>> = sqlx::query_scalar("SELECT address_sealed FROM alert_destinations").fetch_all(s.panel.store().pool()).await.unwrap();
-	assert!(stored.len() == 2 && stored.iter().all(|a| !String::from_utf8_lossy(a).contains("x.io")));
+	assert!(
+		matches!(refused, Err(Refused::Invalid(m)) if m.contains("no such hook")),
+		"what a test does not reach is not stored"
+	);
+	let stored: Vec<Vec<u8>> = sqlx::query_scalar("SELECT address_sealed FROM alert_destinations")
+		.fetch_all(s.panel.store().pool())
+		.await
+		.unwrap();
+	assert!(stored.len() == 2);
+	assert!(stored.iter().all(|a| !String::from_utf8_lossy(a).contains("x.io")));
 
 	assert_eq!(s.lead(now).await, 2);
 	assert_eq!(s.hub.deliver(now).await.unwrap().sent, 2);
@@ -222,7 +239,8 @@ async fn a_channel_reads_no_contact_details() {
 	assert_eq!((mail.text.text.as_str(), channel.text.text.as_str()), ("New lead\n+33 6", "New lead"));
 	let note = mail.notes[0];
 	assert_eq!(mail.links, [("Open".to_owned(), format!("https://panel.test/user/alerts?open={note}"))]);
-	assert!(mail.unsubscribe.is_some() && channel.unsubscribe.is_none());
+	assert!(mail.unsubscribe.is_some());
+	assert!(channel.unsubscribe.is_none());
 }
 
 /// A mail's unsubscribe link ends its destination's alerts alone, what waits with them; another's
@@ -239,13 +257,14 @@ async fn a_mails_link_unsubscribes_its_destination() {
 	assert_eq!(url.path(), "/api/alerts/unsubscribe");
 	let token = url.query_pairs().find(|(k, _)| k == "token").unwrap().1.into_owned();
 	for forged in ["", "x", &token[1..], &s.panel.alerts_email_token(s.user, "a@x.io", now).unwrap()] {
-		assert!(!s.panel.alerts_unsubscribe(forged).await.unwrap(), "{forged}");
+		assert!(!s.panel.alerts_unsubscribe(forged, now).await.unwrap(), "{forged}");
 	}
 	assert_eq!(s.lead(now).await, 2);
-	assert!(s.panel.alerts_unsubscribe(&token).await.unwrap());
+	assert!(!s.panel.alerts_unsubscribe(&token, now + SignedDuration::from_hours(24 * 91)).await.unwrap(), "out of date");
+	assert!(s.panel.alerts_unsubscribe(&token, now).await.unwrap());
 	assert_eq!(s.hub.deliver(now + SignedDuration::from_secs(5)).await.unwrap().sent, 1, "the channel's, the mail's given up");
 	assert_eq!(s.lead(now).await, 1);
-	assert!(s.panel.alerts_unsubscribe(&token).await.unwrap(), "again: as it is");
+	assert!(s.panel.alerts_unsubscribe(&token, now).await.unwrap(), "again: as it is");
 }
 
 /// The link mailed to an address proves it to who asked for it, for a day.
@@ -286,6 +305,55 @@ async fn few_links_are_mailed_to_strangers() {
 	assert!(!ask(Uuid::now_v7(), "0@x.io", now).await, "whoever asks");
 	assert!(ask(Uuid::now_v7(), "0@x.io", now + SignedDuration::from_hours(24)).await);
 	assert_eq!(s.networks.taken().len(), 9, "a refusal mails nothing");
+}
+
+/// A link that did not go out is not one of the few; one to a mailbox that is not there is.
+#[tokio::test]
+async fn a_link_not_mailed_is_not_counted() {
+	let s = Setup::new().await;
+	let now = Timestamp::now();
+	let ask = async || s.hub.prove_email(s.user, "team@x.io", "/user/alerts/settings", now).await.unwrap();
+	for _ in 0..4 {
+		s.networks.refuse(email("team@x.io"), Failure::Transient("the relay is down".into()));
+		assert!(matches!(ask().await, Err(Refused::Invalid(_))));
+	}
+	for _ in 0..3 {
+		s.networks.refuse(email("team@x.io"), Failure::Gone("no such mailbox".into()));
+		assert!(matches!(ask().await, Err(Refused::Invalid(_))));
+	}
+	assert!(matches!(ask().await, Err(Refused::Unavailable(_))));
+}
+
+/// Tests are bounded per person: a destination asks to be tested as often as its person likes otherwise.
+#[tokio::test]
+async fn few_tests_go_out_in_a_minute() {
+	let s = Setup::new().await;
+	let now = Timestamp::now();
+	let hook = s.add(slack("https://hooks.slack.test/a"), now).await;
+	let mut sent = 0;
+	while s.hub.test(s.user, hook, now).await.unwrap().is_ok() {
+		sent += 1;
+		assert!(sent < 100);
+	}
+	assert!(matches!(s.hub.test(s.user, hook, now).await.unwrap(), Err(Refused::Unavailable(_))));
+	s.hub.test(s.user, hook, now + SignedDuration::from_mins(1)).await.unwrap().unwrap();
+}
+
+/// A person's own address starts as a destination, once: removed, it stays so.
+#[tokio::test]
+async fn a_persons_own_address_starts_once() {
+	let s = Setup::new().await;
+	let now = Timestamp::now();
+	s.panel.alerts_access_seen(s.user, &operator(), "Olga", now).await.unwrap();
+	let start = async || {
+		s.panel.alerts_start_mail(s.user, &operator(), "Olga", "olga@x.io", now).await.unwrap();
+		s.panel.alerts(s.user, &operator()).await.unwrap().destinations
+	};
+	let [own] = start().await.try_into().unwrap();
+	assert_eq!(own.title.as_deref(), Some("olga@x.io"));
+	assert_eq!(start().await.len(), 1);
+	assert!(s.panel.alerts_remove(s.user, own.id).await.unwrap());
+	assert!(start().await.is_empty());
 }
 
 /// A network that hangs holds its own messages alone: not the rest of its pass, nor the passes after.
@@ -356,9 +424,9 @@ async fn a_refusal_is_its_methods_or_its_addresss() {
 	assert_eq!(s.hub.deliver(later(150)).await.unwrap().sent, 1, "the other's second; the dead one's is given up");
 	assert_eq!(s.lead(later(151)).await, 1);
 	s.networks.refuse(a(), Failure::Gone("still not".into()));
-	assert!(matches!(s.hub.test(s.user, hook).await.unwrap(), Err(Refused::Invalid(_))));
+	assert!(matches!(s.hub.test(s.user, hook, now).await.unwrap(), Err(Refused::Invalid(_))));
 	assert!(s.dead(hook).await.is_some());
-	s.hub.test(s.user, hook).await.unwrap().unwrap();
+	s.hub.test(s.user, hook, now).await.unwrap().unwrap();
 	assert_eq!(s.dead(hook).await, None);
 	assert_eq!(s.lead(later(152)).await, 2);
 }

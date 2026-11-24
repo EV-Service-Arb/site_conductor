@@ -45,8 +45,8 @@ use sa_server::{
 	outlets::Networks,
 	testing::{Browser, Log, SEED, upstream},
 };
-use social_networks_adapters::notify::{Entity, Rich, telegram, webhook};
 use serde_json::{Value, json};
+use social_networks_adapters::notify::{Entity, Rich, telegram, webhook};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -479,6 +479,26 @@ impl Setup {
 		let gmb = self.panel.add_gmb(Some(Spender::new(user)), existing, t0()).await.unwrap().unwrap();
 		(gmail.id, gmb.id)
 	}
+
+	/// A user whose access concierge confirms at `now`, with no destination.
+	async fn seen(&self, user: Uuid, permissions: &PermissionSet, now: Timestamp) {
+		self.panel.alerts_access_seen(user, permissions, "Olga", now).await.unwrap();
+	}
+
+	/// A user with a private chat, an admin confirmed at `now`, whose hours are `hours`.
+	async fn reached(&self, chat: i64, hours: Hours) -> Uuid {
+		let user = Uuid::now_v7();
+		self.link(user, aliases::admin(), chat, t0()).await;
+		self.panel.alerts_set_hours(user, &hours, t0()).await.unwrap().unwrap();
+		self.mock.clear();
+		user
+	}
+
+	/// A booking noted at `now`: how many messages it queued.
+	async fn book(&self, what: &str, now: Timestamp) -> usize {
+		self.note("booked", now, text(what), Value::Null, None, json!([]));
+		self.fan_out(&self.n, now).await.unwrap()
+	}
 }
 
 async fn setup() -> Setup {
@@ -679,7 +699,10 @@ async fn a_note_goes_to_linked_users_with_access_only_its_pii_to_who_sees_it() {
 	s.set_rules(muted, &aliases::admin(), &[(Rule::NewLead, Cadence::Off)]).await.unwrap();
 	s.panel.alerts_access_seen(revoked, &PermissionSet::from_iter(Vec::<String>::new()), "Rex", t0()).await.unwrap();
 	assert!(
-		matches!(s.set_rules(operator, &aliases::operator(), &[(Rule::PaymentReceived, Cadence::Now)]).await, Err(Refused::Invalid(_))),
+		matches!(
+			s.set_rules(operator, &aliases::operator(), &[(Rule::PaymentReceived, Cadence::Now)]).await,
+			Err(Refused::Invalid(_))
+		),
 		"payments are the admins'"
 	);
 	assert!(
@@ -1032,12 +1055,12 @@ async fn a_test_revives_a_dead_chat() {
 	assert!(dead().await.is_some());
 
 	s.mock.script(403, json!({"ok": false, "error_code": 403, "description": "Forbidden"}));
-	assert!(matches!(s.n.test(user, channel).await.unwrap(), Err(Refused::Invalid(_))));
+	assert!(matches!(s.n.test(user, channel, t0()).await.unwrap(), Err(Refused::Invalid(_))));
 	assert!(dead().await.is_some(), "still dead");
-	assert!(matches!(s.n.test(Uuid::now_v7(), channel).await.unwrap(), Err(Refused::NotFound)), "not theirs");
+	assert!(matches!(s.n.test(Uuid::now_v7(), channel, t0()).await.unwrap(), Err(Refused::NotFound)), "not theirs");
 	// Since added, it became a group under another title: the test that arrives learns it.
 	s.mock.chat("-1001", -1001, "supergroup", false, 77);
-	s.n.test(user, channel).await.unwrap().unwrap();
+	s.n.test(user, channel, t0()).await.unwrap().unwrap();
 	assert_eq!(dead().await, None);
 	let now = s
 		.panel
@@ -1584,28 +1607,6 @@ fn nobody() -> PermissionSet {
 	std::iter::empty::<&str>().collect()
 }
 
-impl Setup {
-	/// A user whose access concierge confirms at `now`, with no destination.
-	async fn seen(&self, user: Uuid, permissions: &PermissionSet, now: Timestamp) {
-		self.panel.alerts_access_seen(user, permissions, "Olga", now).await.unwrap();
-	}
-
-	/// A user with a private chat, an admin confirmed at `now`, whose hours are `hours`.
-	async fn reached(&self, chat: i64, hours: Hours) -> Uuid {
-		let user = Uuid::now_v7();
-		self.link(user, aliases::admin(), chat, t0()).await;
-		self.panel.alerts_set_hours(user, &hours, t0()).await.unwrap().unwrap();
-		self.mock.clear();
-		user
-	}
-
-	/// A booking noted at `now`: how many messages it queued.
-	async fn book(&self, what: &str, now: Timestamp) -> usize {
-		self.note("booked", now, text(what), Value::Null, None, json!([]));
-		self.fan_out(&self.n, now).await.unwrap()
-	}
-}
-
 fn utc(quiet: Option<(u16, u16)>, snoozed_until: Option<Timestamp>) -> Hours {
 	Hours {
 		tz: "UTC".into(),
@@ -1650,7 +1651,11 @@ async fn a_note_is_in_the_inbox_of_its_audience_as_each_may_read_it_now() {
 	assert!(!s.inbox(worker, &no_pii).await[0].text.text.contains("+33"));
 	assert!(s.inbox(typist, &aliases::operator()).await.is_empty(), "who did it is not told");
 	let review = s.inbox(outsider, &aliases::admin()).await;
-	assert_eq!(review.iter().map(|a| (a.rule, a.gmbs.clone())).collect::<Vec<_>>(), [(Rule::ReviewNew, vec![royat])], "the owner's alone");
+	assert_eq!(
+		review.iter().map(|a| (a.rule, a.gmbs.clone())).collect::<Vec<_>>(),
+		[(Rule::ReviewNew, vec![royat])],
+		"the owner's alone"
+	);
 
 	let unread = |user| {
 		let panel = &s.panel;
@@ -1662,10 +1667,7 @@ async fn a_note_is_in_the_inbox_of_its_audience_as_each_may_read_it_now() {
 	s.panel.alerts_read(operator, None, lead[0].id, at(2_000)).await.unwrap();
 	assert_eq!(unread(operator).await[&Tier::Urgent], 1, "what came since was not on the screen");
 	assert_eq!(unread(worker).await[&Tier::Urgent], 2, "each reads their own");
-	let only_unread = Sought {
-		unread: true,
-		..Sought::default()
-	};
+	let only_unread = Sought { unread: true, ..Sought::default() };
 	let left = s.panel.alerts_inbox(operator, &aliases::operator(), &only_unread).await.unwrap();
 	assert_eq!(left.len(), 1);
 	assert!(left[0].id > lead[0].id);
@@ -1699,7 +1701,18 @@ async fn a_persons_tier_beats_the_notes_and_it_the_rules() {
 	assert_eq!(tiers(plain).await, [Tier::Urgent, Tier::Info]);
 	assert_eq!(tiers(set).await, [Tier::Important, Tier::Important]);
 	own(Rule::NewLead, None).await.unwrap().unwrap();
-	assert_eq!(s.panel.alerts(set, &aliases::operator()).await.unwrap().rules.iter().find(|(r, _)| *r == Rule::NewLead).unwrap().1, None);
+	assert_eq!(
+		s.panel
+			.alerts(set, &aliases::operator())
+			.await
+			.unwrap()
+			.rules
+			.iter()
+			.find(|(r, _)| *r == Rule::NewLead)
+			.unwrap()
+			.1,
+		None
+	);
 }
 
 /// A destination is told of a tier at that tier's cadence, of a rule at the rule's own.
@@ -1802,7 +1815,15 @@ async fn what_is_held_goes_out_as_one_and_urgent_is_not_held() {
 	assert_eq!(sent(hours(15)).await, ["Paid"], "one alone is itself");
 
 	// Quiet from 22:00 to 7:00; it is 23:00.
-	s.set(&d, &aliases::admin(), |set| set.cadences = Cadences { urgent: Cadence::Now, important: Cadence::Now, info: Cadence::Off }).await.unwrap();
+	s.set(&d, &aliases::admin(), |set| {
+		set.cadences = Cadences {
+			urgent: Cadence::Now,
+			important: Cadence::Now,
+			info: Cadence::Off,
+		}
+	})
+	.await
+	.unwrap();
 	s.panel.alerts_set_hours(user, &utc(night, None), hours(16)).await.unwrap().unwrap();
 	s.seen(user, &aliases::admin(), hours(29)).await;
 	for booking in ["Third", "Fourth", "Read meanwhile"] {
@@ -1907,7 +1928,10 @@ async fn a_press_in_the_panel_is_the_press_in_telegram() {
 		user_id: Uuid::now_v7(),
 		..who.clone()
 	};
-	assert!(matches!(s.n.press(&stranger, None, note, "take", at(3_000)).await.unwrap(), Pressed::Unknown), "not a note of theirs");
+	assert!(
+		matches!(s.n.press(&stranger, None, note, "take", at(3_000)).await.unwrap(), Pressed::Unknown),
+		"not a note of theirs"
+	);
 	assert!(matches!(s.n.press(&who, None, note, "nope", at(3_000)).await.unwrap(), Pressed::Unknown));
 	assert_eq!(s.presses().len(), 2, "neither reached sites");
 }
@@ -1976,17 +2000,7 @@ async fn what_is_no_address_is_not_added() {
 		},
 		bot: Default::default(),
 	};
-	let app = sa_server::http::app(
-		sign_in,
-		None,
-		None,
-		Default::default(),
-		Some(alerting),
-		None,
-		None,
-		sa_server::testing::sandbox(),
-		None,
-	);
+	let app = sa_server::http::app(sign_in, None, None, Default::default(), Some(alerting), None, None, sa_server::testing::sandbox(), None);
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let push = |endpoint: &str| json!({"endpoint": endpoint, "p256dh": "x", "auth": "y", "title": "Firefox"});
@@ -2120,7 +2134,10 @@ async fn an_access_request_is_told_again_after_a_day_and_dropped_once_held() {
 	};
 	let day = SignedDuration::from_hours(24);
 
-	assert_eq!(ask(t0()).await.unwrap(), (s.panel.pending_access(bob, &std::iter::empty::<&str>().collect()).await.unwrap()[0].clone(), true));
+	assert_eq!(
+		ask(t0()).await.unwrap(),
+		(s.panel.pending_access(bob, &std::iter::empty::<&str>().collect()).await.unwrap()[0].clone(), true)
+	);
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 1);
 	s.n.deliver(t0()).await.unwrap();
 	let within = t0() + day - SignedDuration::from_secs(1);

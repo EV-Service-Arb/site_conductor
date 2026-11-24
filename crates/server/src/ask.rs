@@ -102,6 +102,7 @@ pub(crate) async fn ask(
 	if q.from > read.turns.len() {
 		return Err(Refusal::new(Code::BadRequest, format!("from {} is past the chat's {} turns", q.from, read.turns.len())));
 	}
+	state.sign_in.panel.alerts_assistant_answered(caller.user_id, chat, Timestamp::now()).await?;
 	let a = Asking {
 		state: &state,
 		caller: &caller,
@@ -178,6 +179,7 @@ pub(crate) async fn act(
 		}
 	}
 	action.state = ActionState::Done;
+	state.sign_in.panel.alerts_assistant_answered(caller.user_id, chat, Timestamp::now()).await?;
 	let tail = turns.split_off(at);
 	let done = state
 		.sign_in

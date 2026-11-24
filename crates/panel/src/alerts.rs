@@ -73,6 +73,9 @@ pub const NOTES_PAGE: usize = 500;
 /// How long the link mailed to an address to prove it stays good.
 pub const EMAIL_TOKEN_TTL: SignedDuration = SignedDuration::from_hours(24);
 
+/// How long a message's unsubscribe link works.
+const UNSUBSCRIBE_TTL: SignedDuration = SignedDuration::from_hours(24 * 90);
+
 /// A person's destinations, at most.
 const DESTINATIONS: usize = 50;
 
@@ -425,11 +428,13 @@ impl<O, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 	}
 }
 
-
 /// What a press came to.
 #[derive(Clone, Debug)]
 pub enum Pressed {
-	Done { line: String, left: Vec<Button> },
+	Done {
+		line: String,
+		left: Vec<Button>,
+	},
 	AlreadyDone,
 	/// What it acts on is gone.
 	Gone,
@@ -625,6 +630,32 @@ impl Panel {
 		Ok(Ok(id))
 	}
 
+	/// The user's own `address`, which concierge verified, a destination of theirs: once, so one they
+	/// removed stays so.
+	pub async fn alerts_start_mail(&self, user: Uuid, permissions: &PermissionSet, display: &str, address: &str, now: Timestamp) -> eyre::Result<()> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection to start a user's mail")?;
+		if db::mail_started(&mut conn, user).await? {
+			return Ok(());
+		}
+		let to = Address::Email { to: address.to_owned() };
+		if let Err(refused) = self.alerts_add(user, permissions, display, &to, address, now).await? {
+			tracing::info!(user_id = %user, ?refused, "alerts: their own address is not added"); // there already, or no room for it
+		}
+		db::start_mail(&mut conn, user).await
+	}
+
+	/// The browser behind a push destination of the user's is no longer signed in: nothing goes there
+	/// until it subscribes again. `false`: no such destination.
+	pub async fn alerts_push_left(&self, user: Uuid, destination: i64, now: Timestamp) -> eyre::Result<bool> {
+		let mut tx = self.store.begin_write().await?;
+		let Some(Destination { method: Method::Push, .. }) = db::destination_of(&mut tx, user, destination).await? else {
+			return Ok(false);
+		};
+		db::dead(&mut tx, destination, "signed out there", now).await?;
+		tx.commit().await.wrap_err("committing a browser left")?;
+		Ok(true)
+	}
+
 	/// Where a destination is reached.
 	pub(crate) fn alerts_address(&self, d: &Destination) -> eyre::Result<Address> {
 		if let Some(chat) = d.chat {
@@ -635,7 +666,10 @@ impl Panel {
 		}
 		let (sealed, fp) = d.address.as_ref().expect("a destination is a chat or has an address sealed");
 		eyre::ensure!(fp.as_slice() == self.key.fingerprint(), "destination {} is sealed under another PANEL_DATA_KEY", d.id);
-		let plain = self.key.open(&alert_address_aad(d.user_id, d.method.as_ref()), sealed).wrap_err_with(|| format!("destination {}'s address", d.id))?;
+		let plain = self
+			.key
+			.open(&alert_address_aad(d.user_id, d.method.as_ref()), sealed)
+			.wrap_err_with(|| format!("destination {}'s address", d.id))?;
 		serde_json::from_slice(&plain).wrap_err_with(|| format!("destination {}'s address", d.id))
 	}
 
@@ -662,14 +696,19 @@ impl Panel {
 	}
 
 	/// What a message's one-click unsubscribe carries.
-	pub(crate) fn alerts_unsubscribe_token(&self, destination: i64) -> eyre::Result<String> {
-		let plain = serde_json::to_vec(&destination).wrap_err("serializing a destination's id")?;
+	pub(crate) fn alerts_unsubscribe_token(&self, destination: i64, now: Timestamp) -> eyre::Result<String> {
+		let token = UnsubscribeToken {
+			destination,
+			until: now + UNSUBSCRIBE_TTL,
+		};
+		let plain = serde_json::to_vec(&token).wrap_err("serializing an unsubscribe token")?;
 		Ok(URL_SAFE_NO_PAD.encode(self.key.seal(UNSUBSCRIBE_AAD, &plain)?))
 	}
 
-	/// Tells the destination a message's `token` names nothing more; `false` for no such token.
-	pub async fn alerts_unsubscribe(&self, token: &str) -> eyre::Result<bool> {
-		let Some(destination) = self.opened::<i64>(UNSUBSCRIBE_AAD, token) else {
+	/// Tells the destination a message's `token` names nothing more; `false` for no such token, or one
+	/// out of date.
+	pub async fn alerts_unsubscribe(&self, token: &str, now: Timestamp) -> eyre::Result<bool> {
+		let Some(UnsubscribeToken { destination, .. }) = self.opened(UNSUBSCRIBE_AAD, token).filter(|t: &UnsubscribeToken| t.until > now) else {
 			return Ok(false);
 		};
 		let mut tx = self.store.begin_write().await?;
@@ -723,10 +762,7 @@ impl Panel {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for an inbox")?;
 		let rules: Vec<Rule> = Rule::VARIANTS.iter().copied().filter(|r| r.open_to(permissions)).collect();
 		let unread = db::unread(&mut conn, user, &rules).await?;
-		Ok(Tier::VARIANTS
-			.iter()
-			.map(|t| (*t, unread.iter().find(|(u, _)| u == t).map_or(0, |(_, n)| *n)))
-			.collect())
+		Ok(Tier::VARIANTS.iter().map(|t| (*t, unread.iter().find(|(u, _)| u == t).map_or(0, |(_, n)| *n))).collect())
 	}
 
 	/// Marks the user's notes read: `ids`, or all of them up to `up_to`.
@@ -813,10 +849,7 @@ impl Panel {
 		let mut tx = self.store.begin_write().await?;
 		let mut queued = 0;
 		for note in page.notes {
-			let rendered = |t: sa_alerts::NoteText| Rendered {
-				text: t.text,
-				entities: t.entities,
-			};
+			let rendered = |t: sa_alerts::NoteText| Rendered { text: t.text, entities: t.entities };
 			let telling = Telling {
 				rule: note.rule,
 				event: note.event_id,
@@ -932,6 +965,12 @@ impl Panel {
 struct EmailToken {
 	user: Uuid,
 	address: String,
+	until: Timestamp,
+}
+
+#[derive(Deserialize, Serialize)]
+struct UnsubscribeToken {
+	destination: i64,
 	until: Timestamp,
 }
 

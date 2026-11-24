@@ -61,10 +61,7 @@ impl Panel {
 	/// they are told.
 	pub async fn pending_access(&self, user: Uuid, permissions: &PermissionSet) -> eyre::Result<Vec<AccessRequest>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for access requests")?;
-		let (held, pending): (Vec<_>, Vec<_>) = db::of_user(&mut conn, user)
-			.await?
-			.into_iter()
-			.partition(|r| holds(permissions, &r.need) == Some(true));
+		let (held, pending): (Vec<_>, Vec<_>) = db::of_user(&mut conn, user).await?.into_iter().partition(|r| holds(permissions, &r.need) == Some(true));
 		for r in held {
 			self.granted(&mut conn, &r, Timestamp::now()).await?;
 		}

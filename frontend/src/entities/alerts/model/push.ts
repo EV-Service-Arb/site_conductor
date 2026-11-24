@@ -50,9 +50,11 @@ export async function subscribePush(user: string, key: string): Promise<Alerts |
   return alerts;
 }
 
-/** What keeps pushes off a browser its person left; its destination stays, dead, until they are back (`resubscribe`). */
+/** What keeps pushes off a browser its person leaves; its destination stays, dead, until they are back (`resubscribe`). */
 export async function unsubscribePush(): Promise<void> {
   if (pushable() !== "yes") return;
+  const kept = keptPush();
+  if (kept !== null) await ok(api.POST("/alerts/destinations/{id}/left", { params: { path: { id: kept.destination } } }));
   const registration = await navigator.serviceWorker.getRegistration("/");
   await (await registration?.pushManager.getSubscription())?.unsubscribe();
 }

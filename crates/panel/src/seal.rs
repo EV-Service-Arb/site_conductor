@@ -28,7 +28,7 @@ pub const BUSINESS_STATE_AAD: &[u8] = b"sa-panel/business-state/v1";
 pub const EMAIL_TOKEN_AAD: &[u8] = b"sa-panel/alerts-email/v1";
 
 /// Associated data of a message's unsubscribe token.
-pub const UNSUBSCRIBE_AAD: &[u8] = b"sa-panel/alerts-unsubscribe/v1";
+pub const UNSUBSCRIBE_AAD: &[u8] = b"sa-panel/alerts-unsubscribe/v2";
 
 const NONCE_LEN: usize = 24;
 

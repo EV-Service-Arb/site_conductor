@@ -190,7 +190,15 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 		};
 		let google = sa_places::Google::try_new(keys, Arc::new(rank), Arc::new(store.clone()))?.spend(spend);
 		let smtp = Arc::new(sa_panel::mail::Gmail);
-		eyre::Ok(Panel::new(store, settings.data_key()?, settings.renewal()?, google, accounts, smtp, settings.app_env == "production"))
+		eyre::Ok(Panel::new(
+			store,
+			settings.data_key()?,
+			settings.renewal()?,
+			google,
+			accounts,
+			smtp,
+			settings.app_env == "production",
+		))
 	};
 	match cli.cmd {
 		Cmd::Migrate => {
@@ -448,6 +456,7 @@ async fn serve(
 	}
 	let catalog = forward.as_ref().map(|f| f.catalog().clone());
 	let browsers_followed = browsers.clone();
+	let browsers_asked = browsers.clone();
 	let sandbox = sa_server::execute::Sandbox::new(std::env::current_exe().wrap_err("the conductor's own binary: the sandbox's workers")?);
 	let app = http::app(
 		sign_in,
@@ -492,6 +501,7 @@ async fn serve(
 		};
 		let usage = sa_server::usage::run(engine.clone(), services.clone(), browsers_followed, stopped.clone());
 		let inboxes = sa_server::connections::follow(engine.clone(), stopped.clone());
+		let connections = sa_server::connections::watch(engine.clone(), browsers_asked, stopped.clone());
 		let mail = mail::run(mail, stopped.clone());
 		let tokens = async {
 			if let Some(services) = &services {
@@ -512,7 +522,7 @@ async fn serve(
 		// a dev's holds would overwrite what the guard holds prod's accounts to
 		let meters = sa_server::meters::run(metered, readers, production, stopped.clone());
 		let workers = sandbox.run(stopped.clone());
-		tokio::join!(alerting, feed, usage, inboxes, mail, tokens, grafana, purge, meters, catalog, workers);
+		tokio::join!(alerting, feed, usage, inboxes, connections, mail, tokens, grafana, purge, meters, catalog, workers);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

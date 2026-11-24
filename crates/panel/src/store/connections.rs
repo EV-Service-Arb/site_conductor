@@ -6,6 +6,7 @@ use sqlx::SqliteConnection;
 use uuid::Uuid;
 
 use super::{from_db, to_db};
+use crate::own_alerts::Lost;
 
 /// What the last check said: `None`, it went through.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -236,6 +237,25 @@ pub(crate) async fn checked(conn: &mut SqliteConnection, gmail_id: i64, which: C
 		.await
 		.wrap_err_with(|| format!("recording a check of a gmail's {which}"))?;
 	Ok(())
+}
+
+/// The grants, Maps keys and proxies of gmails not removed, last asked at or before `answering`, or
+/// `failing` when they did not answer then: whose, of which gmail, what.
+pub(crate) async fn unasked(conn: &mut SqliteConnection, answering: Timestamp, failing: Timestamp) -> eyre::Result<Vec<(Uuid, i64, Lost)>> {
+	let rows: Vec<(Uuid, i64, String)> = sqlx::query_as(
+		"SELECT g.owner, g.id, c.what FROM ( \
+		   SELECT gmail_id, 'business' AS what, checked_at, check_error FROM gmail_business WHERE grant_sealed IS NOT NULL \
+		   UNION ALL SELECT gmail_id, 'maps_key', checked_at, check_error FROM gmail_maps_keys \
+		   UNION ALL SELECT gmail_id, 'proxy', checked_at, check_error FROM gmail_browsers \
+		 ) c JOIN gmails g ON g.id = c.gmail_id \
+		 WHERE g.removed_at IS NULL AND (c.checked_at IS NULL OR c.checked_at <= iif(c.check_error IS NULL, $1, $2)) ORDER BY g.id, c.what",
+	)
+	.bind(to_db(answering))
+	.bind(to_db(failing))
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing the connections to ask again")?;
+	rows.into_iter().map(|(owner, gmail, what)| Ok((owner, gmail, what.parse()?))).collect()
 }
 
 /// `false`: none was set.

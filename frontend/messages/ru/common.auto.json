@@ -4815,10 +4815,6 @@
     "en": "Wallet is unavailable",
     "t": "Кошелёк недоступен"
   },
-  "window.appeal.banner": {
-    "en": "Google wants every document to match the profile's exact name and address.",
-    "t": "Google требует, чтобы каждый документ точно совпадал с названием и адресом профиля."
-  },
   "window.appeal.documents": {
     "en": "Documents",
     "t": "Документы"
@@ -4834,10 +4830,6 @@
   "window.appeal.linked.gmail": {
     "en": "same gmail{gmail}",
     "t": "тот же gmail{gmail}"
-  },
-  "window.appeal.linked.hint": {
-    "en": "The site or the gmail ties to this profile: a shared site is the risk, not the name.",
-    "t": "Сайт или gmail связывает с этим профилем: риск создаёт общий сайт, а не название."
   },
   "window.appeal.linked.none": {
     "en": "No other GBP shares its site or its gmail.",
@@ -4862,10 +4854,6 @@
   "window.appeal.rules.what": {
     "en": "Email rules on its gmail: re-submit the appeal, move its state on Google's decision mail",
     "t": "Правила почты для его gmail: повторно подать апелляцию, менять состояние по письму Google с решением"
-  },
-  "window.appeal.sent": {
-    "en": "Sent",
-    "t": "Отправлено"
   },
   "window.browser.afterNext": {
     "en": "After Next on step 8, it is on Google: verifying.",
@@ -5162,10 +5150,6 @@
   "window.connections.ready": {
     "en": "{n} of {of} ready",
     "t": "{n} из {of} готово"
-  },
-  "window.header.email": {
-    "en": "Google: {subject} · {ago}",
-    "t": "Google: {subject} · {ago}"
   },
   "window.header.inView": {
     "en": "{at}/{n} in view",
@@ -5627,17 +5611,9 @@
     "en": "Appeal",
     "t": "Обжаловать"
   },
-  "window.reviews.appealDone": {
-    "en": "Appeal sent",
-    "t": "Апелляция отправлена"
-  },
   "window.reviews.appealPlanned": {
     "en": "Send the appeal to Google from here",
     "t": "Отправить апелляцию в Google отсюда"
-  },
-  "window.reviews.appealSent": {
-    "en": "appeal sent {ago}",
-    "t": "апелляция отправлена {ago}"
   },
   "window.reviews.draft": {
     "en": "Draft a reply with an agent",
@@ -5654,10 +5630,6 @@
   "window.reviews.draftReply": {
     "en": "Draft reply",
     "t": "Составить ответ"
-  },
-  "window.reviews.goneAt": {
-    "en": "gone {ago}",
-    "t": "исчез {ago}"
   },
   "window.reviews.lastRun": {
     "en": "last run {ago} · {status}",
@@ -5678,10 +5650,6 @@
   "window.reviews.needsAction": {
     "en": "Suspended · Reinstating · To remove",
     "t": "Заблокированные · Восстанавливаются · На удаление"
-  },
-  "window.reviews.needsActionNote": {
-    "en": "gone from Google, or flagged by us",
-    "t": "исчезли из Google или помечены нами"
   },
   "window.reviews.new7d": {
     "en": "New 7d",
@@ -5963,21 +5931,9 @@
     "en": "Its own page",
     "t": "Своя страница"
   },
-  "window.verification.after": {
-    "en": "After a rejected video",
-    "t": "После отклонённого видео"
-  },
   "window.verification.attempts": {
     "en": "Attempts",
     "t": "Попытки"
-  },
-  "window.verification.banner.email": {
-    "en": "Google wrote: {subject} · {ago}",
-    "t": "Google написал: {subject} · {ago}"
-  },
-  "window.verification.banner.hint": {
-    "en": "Google's own word: its state moves and its emails to the gmail, read from the inbox.",
-    "t": "Слово самого Google: смены его состояния и его письма на gmail, прочитанные из почты."
   },
   "window.verification.banner.none": {
     "en": "Nothing from Google yet",
@@ -5986,10 +5942,6 @@
   "window.verification.banner.state": {
     "en": "{from} → {to} · {ago}",
     "t": "{from} → {to} · {ago}"
-  },
-  "window.verification.emails": {
-    "en": "Google's emails",
-    "t": "Письма Google"
   },
   "window.verification.kit": {
     "en": "Verification kit",

@@ -529,6 +529,55 @@ export const VIEWS = {
               "null"
             ]
           },
+          "alert": {
+            "description": "The alert open in it.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "alert_family": {
+            "description": "What a rule is about, as a person sorts their alerts.",
+            "enum": [
+              "leads",
+              "reviews",
+              "profiles",
+              "money",
+              "panel",
+              "team",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "alert_settings": {
+            "description": "Where they go and when, not the inbox.",
+            "type": "boolean"
+          },
+          "alert_tier": {
+            "description": "How much a note matters: what it may interrupt.",
+            "enum": [
+              "info",
+              "important",
+              "urgent",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "alert_unread": {
+            "description": "The unread alone.",
+            "type": "boolean"
+          },
+          "alerts": {
+            "description": "The alerts' window.",
+            "type": "boolean"
+          },
           "area": {
             "description": "The area a study is framed by; empty, one being drawn.",
             "type": [

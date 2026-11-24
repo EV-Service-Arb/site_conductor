@@ -265,43 +265,6 @@ pub async fn drop_one(conn: &mut SqliteConnection, id: i64, why: &str) -> eyre::
 	Ok(())
 }
 
-/// Gives up what was still waiting to go out of the notes the user has read.
-pub(super) async fn drop_read(conn: &mut SqliteConnection, user: Uuid, now: Timestamp) -> eyre::Result<()> {
-	sqlx::query(concat!(
-		give_up!(),
-		"user_id = $2 AND next_attempt_at > $3 AND attempts = 0 \
-		 AND EXISTS (SELECT 1 FROM alert_inbox i WHERE i.user_id = alert_outbox.user_id AND i.note_id = alert_outbox.note_id AND i.read_at IS NOT NULL)"
-	))
-	.bind("read")
-	.bind(user)
-	.bind(to_db(now))
-	.execute(&mut *conn)
-	.await
-	.wrap_err("dropping what was read")?;
-	Ok(())
-}
-
-/// Gives up what the outbox still owed a user, and why.
-pub(super) async fn drop_of_user(conn: &mut SqliteConnection, user: Uuid, why: &str) -> eyre::Result<()> {
-	sqlx::query(concat!(give_up!(), "user_id = $2"))
-		.bind(why)
-		.bind(user)
-		.execute(&mut *conn)
-		.await
-		.wrap_err_with(|| format!("dropping what a user was owed ({why})"))?;
-	Ok(())
-}
-
-/// Gives up what the outbox still owed destinations nothing reaches.
-pub(super) async fn drop_of_dead(conn: &mut SqliteConnection, why: &str) -> eyre::Result<()> {
-	sqlx::query(concat!(give_up!(), "destination_id IN (SELECT id FROM alert_destinations WHERE dead_at IS NOT NULL)"))
-		.bind(why)
-		.execute(&mut *conn)
-		.await
-		.wrap_err("dropping what a dead destination was owed")?;
-	Ok(())
-}
-
 /// Gives up what the outbox still owed a destination, and why.
 pub async fn drop_of_destination(conn: &mut SqliteConnection, destination: i64, why: &str) -> eyre::Result<()> {
 	sqlx::query(concat!(give_up!(), "destination_id = $2"))
@@ -357,14 +320,13 @@ pub enum State {
 /// Where a note of the user's went, or will go.
 pub async fn told(conn: &mut SqliteConnection, user: Uuid, note: i64) -> eyre::Result<Vec<Told>> {
 	type Row = (i64, String, i64, Option<String>);
-	let rows: Vec<Row> = sqlx::query_as(
-		"SELECT destination_id, state, coalesce(sent_at, next_attempt_at), last_error FROM alert_outbox WHERE user_id = $1 AND note_id = $2 ORDER BY destination_id",
-	)
-	.bind(user)
-	.bind(note)
-	.fetch_all(&mut *conn)
-	.await
-	.wrap_err("reading where a note went")?;
+	let rows: Vec<Row> =
+		sqlx::query_as("SELECT destination_id, state, coalesce(sent_at, next_attempt_at), last_error FROM alert_outbox WHERE user_id = $1 AND note_id = $2 ORDER BY destination_id")
+			.bind(user)
+			.bind(note)
+			.fetch_all(&mut *conn)
+			.await
+			.wrap_err("reading where a note went")?;
 	rows.into_iter()
 		.map(|(destination_id, state, at, error)| {
 			Ok(Told {
@@ -375,4 +337,41 @@ pub async fn told(conn: &mut SqliteConnection, user: Uuid, note: i64) -> eyre::R
 			})
 		})
 		.collect()
+}
+
+/// Gives up what was still waiting to go out of the notes the user has read.
+pub(super) async fn drop_read(conn: &mut SqliteConnection, user: Uuid, now: Timestamp) -> eyre::Result<()> {
+	sqlx::query(concat!(
+		give_up!(),
+		"user_id = $2 AND next_attempt_at > $3 AND attempts = 0 \
+		 AND EXISTS (SELECT 1 FROM alert_inbox i WHERE i.user_id = alert_outbox.user_id AND i.note_id = alert_outbox.note_id AND i.read_at IS NOT NULL)"
+	))
+	.bind("read")
+	.bind(user)
+	.bind(to_db(now))
+	.execute(&mut *conn)
+	.await
+	.wrap_err("dropping what was read")?;
+	Ok(())
+}
+
+/// Gives up what the outbox still owed a user, and why.
+pub(super) async fn drop_of_user(conn: &mut SqliteConnection, user: Uuid, why: &str) -> eyre::Result<()> {
+	sqlx::query(concat!(give_up!(), "user_id = $2"))
+		.bind(why)
+		.bind(user)
+		.execute(&mut *conn)
+		.await
+		.wrap_err_with(|| format!("dropping what a user was owed ({why})"))?;
+	Ok(())
+}
+
+/// Gives up what the outbox still owed destinations nothing reaches.
+pub(super) async fn drop_of_dead(conn: &mut SqliteConnection, why: &str) -> eyre::Result<()> {
+	sqlx::query(concat!(give_up!(), "destination_id IN (SELECT id FROM alert_destinations WHERE dead_at IS NOT NULL)"))
+		.bind(why)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("dropping what a dead destination was owed")?;
+	Ok(())
 }

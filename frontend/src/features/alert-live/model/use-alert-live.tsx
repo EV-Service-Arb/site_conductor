@@ -4,6 +4,7 @@ import { toast } from "@evinvest/uikit";
 import { useEffect, useRef } from "react";
 
 import { alerts as keys, lines, resubscribe, useAlerts, useNamedGmbs, useUnread } from "@/entities/alerts";
+import { type WinKey, openWindow, pageOf } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import { safeLocalPath } from "@/shared/api";
 import type { Alert } from "@/shared/api/schema";
@@ -46,8 +47,9 @@ function useToasts() {
 }
 
 function ToastLink({ alert, title }: { alert: Alert; title: string }) {
+  const opened: WinKey = { kind: "alerts", at: { open: alert.id } };
   return (
-    <ViewLink to={{ view: "alerts", params: { open: alert.id } }} className="hover:underline">
+    <ViewLink to={pageOf(opened)} open={() => openWindow(opened)} className="hover:underline">
       {title}
     </ViewLink>
   );

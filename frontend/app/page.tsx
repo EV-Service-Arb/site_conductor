@@ -6,7 +6,6 @@ import type { ReactNode } from "react";
 import { AccessView } from "@/views/access";
 import { AccountView } from "@/views/account";
 import { AdminTokensView } from "@/views/admin-tokens";
-import { AlertSettingsView, AlertsView } from "@/views/alerts";
 import { AssistantView } from "@/views/assistant";
 import { EmailView } from "@/views/email";
 import { Home } from "@/views/home";
@@ -60,10 +59,6 @@ function framed(at: Exclude<At, { view: "access" | "kit_qr" }>): ReactNode {
       return <WalletView />;
     case "members":
       return <MembersView />;
-    case "alerts":
-      return <AlertsView />;
-    case "alert_settings":
-      return <AlertSettingsView />;
     case "email":
       return <EmailView />;
     case "gbp":
@@ -73,6 +68,8 @@ function framed(at: Exclude<At, { view: "access" | "kit_qr" }>): ReactNode {
     case "categories":
     case "library":
     case "trash":
+    case "alerts":
+    case "alert_settings":
     case "adding":
     case "kits":
     case "kit":

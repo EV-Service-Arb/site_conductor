@@ -37,7 +37,7 @@ pub mod live;
 pub mod mail;
 pub mod meters;
 pub mod oauth;
-mod own_alerts;
+pub mod own_alerts;
 pub mod own_models;
 pub mod placement;
 pub mod seal;
