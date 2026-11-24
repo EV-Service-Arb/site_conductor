@@ -19,7 +19,6 @@ import { EmptyState } from "@/shared/ui/empty-state";
 import { useButtonSize } from "@/shared/ui/touch";
 import { ErrorState } from "@/shared/ui/error-state";
 import { KitEdit } from "@/views/kit";
-import { Floats } from "@/views/windows";
 
 import { Peek } from "./peek";
 
@@ -45,7 +44,6 @@ export function Home() {
       {/* not found: the conductor has no browser key, so there is no map */}
       {config.status === "error" && config.failure.code === "not_found" && <EmptyState className="m-6" title={t(home.noMap, "No map here")} description={t(home.noMap.why, "No Google account in the conductor's config has a browser key. Your GMBs are in the list beside.")} />}
       {config.status === "ok" && <GmbMap config={config.data} />}
-      {config.status !== "ok" && <Floats hidden={false} />}
     </div>
   );
 }
@@ -263,7 +261,6 @@ function GmbMap({ config }: { config: MapConfig }) {
         </OnPin>
       )}
       {peekedListed && windows && !windowed && !peekedListed.gmb.location && <Peek listed={peekedListed} onClose={() => peek(null)} className="absolute top-4 right-4" />}
-      <Floats hidden={placed !== undefined || (picking !== null && !adding)} />
       {map.status === "ok" && windows && editing !== null && <KitEdit map={map.map} slug={editing} />}
       {map.status === "ok" && windows && <StudyAreaWindow map={map.map} />}
       {picking !== null && (

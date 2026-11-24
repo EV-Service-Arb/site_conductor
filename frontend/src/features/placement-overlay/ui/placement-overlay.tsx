@@ -48,7 +48,7 @@ export function PlacementOverlay({ map }: { map: google.maps.Map }) {
     live?.competitors(competitors);
   }, [live, competitors]);
   useEffect(() => {
-    if (view.opacity !== null) live?.opacity(view.opacity);
+    live?.opacity(view.opacity);
   }, [live, view.opacity]);
   useEffect(() => {
     live?.hideImputed(view.hideImputed);

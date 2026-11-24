@@ -301,7 +301,8 @@ second block below to it.
   `entities/gmb/model/windows.ts`: how it reads from and writes to Home's params, its page, its
   entry), drawn by one registry (`views/windows`: title, icon, body, the same over the map and as
   a page). One floats at a time; a phone only ever gets its page. The tab's open set
-  (sessionStorage) is the hotbar's entries after the app's tools; × or Escape takes one out.
+  (sessionStorage) is the hotbar's entries after the app's tools; × or Escape takes one out. One
+  floated and since hidden stays mounted in the shell, its effects off, until it is taken out.
   Map modes (the kit's editor, a study's area) draw on the map: no window, no page.
 
   ```

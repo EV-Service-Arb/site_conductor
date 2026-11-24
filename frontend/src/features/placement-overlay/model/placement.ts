@@ -130,7 +130,7 @@ export interface MapView {
   competitors: boolean;
   /** Tiers whose weight or visibility was moved off the study's own. */
   tiers: NonNullable<Home["tiers"]> | null;
-  opacity: number | null;
+  opacity: number;
   hideImputed: boolean;
 }
 
@@ -148,7 +148,7 @@ export function useMapView(): MapView {
     pressure: home.pressure ?? null,
     competitors: home.competitors === true,
     tiers: home.tiers ?? null,
-    opacity: home.opacity ?? null,
+    opacity: home.opacity ?? 0.5,
     hideImputed: home.hide_imputed === true,
   };
 }
@@ -175,7 +175,7 @@ export function setMapView(change: Partial<MapView>): void {
     ...(change.pressure !== undefined && { pressure: change.pressure === null ? undefined : Math.round(change.pressure) }),
     ...(change.competitors !== undefined && { competitors: change.competitors }),
     ...(change.tiers !== undefined && { tiers: change.tiers ?? undefined }),
-    ...(change.opacity !== undefined && { opacity: change.opacity ?? undefined }),
+    ...(change.opacity !== undefined && { opacity: change.opacity }),
     ...(change.hideImputed !== undefined && { hide_imputed: change.hideImputed }),
   });
 }

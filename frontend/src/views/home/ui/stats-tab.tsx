@@ -239,8 +239,7 @@ function Changes({ gmb, since, now }: { gmb: number; since: number; now: number 
   }
   const inLog = (log_at: string): At => {
     if (at.view === "gbp") return { view: "gbp", params: { gmb, tab: "log", log_at } };
-    if (at.view !== "home") throw new Error(`a GBP's stats on ${at.view}`);
-    return { view: "home", params: { ...at.params, tab: "log", log_at } };
+    return { view: "home", params: { ...(at.view === "home" && at.params), gmb, tab: "log", log_at } };
   };
   return (
     <section className="flex flex-col gap-2 rounded-panel border border-border p-3">

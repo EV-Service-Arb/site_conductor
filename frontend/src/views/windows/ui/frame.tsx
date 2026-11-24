@@ -2,9 +2,9 @@
 
 import { Button, FloatingPanel, type FloatingPanelHandle, type Placement, useBinding, useKeymap } from "@evinvest/uikit";
 import { Maximize2, Minimize2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Activity, useEffect, useRef, useState } from "react";
 
-import { type WinKey, closeWindow, floatWindow, hideWindow, keepOpen, pageOf, pageWindow, shownAt, subjectOf, useShown, windowKeys } from "@/entities/gmb";
+import { type WinKey, closeWindow, floatWindow, hideWindow, keepOpen, pageOf, pageWindow, shownAt, subjectOf, useGmails, useOnMap, useOpenWindows, useShown, windowKeys } from "@/entities/gmb";
 import { useT } from "@/shared/i18n";
 import { type At, go } from "@/shared/lib/location";
 import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
@@ -24,11 +24,25 @@ function places(): Record<string, Placement> {
   return all as Record<string, Placement>;
 }
 
-/** The window shown over the map, from md up; below it, its page instead. */
-export function Floats({ hidden }: { hidden: boolean }) {
+/** The window shown over the map, from md up; below it, its page instead. Those floated before and still open stay mounted, out of sight, with what was typed in them. */
+export function Floats() {
   const shown = useShown();
-  if (shown === null || shown.page || hidden) return null;
-  return <WindowFrame key={subjectOf(shown.key)} k={shown.key} />;
+  const open = useOpenWindows();
+  const gmails = useGmails();
+  const placing = useOnMap((s) => s.placing);
+  const picking = useOnMap((s) => s.picking);
+  const [floated, setFloated] = useState<readonly string[]>([]);
+  const here = shown === null ? null : subjectOf(shown.key);
+  const up = shown === null || shown.page ? null : shown.key;
+  if (up !== null && here !== null && !floated.includes(here)) setFloated([...floated, here]);
+  const kept = open.filter((k) => subjectOf(k) !== here && floated.includes(subjectOf(k)));
+  const placed = gmails.status === "ok" && gmails.data.gmbs.some((g) => g.id === placing);
+  const covered = placed || (picking !== null && up?.kind !== "add");
+  return (up === null ? kept : [...kept, up]).map((k) => (
+    <Activity key={subjectOf(k)} mode={k === up && !covered ? "visible" : "hidden"}>
+      <WindowFrame k={k} />
+    </Activity>
+  ));
 }
 
 function WindowFrame({ k }: { k: WinKey }) {

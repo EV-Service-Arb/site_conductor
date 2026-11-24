@@ -15,6 +15,7 @@ import { useAt } from "@/shared/lib/location";
 import { useLiveSocket } from "@evinvest/api/react";
 import { FloatieKey } from "@/shared/ui/floatie";
 import { ResizeEdge } from "@/shared/ui/resize-edge";
+import { Floats } from "@/views/windows";
 
 import { WIDTH, setSidebarWidth, useSidebarFolded, useSidebarWidth } from "../model/sidebar";
 import { followTitleCount } from "../model/title-count";
@@ -62,6 +63,7 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
               <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
               {PANEL.assistant && at.view !== "assistant" && <Assistant />}
             </div>
+            <Floats />
             <PanelHotbar />
           </div>
         </GmailsProvider>

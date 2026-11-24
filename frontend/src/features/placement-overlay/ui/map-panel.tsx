@@ -528,8 +528,8 @@ function DataSection({ view, data, ages, notice, pulling, pullFailed, drawn, pic
         <span className="flex-1">{t(placementKeys.imputed, "Imputed cells · {n} of {cells}", { n: data.imputed, cells: data.cells })}</span>
       </button>
       <div className="flex items-center gap-2 px-2 py-1">
-        <span className="w-24 shrink-0 text-ink-mid">{t(placementKeys.opacity, "Opacity {pct}%", { pct: Math.round((view.opacity ?? 1) * 100) })}</span>
-        <Slider min={0} max={1} step={0.05} value={view.opacity ?? 1} onValueChange={(v) => setMapView({ opacity: v })} />
+        <span className="w-24 shrink-0 text-ink-mid">{t(placementKeys.opacity, "Opacity {pct}%", { pct: Math.round(view.opacity * 100) })}</span>
+        <Slider min={0} max={1} step={0.05} value={view.opacity} onValueChange={(v) => setMapView({ opacity: v })} />
       </div>
     </Section>
   );
