@@ -1559,6 +1559,34 @@
     "en": "{n} tokens",
     "t": "{n} токенов"
   },
+  "assistant.cost.connect": {
+    "en": "Connect your own model",
+    "t": "Подключите свою модель"
+  },
+  "assistant.cost.free": {
+    "en": "Connect your own model and it costs nothing here.",
+    "t": "Подключите свою модель, и здесь это ничего не будет стоить."
+  },
+  "assistant.cost.listed": {
+    "en": "Its provider lists them at: {usd}. A subscription pays nothing per answer.",
+    "t": "Их стоимость у провайдера: {usd}. Подписка не требует платы за каждый ответ."
+  },
+  "assistant.cost.onTheirs": {
+    "en": "Ran on your {model}: {input} in, {output} out model tokens, nothing charged here.",
+    "t": "Выполнено на вашей модели {model}: {input} входных, {output} выходных токенов модели, здесь ничего не списано."
+  },
+  "assistant.cost.ours": {
+    "en": "Ran on the panel's {model}: {input} in, {output} out model tokens, {n} of your tokens.",
+    "t": "Выполнено на модели панели {model}: {input} входных, {output} выходных токенов модели, {n} ваших токенов."
+  },
+  "assistant.cost.theirs": {
+    "en": "your {model}",
+    "t": "вашей модели {model}"
+  },
+  "assistant.cost.unknown": {
+    "en": "not known",
+    "t": "неизвестно"
+  },
   "assistant.delete": {
     "en": "Delete",
     "t": "Удалить"
@@ -1738,6 +1766,10 @@
   "assistant.notShared": {
     "en": "This chat isn't shared with you",
     "t": "Этим чатом с вами не поделились"
+  },
+  "assistant.own": {
+    "en": "Your own models",
+    "t": "Ваши собственные модели"
   },
   "assistant.own.none": {
     "en": "not connected",
@@ -4028,12 +4060,12 @@
     "t": "Видео отклонено"
   },
   "mail.mend.connect": {
-    "en": "Connect your Claude",
-    "t": "Подключите свой Claude"
+    "en": "Connect your own model",
+    "t": "Подключить свою модель"
   },
   "mail.mend.reconnect": {
-    "en": "Reconnect your Claude",
-    "t": "Подключите свой Claude заново"
+    "en": "Your own models",
+    "t": "Ваши собственные модели"
   },
   "mail.mend.tokens": {
     "en": "Tokens: {n} left",
@@ -4600,8 +4632,8 @@
     "t": "Что он должен сказать"
   },
   "mail.write.own": {
-    "en": "on your Claude",
-    "t": "на вашем Claude"
+    "en": "on your own model",
+    "t": "на вашей собственной модели"
   },
   "mail.write.own.self": {
     "en": "Write it yourself",
@@ -4711,6 +4743,10 @@
     "en": "Wallet",
     "t": "Кошелёк"
   },
+  "own.claude": {
+    "en": "Claude subscription",
+    "t": "Подписка Claude"
+  },
   "own.code": {
     "en": "The code Claude shows",
     "t": "Код, который показывает Claude"
@@ -4719,9 +4755,17 @@
     "en": "Connect",
     "t": "Подключить"
   },
+  "own.connect.claude": {
+    "en": "Connect Claude",
+    "t": "Подключить Claude"
+  },
   "own.connected.claude": {
     "en": "Your Claude is connected: your answers run on it",
     "t": "Ваш Claude подключён: ответы выполняются на нём"
+  },
+  "own.connected.openai": {
+    "en": "Your OpenAI key is connected: your answers run on it",
+    "t": "Ваш ключ OpenAI подключён: ваши ответы работают на нём"
   },
   "own.disconnect": {
     "en": "Disconnect",
@@ -4739,9 +4783,17 @@
     "en": "Open Claude's page",
     "t": "Открыть страницу Claude"
   },
+  "own.openai": {
+    "en": "OpenAI key",
+    "t": "Ключ OpenAI"
+  },
   "own.paste": {
     "en": "Paste",
     "t": "Вставить"
+  },
+  "own.reconnect": {
+    "en": "Reconnect",
+    "t": "Подключить заново"
   },
   "own.send": {
     "en": "Connect with this code",
@@ -4754,6 +4806,14 @@
   "own.steps": {
     "en": "Authorize on Claude's page, press Copy there, then Paste here.",
     "t": "Авторизуйтесь на странице Claude, нажмите там «Копировать», затем вставьте код сюда."
+  },
+  "own.title": {
+    "en": "Your own models",
+    "t": "Ваши собственные модели"
+  },
+  "own.why": {
+    "en": "On the panel's models the assistant and mail cost tokens. Connect your own and they cost nothing here, and run on yours alone.",
+    "t": "На моделях панели ассистент и почта расходуют токены. Подключите свои — и здесь они ничего не стоят и работают только на ваших."
   },
   "own.works": {
     "en": "Connected",

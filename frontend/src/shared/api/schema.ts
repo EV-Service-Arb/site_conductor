@@ -274,6 +274,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alerts/destinations/{id}/left": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The browser behind a push destination is signed out of: nothing goes there until it subscribes again. 404 no such push destination. */
+        post: operations["left_browser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alerts/destinations/{id}/test": {
         parameters: {
             query?: never;
@@ -5591,7 +5608,9 @@ export interface components {
          */
         Role: "owner" | "member" | "viewer";
         /**
-         * @description - `google_mail`: A case of Google's mail turned to a person.
+         * @description - `invoice_lost`: An invoice cancelled or expired, unpaid.
+         *     - `calendar_lost`: A brand's Google Calendar no longer answers: its bookings are not read.
+         *     - `google_mail`: A case of Google's mail turned to a person.
          *     - `connection_lost`: A gmail's inbox no longer answers.
          *     - `assistant_waiting`: The assistant holds a call until the person agrees to it.
          *     - `release_out`: A newer version of a listing a category was taken from.
@@ -5600,7 +5619,7 @@ export interface components {
          *     - `meter_held`: A Google account's meter reached its stop, or its guard unlinked its billing.
          * @enum {string}
          */
-        Rule: "new_lead" | "contact_overdue" | "booked" | "payment_received" | "review_new" | "review_changed" | "review_gone" | "review_reappeared" | "scan_failed" | "tokens_low" | "browser_stopped" | "kickback" | "access_granted" | "access_requested" | "source_silent" | "google_mail" | "connection_lost" | "assistant_waiting" | "release_out" | "trash_purge" | "feed_stalled" | "meter_held";
+        Rule: "new_lead" | "contact_overdue" | "booked" | "payment_received" | "invoice_paid" | "review_new" | "review_changed" | "review_gone" | "review_reappeared" | "scan_failed" | "tokens_low" | "browser_stopped" | "kickback" | "access_granted" | "access_requested" | "source_silent" | "invoice_lost" | "calendar_lost" | "google_mail" | "connection_lost" | "assistant_waiting" | "release_out" | "trash_purge" | "feed_stalled" | "meter_held";
         Running: {
             /** Format: int64 */
             gmb: number | null;
@@ -9004,6 +9023,134 @@ export interface operations {
             };
         };
     };
+    left_browser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     test_destination: {
         parameters: {
             query?: never;
@@ -9665,8 +9812,9 @@ export interface operations {
             query?: {
                 tier?: components["schemas"]["Tier"] | null;
                 unread?: boolean;
-                /** @description About this GBP. */
-                gmb?: number | null;
+                family?: components["schemas"]["Family"] | null;
+                /** @description GBPs' ids, comma-separated: those about one of these, or about none of the caller's. */
+                gmbs?: string | null;
                 /** @description Older than this one. */
                 before?: number | null;
             };
@@ -30789,7 +30937,7 @@ export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["
 export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "places.profile", "places.photo", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output", "openai.input", "openai.cache_write", "openai.cache_read", "openai.output"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
-export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "booked", "payment_received", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed", "tokens_low", "browser_stopped", "kickback", "access_granted", "access_requested", "source_silent", "google_mail", "connection_lost", "assistant_waiting", "release_out", "trash_purge", "feed_stalled", "meter_held"];
+export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "booked", "payment_received", "invoice_paid", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed", "tokens_low", "browser_stopped", "kickback", "access_granted", "access_requested", "source_silent", "invoice_lost", "calendar_lost", "google_mail", "connection_lost", "assistant_waiting", "release_out", "trash_purge", "feed_stalled", "meter_held"];
 export const scaleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scale"]> = ["linear", "percentile"];
 export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive", "browsers", "placement"];
 export const sortValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Sort"]> = ["rank", "recent", "used"];

@@ -28,8 +28,8 @@ use sa_server::{
 	alerts::Alerting,
 	concierge::{CLIENT_ID, Concierge},
 	http,
-	signin::{SignIn, SignInConfig},
 	outlets::Networks,
+	signin::{SignIn, SignInConfig},
 	telegram::BotName,
 };
 use serde_json::{Value, json};
@@ -813,10 +813,10 @@ async fn the_alerts_page_links_telegram_and_sets_what_is_told() {
 		"INSERT INTO alert_destinations (user_id, method, private, urgent, important, info, filter, created_at) \
 		 VALUES ($1, 'telegram', 1, 'now', 'now', 'off', '{\"gmails\":[],\"trades\":[],\"brands\":[],\"gmbs\":[]}', 0) RETURNING id",
 	)
-		.bind(operator_id)
-		.fetch_one(&pool)
-		.await
-		.unwrap();
+	.bind(operator_id)
+	.fetch_one(&pool)
+	.await
+	.unwrap();
 	sqlx::query("INSERT INTO telegram_destinations (destination_id, kind, chat_id) VALUES ($1, 'private', 7)")
 		.bind(destination)
 		.execute(&pool)
@@ -886,11 +886,18 @@ async fn the_alerts_page_links_telegram_and_sets_what_is_told() {
 	let set_hours = b.send(&app, Method::PUT, "/api/v1/alerts/hours", Some(hours("Europe/Paris", json!([1320, 420]))), true).await;
 	assert_eq!((set_hours.status, &set_hours.body["hours"]["quiet"]), (StatusCode::OK, &json!([1320, 420])));
 	for wrong in [hours("Mars/Olympus", json!(null)), hours("UTC", json!([60, 60])), hours("UTC", json!([0, 1440]))] {
-		assert_eq!(b.send(&app, Method::PUT, "/api/v1/alerts/hours", Some(wrong.clone()), true).await.status, StatusCode::BAD_REQUEST, "{wrong}");
+		assert_eq!(
+			b.send(&app, Method::PUT, "/api/v1/alerts/hours", Some(wrong.clone()), true).await.status,
+			StatusCode::BAD_REQUEST,
+			"{wrong}"
+		);
 	}
 
 	let inbox = b.get(&app, "/api/v1/alerts/inbox?tier=urgent&unread=true").await;
-	assert_eq!((inbox.status, &inbox.body), (StatusCode::OK, &json!({"alerts": [], "unread": {"urgent": 0, "important": 0, "info": 0}})));
+	assert_eq!(
+		(inbox.status, &inbox.body),
+		(StatusCode::OK, &json!({"alerts": [], "unread": {"urgent": 0, "important": 0, "info": 0}}))
+	);
 	assert_eq!(b.get(&app, "/api/v1/alerts/inbox/1").await.status, StatusCode::NOT_FOUND);
 	let read = b.send(&app, Method::POST, "/api/v1/alerts/inbox/read", Some(json!({"ids": null, "up_to": 1})), true).await;
 	assert_eq!(read.status, StatusCode::NO_CONTENT);
@@ -975,6 +982,7 @@ async fn no_permission_opens_no_section() {
 			"/alerts/inbox/{id}/press",
 			"/alerts/rules/{rule}",
 			"/alerts/hours",
+			"/alerts/destinations/{id}/left",
 			"/alerts/destinations/{id}/test",
 			"/alerts/destinations/{id}",
 			"/gmails",

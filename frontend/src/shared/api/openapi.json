@@ -8750,12 +8750,13 @@
         "type": "string"
       },
       "Rule": {
-        "description": "- `google_mail`: A case of Google's mail turned to a person.\n- `connection_lost`: A gmail's inbox no longer answers.\n- `assistant_waiting`: The assistant holds a call until the person agrees to it.\n- `release_out`: A newer version of a listing a category was taken from.\n- `trash_purge`: What was removed is about to be deleted for good.\n- `feed_stalled`: A service's feed keeps failing.\n- `meter_held`: A Google account's meter reached its stop, or its guard unlinked its billing.",
+        "description": "- `invoice_lost`: An invoice cancelled or expired, unpaid.\n- `calendar_lost`: A brand's Google Calendar no longer answers: its bookings are not read.\n- `google_mail`: A case of Google's mail turned to a person.\n- `connection_lost`: A gmail's inbox no longer answers.\n- `assistant_waiting`: The assistant holds a call until the person agrees to it.\n- `release_out`: A newer version of a listing a category was taken from.\n- `trash_purge`: What was removed is about to be deleted for good.\n- `feed_stalled`: A service's feed keeps failing.\n- `meter_held`: A Google account's meter reached its stop, or its guard unlinked its billing.",
         "enum": [
           "new_lead",
           "contact_overdue",
           "booked",
           "payment_received",
+          "invoice_paid",
           "review_new",
           "review_changed",
           "review_gone",
@@ -8767,6 +8768,8 @@
           "access_granted",
           "access_requested",
           "source_silent",
+          "invoice_lost",
+          "calendar_lost",
           "google_mail",
           "connection_lost",
           "assistant_waiting",
@@ -13947,6 +13950,170 @@
         }
       }
     },
+    "/alerts/destinations/{id}/left": {
+      "post": {
+        "operationId": "left_browser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unaffordable`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`csrf`, `forbidden`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`conflict`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_large`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_many`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`, `browsers_not_connected`"
+          }
+        },
+        "summary": "The browser behind a push destination is signed out of: nothing goes there until it subscribes again. 404 no such push destination.",
+        "tags": [
+          "alerts"
+        ],
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
     "/alerts/destinations/{id}/test": {
       "post": {
         "operationId": "test_destination",
@@ -14822,14 +14989,28 @@
             "style": "form"
           },
           {
-            "description": "About this GBP.",
             "in": "query",
-            "name": "gmb",
+            "name": "family",
             "schema": {
-              "description": "About this GBP.",
-              "format": "int64",
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Family"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "style": "form"
+          },
+          {
+            "description": "GBPs' ids, comma-separated: those about one of these, or about none of the caller's.",
+            "in": "query",
+            "name": "gmbs",
+            "schema": {
+              "description": "GBPs' ids, comma-separated: those about one of these, or about none of the caller's.",
               "type": [
-                "integer",
+                "string",
                 "null"
               ]
             },
@@ -43260,6 +43441,55 @@
                 "object",
                 "null"
               ]
+            },
+            "alert": {
+              "description": "The alert open in it.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "alert_family": {
+              "description": "What a rule is about, as a person sorts their alerts.",
+              "enum": [
+                "leads",
+                "reviews",
+                "profiles",
+                "money",
+                "panel",
+                "team",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "alert_settings": {
+              "description": "Where they go and when, not the inbox.",
+              "type": "boolean"
+            },
+            "alert_tier": {
+              "description": "How much a note matters: what it may interrupt.",
+              "enum": [
+                "info",
+                "important",
+                "urgent",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "alert_unread": {
+              "description": "The unread alone.",
+              "type": "boolean"
+            },
+            "alerts": {
+              "description": "The alerts' window.",
+              "type": "boolean"
             },
             "area": {
               "description": "The area a study is framed by; empty, one being drawn.",
