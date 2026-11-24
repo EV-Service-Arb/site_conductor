@@ -1955,6 +1955,8 @@ dependencies = [
 [[package]]
 name = "ev_lib"
 version = "0.34.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b87ae4a263235e0b70fe32188b6bfb2d0d28259e1db63bb59a45ea9ad8d1afd"
 dependencies = [
  "aide",
  "axum",
@@ -1991,6 +1993,8 @@ dependencies = [
 [[package]]
 name = "ev_lib_macros"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c953ac6797c156bfe259c3c367fd6066fa9a34c3500b4e1418f08fd4d060abc"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -5986,6 +5990,7 @@ checksum = "8aa3a1ebad7c7d912534fac818e45203fe094907e97806786285f8f440222e5a"
 [[package]]
 name = "social_networks_adapters"
 version = "0.6.19"
+source = "git+https://github.com/valeratrades/social_networks?branch=main#ba0d2ea20961deddd2a22d833889bf55d443605d"
 dependencies = [
  "base64 0.23.1",
  "jiff",
