@@ -1,6 +1,7 @@
 mod gbp_lifecycle;
 mod gmbs;
 mod inbox;
+mod mail;
 mod must_haves;
 mod schema;
 mod sessions;

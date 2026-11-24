@@ -50,6 +50,7 @@ const RULE_NAME = {
   review_gone: (t) => t(alertsKeys.rule.review_gone, "Removed reviews"),
   review_reappeared: (t) => t(alertsKeys.rule.review_reappeared, "Reviews back"),
   scan_failed: (t) => t(alertsKeys.rule.scan_failed, "Failed scans"),
+  google_mail: (t) => t(alertsKeys.rule.google_mail, "Google's mail"),
 } satisfies Record<Rule, (t: T) => string>;
 
 export function AlertsView() {

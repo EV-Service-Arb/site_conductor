@@ -1446,6 +1446,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/gmbs/{id}/mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A GBP's mail: every try to verify it, and its cases. */
+        get: operations["gmb_mail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/gmbs/{id}/note": {
         parameters: {
             query?: never;
@@ -1798,6 +1815,138 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/mail/auto": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The gmails and topics whose replies go by themselves, a quarter of an hour after they are written. */
+        get: operations["mail_auto"];
+        /** Lets replies on a topic of a gmail's go by themselves, or no more. 400 a topic that never does. */
+        put: operations["set_mail_auto"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's mail with Google about their GBPs, as cases: a conversation with support, or a lone notice; what each says, whose turn it is and why. */
+        get: operations["mail_cases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/cases/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A case of the caller's: its messages, its draft, and the tries to verify its GBP. */
+        get: operations["mail_case"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Corrects a case's GBP or topic, or marks it done: its draft is let go. */
+        patch: operations["edit_mail_case"];
+        trace?: never;
+    };
+    "/mail/cases/{id}/draft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Writes a reply to the case now, in place of the one there; nothing is sent.
+         * @description 409 another message came meanwhile; 503 no Claude to write it, or it does not answer.
+         */
+        post: operations["draft_mail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/drafts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Keeps the operator's edit of a draft; one going by itself waits for them now. 409 it was sent or let go. */
+        put: operations["edit_mail_draft"];
+        post?: never;
+        /** Lets a draft go: none is written to the same message by itself again. 409 it was sent or let go. */
+        delete: operations["dismiss_mail_draft"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/drafts/{id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sends a draft to Google as the case's gmail, once: the recipient is the case's (`recipient`).
+         * @description 400 nothing in the case takes a reply, or a file is not base64; 409 another message came since it was
+         *     written, or it was sent; 413 its files; 503 not sent, or it may have gone out: check the thread.
+         */
+        post: operations["send_mail_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/messages/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Corrects what a message of Google's was read as; the caller's word from then on.
+         * @description 400 a topic its kind is not of, or a message of ours.
+         */
+        patch: operations["correct_mail"];
         trace?: never;
     };
     "/map": {
@@ -2479,7 +2628,7 @@ export interface components {
          * @description What an agent does without asking its person first; each level runs what the one before it does.
          *     What neither destroys nor spends always runs.
          *
-         *     - `ask`: Everything that destroys or spends is proposed.
+         *     - `ask`: Everything that destroys, speaks to someone outside or spends is proposed.
          *     - `spend`: What spends runs; what destroys is proposed.
          *     - `act`: What spends and what destroys run.
          * @enum {string}
@@ -2954,17 +3103,7 @@ export interface components {
             kind: components["schemas"]["DestinationKind"];
             /** @description Every rule open to the caller, on or off here. */
             rules: {
-                access_requested?: boolean;
-                booked?: boolean;
-                contact_overdue?: boolean;
-                new_lead?: boolean;
-                payment_received?: boolean;
-                review_changed?: boolean;
-                review_gone?: boolean;
-                review_new?: boolean;
-                review_reappeared?: boolean;
-                scan_failed?: boolean;
-                source_silent?: boolean;
+                [key: string]: boolean;
             };
             /** @description A private chat's account, a channel's or group's title. */
             title: string | null;
@@ -3282,6 +3421,13 @@ export interface components {
             target: components["schemas"]["KitTarget"] | null;
             /** @description What its QR encodes; `null` while off. */
             url: string | null;
+        };
+        /** @description `GET /gmbs/{id}/mail`. */
+        GmbMail: {
+            /** @description Newest first. */
+            attempts: components["schemas"]["VerificationAttempt"][];
+            /** @description Those last spoken in first. */
+            cases: components["schemas"]["MailCase"][];
         };
         /** @description What the caller noted on a GBP: theirs alone, read by nobody else. */
         GmbNote: {
@@ -3809,6 +3955,337 @@ export interface components {
             /** @description Gmail's X-GM-THRID, hex: the thread's address in Gmail. */
             thread: string;
         });
+        /** @description A topic whose replies go by themselves. */
+        MailAuto: {
+            /** Format: int64 */
+            gmail_id: number;
+            topic: components["schemas"]["MailTopic"];
+        };
+        MailAutoSwitch: {
+            /** Format: int64 */
+            gmail: number;
+            on: boolean;
+            /** @description `verification` or `reviews`. */
+            topic: components["schemas"]["MailTopic"];
+        };
+        /** @description `GET /mail/auto`: those switched on. */
+        MailAutos: {
+            on: components["schemas"]["MailAuto"][];
+            /** @description The topics that can be. */
+            topics: components["schemas"]["MailTopic"][];
+        };
+        /** @description A conversation with Google, or a lone notice of its. */
+        MailCase: {
+            /** @description What Google asks in its last word. */
+            asks: string[];
+            /** @description RFC 3339; Google's, still running. */
+            deadline: string | null;
+            /** @description Its draft, until it is answered; what it lacks in `draft.needs`. */
+            draft: components["schemas"]["MailDraft"] | null;
+            /** Format: int64 */
+            gmail_id: number;
+            /**
+             * Format: int64
+             * @description The GBP it is about; `null`: not known.
+             */
+            gmb_id: number | null;
+            /** Format: int64 */
+            id: number;
+            last: components["schemas"]["MailLine"];
+            /** @description Google's case numbers. */
+            numbers: string[];
+            state: components["schemas"]["MailState"];
+            /** @description Google's latest, else ours. */
+            subject: string | null;
+            /** @description Gmail's thread of its last message: `POST /gmails/{id}/browser/thread` opens it. */
+            thread: string;
+            topic: components["schemas"]["MailTopic"];
+        };
+        /** @description `GET /mail/cases/{id}`. */
+        MailCaseDetail: {
+            /** @description Of its GBP, newest first. */
+            attempts: components["schemas"]["VerificationAttempt"][];
+            case: components["schemas"]["MailCase"];
+            /** @description Oldest first. */
+            messages: components["schemas"]["MailMessage"][];
+            /** @description Where a reply goes; `null`: nothing in it takes one. */
+            recipient: string | null;
+        };
+        /** @description Absent fields stay. */
+        MailCaseEdit: {
+            /** @description Done until Google speaks again. */
+            done?: boolean | null;
+            /**
+             * Format: int64
+             * @description The GBP it is about, over what its mail says; `null`: what its mail says.
+             * @default null
+             */
+            gmb?: number | null;
+            /**
+             * @description As `gmb`.
+             * @default null
+             */
+            topic?: components["schemas"]["MailTopic"] | null;
+        };
+        /** @description `GET /mail/cases`, those last spoken in first. */
+        MailCases: {
+            cases: components["schemas"]["MailCase"][];
+        };
+        /** @description A reply written to a case. */
+        MailDraft: {
+            body: string;
+            /** @description RFC 3339. */
+            created_at: string;
+            /** @description Why it did not go, or why nothing was written. */
+            error: string | null;
+            /** Format: int64 */
+            id: number;
+            /** @description What only the operator has: it never goes by itself. */
+            needs: string[];
+            /** @description RFC 3339; held, when it goes. */
+            send_at: string | null;
+            /** @description RFC 3339. */
+            sent_at: string | null;
+            state: components["schemas"]["MailDraftState"];
+        };
+        MailDraftAsk: {
+            /** @description What to say, or to say otherwise. */
+            instruction?: string | null;
+        };
+        MailDraftEdit: {
+            body: string;
+        };
+        /**
+         * @description - `proposed`: Waits for the operator.
+         *     - `held`: Goes by itself at its `send_at`.
+         *     - `sending`: Handed to SMTP; one left so may have gone out.
+         *     - `superseded`: Another message came in between.
+         *     - `failed`: Not sent, or not written.
+         * @enum {string}
+         */
+        MailDraftState: "sent" | "dismissed" | "proposed" | "held" | "sending" | "superseded" | "failed";
+        MailFile: {
+            base64: string;
+            name: string;
+            /** @description `image/jpeg`. */
+            type: string;
+        };
+        /**
+         * @description What a message of Google's says.
+         *
+         *     - `video_rejected`: The recorded verification video did not pass.
+         *     - `video_in_review`: The recorded verification video is being reviewed.
+         *     - `verified`: The profile is verified.
+         *     - `reverification_required`: The profile has to be verified again.
+         *     - `self_serve`: Support points back at the recorded video or the on-screen prompts.
+         *     - `call_offered`: The live verification call is enabled.
+         *     - `call_failed`: A live verification call was held and did not verify.
+         *     - `options_exhausted`: No way to verify is left on the profile.
+         *     - `account_restricted`: The account, not one profile, is restricted.
+         *     - `reviews_paused`: New reviews are paused: a spike of spam.
+         *     - `reviews_restricted`: Fake or incentivised reviews were found, the profile's reviews restricted.
+         *     - `review_removed`: A review was removed.
+         *     - `reinstatement_refused`: Support will not bring the reviews back.
+         *     - `reinstatement_done`: Support brought all or part of the reviews back.
+         *     - `reviews_live_already`: Support sees the reviews live already.
+         *     - `reviews_no_data`: Support has no record of the reviews, or needs to be told which.
+         *     - `still_active`: Is the business still open: inactivity, removed or revoked unless answered.
+         *     - `invited`: Someone invited this account to manage a profile.
+         *     - `ownership_requested`: Someone asks for a profile's ownership.
+         *     - `management_requested`: Someone asks to manage a profile.
+         *     - `edit_suggested`: Someone suggested an edit: does this look right to you?
+         *     - `edit_rejected`: An edit of ours was not accepted.
+         *     - `changed_by_google`: Google changed the profile.
+         *     - `content_removed`: A photo, post or other content was removed.
+         *     - `duplicate`: The profile is marked as another's duplicate.
+         *     - `acknowledged`: A request was received, nothing more.
+         *     - `routed`: Handed to a specialist or another team.
+         *     - `asks`: Asks for documents, photos, changes or answers before going on.
+         *     - `closed`: The case is closed: it accepts no reply, or a survey follows it.
+         *     - `unclear`: About a profile, what it says cannot be told.
+         *     - `noise`: Performance, promotions, surveys, new reviews, posts.
+         *     - `not_business`: Not about a Business Profile.
+         *     - `impersonation`: Not from Google.
+         * @enum {string}
+         */
+        MailKind: "suspended" | "appeal_received" | "appeal_approved" | "appeal_denied" | "restriction_lifted" | "access_granted" | "access_lost" | "policy_warning" | "video_rejected" | "video_in_review" | "verified" | "reverification_required" | "self_serve" | "call_offered" | "call_failed" | "options_exhausted" | "account_restricted" | "reviews_paused" | "reviews_restricted" | "review_removed" | "reinstatement_refused" | "reinstatement_done" | "reviews_live_already" | "reviews_no_data" | "still_active" | "invited" | "ownership_requested" | "management_requested" | "edit_suggested" | "edit_rejected" | "changed_by_google" | "content_removed" | "duplicate" | "acknowledged" | "routed" | "asks" | "closed" | "unclear" | "noise" | "not_business" | "impersonation";
+        /** @description A message, in a line. */
+        MailLine: {
+            /** @description RFC 3339. */
+            at: string;
+            /** Format: int64 */
+            id: number;
+            /** @description `null`: ours, or not read. */
+            kind: components["schemas"]["MailKind"] | null;
+            /** @description Ours. */
+            sent: boolean;
+            summary: string | null;
+        };
+        /** @description A message, whole. */
+        MailMessage: {
+            /** @description RFC 3339. */
+            at: string;
+            /** @description Proved Google's. */
+            authentic: boolean;
+            from: string | null;
+            /** Format: int64 */
+            gmb_id: number | null;
+            /** Format: int64 */
+            id: number;
+            /** @description The profile it links, by Google's id in the link. */
+            listing: string | null;
+            read_by: components["schemas"]["MailReader"] | null;
+            /** @description Why it is not read, once given up on. */
+            read_error: string | null;
+            /** @description `null`: ours, or not read. */
+            reading: components["schemas"]["MailReading"] | null;
+            /** @description It takes a reply. */
+            repliable: boolean;
+            sent: boolean;
+            subject: string | null;
+            /** @description Its own words, quotes dropped. */
+            text: string;
+            to: string[];
+        };
+        /**
+         * @description Who read a message.
+         *
+         *     - `person`: A person corrected it.
+         * @enum {string}
+         */
+        MailReader: "rule" | "model" | "person";
+        /** @description What a message of Google's was read as. */
+        MailReading: {
+            /**
+             * Format: uint32
+             * @description Only when the mail states it.
+             */
+            answer_within_hours: number | null;
+            /** @description What Google asks for, each thing once. */
+            asks: string[];
+            /**
+             * Format: date-time
+             * @description Only when the mail states one.
+             */
+            deadline: string | null;
+            /**
+             * Format: int64
+             * @description The GBP it is about, as its reader saw it; one it names outright goes first.
+             */
+            gmb: number | null;
+            kind: components["schemas"]["MailKind"];
+            /** @description Why, in Google's words. */
+            reasons: string[];
+            /** @description One line, English. */
+            summary: string;
+            topic: components["schemas"]["MailTopic"];
+        };
+        /** @description Absent fields stay. */
+        MailReadingEdit: {
+            /**
+             * Format: date-time
+             * @default null
+             */
+            deadline?: string | null;
+            /**
+             * Format: int64
+             * @default null
+             */
+            gmb?: number | null;
+            kind?: components["schemas"]["MailKind"] | null;
+            summary?: string | null;
+            /** @description Of a kind that is of any topic. */
+            topic?: components["schemas"]["MailTopic"] | null;
+        };
+        MailSend: {
+            /** @description What goes, as the operator leaves it. */
+            body: string;
+            /** @description At most 18 MiB in all; never stored. */
+            files: components["schemas"]["MailFile"][];
+        };
+        /**
+         * @description Auto-generated discriminant enum variants
+         *
+         *     - `reply_ready`: A draft waits for the operator.
+         *     - `sending`: A draft goes by itself.
+         *     - `reply_due`: Google waits for an answer, or has been silent too long; no draft yet.
+         *     - `waiting`: Google's turn.
+         *     - `quiet`: Nothing to do.
+         * @enum {string}
+         */
+        MailStanding: "needs_you" | "done" | "reply_ready" | "sending" | "reply_due" | "waiting" | "quiet";
+        MailState: {
+            /** @constant */
+            is: "needs_you";
+            why: components["schemas"]["MailWhy"];
+        } | {
+            /** @constant */
+            is: "reply_ready";
+        } | {
+            /** Format: date-time */
+            at: string;
+            /** @constant */
+            is: "sending";
+        } | {
+            /** @constant */
+            is: "reply_due";
+        } | {
+            /** @constant */
+            is: "waiting";
+            /** Format: date-time */
+            until: string;
+        } | {
+            /** @constant */
+            is: "done";
+        } | {
+            /** @constant */
+            is: "quiet";
+        };
+        /** @enum {string} */
+        MailTopic: "verification" | "suspension" | "reviews" | "activity" | "access" | "profile" | "other";
+        /** @description Why a case needs the operator. */
+        MailWhy: {
+            /** @constant */
+            code: "kind";
+            kind: components["schemas"]["MailKind"];
+        } | {
+            /** Format: date-time */
+            at: string;
+            /** @constant */
+            code: "deadline";
+        } | {
+            /** @constant */
+            code: "needs";
+            needs: string[];
+        } | {
+            /** @constant */
+            code: "asked_often";
+        } | {
+            /** @constant */
+            code: "unanswered";
+        } | {
+            /** @constant */
+            code: "no_reply";
+        } | {
+            /** @constant */
+            code: "unread";
+            error: string | null;
+        } | {
+            /** @constant */
+            code: "stuck";
+            error: string;
+        } | {
+            /** @constant */
+            code: "nothing_to_say";
+            why: string;
+        } | {
+            /** @constant */
+            code: "may_have_gone_out";
+        } | {
+            /** @constant */
+            code: "failed";
+            error: string;
+        };
         /**
          * @description `GET /map`: the Maps JS key this page loads on, referrer-restricted, and its account, which the
          *     page's map loads and panoramas name.
@@ -4443,22 +4920,15 @@ export interface components {
          * @enum {string}
          */
         Role: "owner" | "member" | "viewer";
-        /** @enum {string} */
-        Rule: "new_lead" | "contact_overdue" | "payment_received" | "source_silent" | "booked" | "access_requested" | "review_new" | "review_changed" | "review_gone" | "review_reappeared" | "scan_failed";
+        /**
+         * @description - `google_mail`: A case of Google's mail turned to a person.
+         * @enum {string}
+         */
+        Rule: "new_lead" | "contact_overdue" | "payment_received" | "source_silent" | "booked" | "access_requested" | "review_new" | "review_changed" | "review_gone" | "review_reappeared" | "scan_failed" | "google_mail";
         RulesBody: {
             /** @description `{"new_lead": true, "review_gone": false, …}`: the rules to change. */
             rules: {
-                access_requested?: boolean;
-                booked?: boolean;
-                contact_overdue?: boolean;
-                new_lead?: boolean;
-                payment_received?: boolean;
-                review_changed?: boolean;
-                review_gone?: boolean;
-                review_new?: boolean;
-                review_reappeared?: boolean;
-                scan_failed?: boolean;
-                source_silent?: boolean;
+                [key: string]: boolean;
             };
         };
         Running: {
@@ -5148,6 +5618,23 @@ export interface components {
          * @enum {string}
          */
         Vendor: "google";
+        /** @description A try to verify a GBP, as Google's mail tells it. */
+        VerificationAttempt: {
+            /** @description RFC 3339. */
+            at: string;
+            /** Format: int64 */
+            case_id: number;
+            /** Format: int64 */
+            message_id: number;
+            method: components["schemas"]["VerificationMethod"];
+            outcome: components["schemas"]["VerificationOutcome"];
+            reasons: string[];
+            summary: string;
+        };
+        /** @enum {string} */
+        VerificationMethod: "video" | "call" | "unknown";
+        /** @enum {string} */
+        VerificationOutcome: "in_review" | "rejected" | "offered" | "failed" | "verified";
         Viewport: {
             /** Format: double */
             east: number;
@@ -5363,6 +5850,7 @@ export type Gmails = components['schemas']['Gmails'];
 export type Gmb = components['schemas']['Gmb'];
 export type GmbEdit = components['schemas']['GmbEdit'];
 export type GmbKit = components['schemas']['GmbKit'];
+export type GmbMail = components['schemas']['GmbMail'];
 export type GmbNote = components['schemas']['GmbNote'];
 export type GmbPhoto = components['schemas']['GmbPhoto'];
 export type GoogleCategories = components['schemas']['GoogleCategories'];
@@ -5408,6 +5896,29 @@ export type ListingVersion = components['schemas']['ListingVersion'];
 export type Locality = components['schemas']['Locality'];
 export type LogDto = components['schemas']['LogDto'];
 export type LoggedDto = components['schemas']['LoggedDto'];
+export type MailAuto = components['schemas']['MailAuto'];
+export type MailAutoSwitch = components['schemas']['MailAutoSwitch'];
+export type MailAutos = components['schemas']['MailAutos'];
+export type MailCase = components['schemas']['MailCase'];
+export type MailCaseDetail = components['schemas']['MailCaseDetail'];
+export type MailCaseEdit = components['schemas']['MailCaseEdit'];
+export type MailCases = components['schemas']['MailCases'];
+export type MailDraft = components['schemas']['MailDraft'];
+export type MailDraftAsk = components['schemas']['MailDraftAsk'];
+export type MailDraftEdit = components['schemas']['MailDraftEdit'];
+export type MailDraftState = components['schemas']['MailDraftState'];
+export type MailFile = components['schemas']['MailFile'];
+export type MailKind = components['schemas']['MailKind'];
+export type MailLine = components['schemas']['MailLine'];
+export type MailMessage = components['schemas']['MailMessage'];
+export type MailReader = components['schemas']['MailReader'];
+export type MailReading = components['schemas']['MailReading'];
+export type MailReadingEdit = components['schemas']['MailReadingEdit'];
+export type MailSend = components['schemas']['MailSend'];
+export type MailStanding = components['schemas']['MailStanding'];
+export type MailState = components['schemas']['MailState'];
+export type MailTopic = components['schemas']['MailTopic'];
+export type MailWhy = components['schemas']['MailWhy'];
 export type MapConfig = components['schemas']['MapConfig'];
 export type MapOn = components['schemas']['MapOn'];
 export type MapsKey = components['schemas']['MapsKey'];
@@ -5531,6 +6042,9 @@ export type UnitCost = components['schemas']['UnitCost'];
 export type Usage = components['schemas']['Usage'];
 export type UsageDay = components['schemas']['UsageDay'];
 export type Vendor = components['schemas']['Vendor'];
+export type VerificationAttempt = components['schemas']['VerificationAttempt'];
+export type VerificationMethod = components['schemas']['VerificationMethod'];
+export type VerificationOutcome = components['schemas']['VerificationOutcome'];
 export type Viewport = components['schemas']['Viewport'];
 export type Why = components['schemas']['Why'];
 export type BrowserClose = components['schemas']['BrowserClose'];
@@ -18678,6 +19192,136 @@ export interface operations {
             };
         };
     };
+    gmb_mail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /gmbs/{id}/mail`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GmbMail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     gmb_note: {
         parameters: {
             query?: never;
@@ -21712,6 +22356,1328 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    mail_auto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /mail/auto`: those switched on. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAutos"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_mail_auto: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailAutoSwitch"];
+            };
+        };
+        responses: {
+            /** @description `GET /mail/auto`: those switched on. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailAutos"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    mail_cases: {
+        parameters: {
+            query?: {
+                gmail?: number | null;
+                gmb?: number | null;
+                state?: components["schemas"]["MailStanding"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /mail/cases`, those last spoken in first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailCases"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    mail_case: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /mail/cases/{id}`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailCaseDetail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    edit_mail_case: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Absent fields stay. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailCaseEdit"];
+            };
+        };
+        responses: {
+            /** @description `GET /mail/cases/{id}`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailCaseDetail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    draft_mail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailDraftAsk"];
+            };
+        };
+        responses: {
+            /** @description `GET /mail/cases/{id}`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailCaseDetail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    edit_mail_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailDraftEdit"];
+            };
+        };
+        responses: {
+            /** @description `GET /mail/cases/{id}`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailCaseDetail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    dismiss_mail_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    send_mail_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailSend"];
+            };
+        };
+        responses: {
+            /** @description `GET /mail/cases/{id}`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailCaseDetail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    correct_mail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** @description Absent fields stay. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailReadingEdit"];
+            };
+        };
+        responses: {
+            /** @description `GET /mail/cases/{id}`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailCaseDetail"];
+                };
             };
             /** @description `bad_request` */
             400: {
@@ -26004,6 +27970,11 @@ export const kitBlockValues: ReadonlyArray<FlattenedDeepRequired<components>["sc
 export const kitHappeningValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitHappening"]> = ["shown", "scanned", "opened", "copied", "saved", "posted", "reviewed", "gone"];
 export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitTarget"]> = ["google", "drafts", "one_tap"];
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
+export const mailDraftStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailDraftState"]> = ["sent", "dismissed", "proposed", "held", "sending", "superseded", "failed"];
+export const mailKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailKind"]> = ["suspended", "appeal_received", "appeal_approved", "appeal_denied", "restriction_lifted", "access_granted", "access_lost", "policy_warning", "video_rejected", "video_in_review", "verified", "reverification_required", "self_serve", "call_offered", "call_failed", "options_exhausted", "account_restricted", "reviews_paused", "reviews_restricted", "review_removed", "reinstatement_refused", "reinstatement_done", "reviews_live_already", "reviews_no_data", "still_active", "invited", "ownership_requested", "management_requested", "edit_suggested", "edit_rejected", "changed_by_google", "content_removed", "duplicate", "acknowledged", "routed", "asks", "closed", "unclear", "noise", "not_business", "impersonation"];
+export const mailReaderValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailReader"]> = ["rule", "model", "person"];
+export const mailStandingValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailStanding"]> = ["needs_you", "done", "reply_ready", "sending", "reply_due", "waiting", "quiet"];
+export const mailTopicValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailTopic"]> = ["verification", "suspension", "reviews", "activity", "access", "profile", "other"];
 export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MentionKind"]> = ["location"];
 export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MustHave"]> = ["name", "areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"];
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:library:curate", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
@@ -26012,7 +27983,7 @@ export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["
 export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "places.profile", "places.photo", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
-export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];
+export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed", "google_mail"];
 export const scaleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scale"]> = ["linear", "percentile"];
 export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive", "browsers", "placement"];
 export const sortValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Sort"]> = ["rank", "recent", "used"];
@@ -26021,6 +27992,8 @@ export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schem
 export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
 export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["profile", "log", "launch", "browser", "connections", "stats", "ranking", "reviews", "verification", "appeal"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
+export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["video", "call", "unknown"];
+export const verificationOutcomeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationOutcome"]> = ["in_review", "rejected", "offered", "failed", "verified"];
 export const whyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Why"]> = ["edit", "adopt", "update", "revert"];
 export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];
 export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

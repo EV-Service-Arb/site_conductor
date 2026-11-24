@@ -45,6 +45,12 @@ fn mail(uid: u32, subject: &str, text: &str) -> Mail {
 		date: "2026-11-18T09:30:00Z".parse().unwrap(),
 		subject: Some(subject.to_owned()),
 		counterparts: vec!["Google Business Profile <businessprofile-noreply@google.com>".to_owned()],
+		from: Some("businessprofile-noreply@google.com".to_owned()),
+		reply_to: None,
+		to: vec!["a@gmail.com".to_owned()],
+		message_id: None,
+		refs: vec![],
+		authentic: true,
 		sent: false,
 		text: text.to_owned(),
 	}

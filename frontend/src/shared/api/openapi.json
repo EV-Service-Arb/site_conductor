@@ -17446,6 +17446,177 @@
         }
       }
     },
+    "/gmbs/{id}/mail": {
+      "get": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "A GBP's mail: every try to verify it, and its cases.",
+        "operationId": "gmb_mail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`GET /gmbs/{id}/mail`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GmbMail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
     "/gmbs/{id}/note": {
       "get": {
         "tags": [
@@ -21710,6 +21881,1781 @@
           "unstudied": 422
         },
         "x-socket": true
+      }
+    },
+    "/mail/auto": {
+      "get": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "The gmails and topics whose replies go by themselves, a quarter of an hour after they are written.",
+        "operationId": "mail_auto",
+        "responses": {
+          "200": {
+            "description": "`GET /mail/auto`: those switched on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailAutos"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      },
+      "put": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "Lets replies on a topic of a gmail's go by themselves, or no more. 400 a topic that never does.",
+        "operationId": "set_mail_auto",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailAutoSwitch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`GET /mail/auto`: those switched on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailAutos"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-outward": true
+      }
+    },
+    "/mail/cases": {
+      "get": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "The caller's mail with Google about their GBPs, as cases: a conversation with support, or a lone notice; what each says, whose turn it is and why.",
+        "operationId": "mail_cases",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "gmail",
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "gmb",
+            "schema": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/MailStanding"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`GET /mail/cases`, those last spoken in first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailCases"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/mail/cases/{id}": {
+      "get": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "A case of the caller's: its messages, its draft, and the tries to verify its GBP.",
+        "operationId": "mail_case",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`GET /mail/cases/{id}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailCaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      },
+      "patch": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "Corrects a case's GBP or topic, or marks it done: its draft is let go.",
+        "operationId": "edit_mail_case",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "description": "Absent fields stay.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailCaseEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`GET /mail/cases/{id}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailCaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/mail/cases/{id}/draft": {
+      "post": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "Writes a reply to the case now, in place of the one there; nothing is sent.",
+        "description": "409 another message came meanwhile; 503 no Claude to write it, or it does not answer.",
+        "operationId": "draft_mail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailDraftAsk"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`GET /mail/cases/{id}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailCaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-spends": [
+          "claude.input",
+          "claude.cache_write",
+          "claude.cache_read",
+          "claude.output"
+        ]
+      }
+    },
+    "/mail/drafts/{id}": {
+      "put": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "Keeps the operator's edit of a draft; one going by itself waits for them now. 409 it was sent or let go.",
+        "operationId": "edit_mail_draft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailDraftEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`GET /mail/cases/{id}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailCaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      },
+      "delete": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "Lets a draft go: none is written to the same message by itself again. 409 it was sent or let go.",
+        "operationId": "dismiss_mail_draft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/mail/drafts/{id}/send": {
+      "post": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "Sends a draft to Google as the case's gmail, once: the recipient is the case's (`recipient`).",
+        "description": "400 nothing in the case takes a reply, or a file is not base64; 409 another message came since it was\nwritten, or it was sent; 413 its files; 503 not sent, or it may have gone out: check the thread.",
+        "operationId": "send_mail_draft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailSend"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`GET /mail/cases/{id}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailCaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-outward": true
+      }
+    },
+    "/mail/messages/{id}": {
+      "patch": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "Corrects what a message of Google's was read as; the caller's word from then on.",
+        "description": "400 a topic its kind is not of, or a message of ours.",
+        "operationId": "correct_mail",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "description": "Absent fields stay.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailReadingEdit"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "`GET /mail/cases/{id}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailCaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
       }
     },
     "/map": {
@@ -27366,7 +29312,7 @@
         ]
       },
       "Approval": {
-        "description": "What an agent does without asking its person first; each level runs what the one before it does.\nWhat neither destroys nor spends always runs.\n\n- `ask`: Everything that destroys or spends is proposed.\n- `spend`: What spends runs; what destroys is proposed.\n- `act`: What spends and what destroys run.",
+        "description": "What an agent does without asking its person first; each level runs what the one before it does.\nWhat neither destroys nor spends always runs.\n\n- `ask`: Everything that destroys, speaks to someone outside or spends is proposed.\n- `spend`: What spends runs; what destroys is proposed.\n- `act`: What spends and what destroys run.",
         "type": "string",
         "enum": [
           "ask",
@@ -28761,42 +30707,9 @@
           "rules": {
             "description": "Every rule open to the caller, on or off here.",
             "type": "object",
-            "properties": {
-              "access_requested": {
-                "type": "boolean"
-              },
-              "booked": {
-                "type": "boolean"
-              },
-              "contact_overdue": {
-                "type": "boolean"
-              },
-              "new_lead": {
-                "type": "boolean"
-              },
-              "payment_received": {
-                "type": "boolean"
-              },
-              "review_changed": {
-                "type": "boolean"
-              },
-              "review_gone": {
-                "type": "boolean"
-              },
-              "review_new": {
-                "type": "boolean"
-              },
-              "review_reappeared": {
-                "type": "boolean"
-              },
-              "scan_failed": {
-                "type": "boolean"
-              },
-              "source_silent": {
-                "type": "boolean"
-              }
-            },
-            "additionalProperties": false
+            "additionalProperties": {
+              "type": "boolean"
+            }
           },
           "title": {
             "description": "A private chat's account, a channel's or group's title.",
@@ -29812,6 +31725,30 @@
           "brand",
           "drafts",
           "tally"
+        ]
+      },
+      "GmbMail": {
+        "description": "`GET /gmbs/{id}/mail`.",
+        "type": "object",
+        "properties": {
+          "attempts": {
+            "description": "Newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VerificationAttempt"
+            }
+          },
+          "cases": {
+            "description": "Those last spoken in first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailCase"
+            }
+          }
+        },
+        "required": [
+          "attempts",
+          "cases"
         ]
       },
       "GmbNote": {
@@ -31431,6 +33368,1018 @@
           "by",
           "gmail_id",
           "of_gmail"
+        ]
+      },
+      "MailAuto": {
+        "description": "A topic whose replies go by themselves.",
+        "type": "object",
+        "properties": {
+          "gmail_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "topic": {
+            "$ref": "#/components/schemas/MailTopic"
+          }
+        },
+        "required": [
+          "gmail_id",
+          "topic"
+        ]
+      },
+      "MailAutoSwitch": {
+        "type": "object",
+        "properties": {
+          "gmail": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "on": {
+            "type": "boolean"
+          },
+          "topic": {
+            "description": "`verification` or `reviews`.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MailTopic"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "gmail",
+          "topic",
+          "on"
+        ]
+      },
+      "MailAutos": {
+        "description": "`GET /mail/auto`: those switched on.",
+        "type": "object",
+        "properties": {
+          "on": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailAuto"
+            }
+          },
+          "topics": {
+            "description": "The topics that can be.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailTopic"
+            }
+          }
+        },
+        "required": [
+          "on",
+          "topics"
+        ]
+      },
+      "MailCase": {
+        "description": "A conversation with Google, or a lone notice of its.",
+        "type": "object",
+        "properties": {
+          "asks": {
+            "description": "What Google asks in its last word.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deadline": {
+            "description": "RFC 3339; Google's, still running.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "draft": {
+            "description": "Its draft, until it is answered; what it lacks in `draft.needs`.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailDraft"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "gmail_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "gmb_id": {
+            "description": "The GBP it is about; `null`: not known.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "last": {
+            "$ref": "#/components/schemas/MailLine"
+          },
+          "numbers": {
+            "description": "Google's case numbers.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "state": {
+            "$ref": "#/components/schemas/MailState"
+          },
+          "subject": {
+            "description": "Google's latest, else ours.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thread": {
+            "description": "Gmail's thread of its last message: `POST /gmails/{id}/browser/thread` opens it.",
+            "type": "string"
+          },
+          "topic": {
+            "$ref": "#/components/schemas/MailTopic"
+          }
+        },
+        "required": [
+          "id",
+          "gmail_id",
+          "gmb_id",
+          "topic",
+          "subject",
+          "numbers",
+          "thread",
+          "state",
+          "deadline",
+          "last",
+          "asks",
+          "draft"
+        ]
+      },
+      "MailCaseDetail": {
+        "description": "`GET /mail/cases/{id}`.",
+        "type": "object",
+        "properties": {
+          "attempts": {
+            "description": "Of its GBP, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/VerificationAttempt"
+            }
+          },
+          "case": {
+            "$ref": "#/components/schemas/MailCase"
+          },
+          "messages": {
+            "description": "Oldest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailMessage"
+            }
+          },
+          "recipient": {
+            "description": "Where a reply goes; `null`: nothing in it takes one.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "case",
+          "messages",
+          "recipient",
+          "attempts"
+        ]
+      },
+      "MailCaseEdit": {
+        "description": "Absent fields stay.",
+        "type": "object",
+        "properties": {
+          "done": {
+            "description": "Done until Google speaks again.",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "gmb": {
+            "description": "The GBP it is about, over what its mail says; `null`: what its mail says.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "default": null
+          },
+          "topic": {
+            "description": "As `gmb`.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailTopic"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "additionalProperties": false
+      },
+      "MailCases": {
+        "description": "`GET /mail/cases`, those last spoken in first.",
+        "type": "object",
+        "properties": {
+          "cases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailCase"
+            }
+          }
+        },
+        "required": [
+          "cases"
+        ]
+      },
+      "MailDraft": {
+        "description": "A reply written to a case.",
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          },
+          "created_at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "error": {
+            "description": "Why it did not go, or why nothing was written.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "needs": {
+            "description": "What only the operator has: it never goes by itself.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "send_at": {
+            "description": "RFC 3339; held, when it goes.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sent_at": {
+            "description": "RFC 3339.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/MailDraftState"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "body",
+          "needs",
+          "send_at",
+          "created_at",
+          "sent_at",
+          "error"
+        ]
+      },
+      "MailDraftAsk": {
+        "type": "object",
+        "properties": {
+          "instruction": {
+            "description": "What to say, or to say otherwise.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MailDraftEdit": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "body"
+        ]
+      },
+      "MailDraftState": {
+        "description": "- `proposed`: Waits for the operator.\n- `held`: Goes by itself at its `send_at`.\n- `sending`: Handed to SMTP; one left so may have gone out.\n- `superseded`: Another message came in between.\n- `failed`: Not sent, or not written.",
+        "type": "string",
+        "enum": [
+          "sent",
+          "dismissed",
+          "proposed",
+          "held",
+          "sending",
+          "superseded",
+          "failed"
+        ]
+      },
+      "MailFile": {
+        "type": "object",
+        "properties": {
+          "base64": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "description": "`image/jpeg`.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "type",
+          "base64"
+        ]
+      },
+      "MailKind": {
+        "description": "What a message of Google's says.\n\n- `video_rejected`: The recorded verification video did not pass.\n- `video_in_review`: The recorded verification video is being reviewed.\n- `verified`: The profile is verified.\n- `reverification_required`: The profile has to be verified again.\n- `self_serve`: Support points back at the recorded video or the on-screen prompts.\n- `call_offered`: The live verification call is enabled.\n- `call_failed`: A live verification call was held and did not verify.\n- `options_exhausted`: No way to verify is left on the profile.\n- `account_restricted`: The account, not one profile, is restricted.\n- `reviews_paused`: New reviews are paused: a spike of spam.\n- `reviews_restricted`: Fake or incentivised reviews were found, the profile's reviews restricted.\n- `review_removed`: A review was removed.\n- `reinstatement_refused`: Support will not bring the reviews back.\n- `reinstatement_done`: Support brought all or part of the reviews back.\n- `reviews_live_already`: Support sees the reviews live already.\n- `reviews_no_data`: Support has no record of the reviews, or needs to be told which.\n- `still_active`: Is the business still open: inactivity, removed or revoked unless answered.\n- `invited`: Someone invited this account to manage a profile.\n- `ownership_requested`: Someone asks for a profile's ownership.\n- `management_requested`: Someone asks to manage a profile.\n- `edit_suggested`: Someone suggested an edit: does this look right to you?\n- `edit_rejected`: An edit of ours was not accepted.\n- `changed_by_google`: Google changed the profile.\n- `content_removed`: A photo, post or other content was removed.\n- `duplicate`: The profile is marked as another's duplicate.\n- `acknowledged`: A request was received, nothing more.\n- `routed`: Handed to a specialist or another team.\n- `asks`: Asks for documents, photos, changes or answers before going on.\n- `closed`: The case is closed: it accepts no reply, or a survey follows it.\n- `unclear`: About a profile, what it says cannot be told.\n- `noise`: Performance, promotions, surveys, new reviews, posts.\n- `not_business`: Not about a Business Profile.\n- `impersonation`: Not from Google.",
+        "type": "string",
+        "enum": [
+          "suspended",
+          "appeal_received",
+          "appeal_approved",
+          "appeal_denied",
+          "restriction_lifted",
+          "access_granted",
+          "access_lost",
+          "policy_warning",
+          "video_rejected",
+          "video_in_review",
+          "verified",
+          "reverification_required",
+          "self_serve",
+          "call_offered",
+          "call_failed",
+          "options_exhausted",
+          "account_restricted",
+          "reviews_paused",
+          "reviews_restricted",
+          "review_removed",
+          "reinstatement_refused",
+          "reinstatement_done",
+          "reviews_live_already",
+          "reviews_no_data",
+          "still_active",
+          "invited",
+          "ownership_requested",
+          "management_requested",
+          "edit_suggested",
+          "edit_rejected",
+          "changed_by_google",
+          "content_removed",
+          "duplicate",
+          "acknowledged",
+          "routed",
+          "asks",
+          "closed",
+          "unclear",
+          "noise",
+          "not_business",
+          "impersonation"
+        ]
+      },
+      "MailLine": {
+        "description": "A message, in a line.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "kind": {
+            "description": "`null`: ours, or not read.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sent": {
+            "description": "Ours.",
+            "type": "boolean"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "sent",
+          "kind",
+          "summary"
+        ]
+      },
+      "MailMessage": {
+        "description": "A message, whole.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "authentic": {
+            "description": "Proved Google's.",
+            "type": "boolean"
+          },
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "gmb_id": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "listing": {
+            "description": "The profile it links, by Google's id in the link.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "read_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailReader"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "read_error": {
+            "description": "Why it is not read, once given up on.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reading": {
+            "description": "`null`: ours, or not read.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailReading"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "repliable": {
+            "description": "It takes a reply.",
+            "type": "boolean"
+          },
+          "sent": {
+            "type": "boolean"
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "description": "Its own words, quotes dropped.",
+            "type": "string"
+          },
+          "to": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "at",
+          "sent",
+          "from",
+          "to",
+          "subject",
+          "text",
+          "authentic",
+          "repliable",
+          "gmb_id",
+          "listing",
+          "reading",
+          "read_by",
+          "read_error"
+        ]
+      },
+      "MailReader": {
+        "description": "Who read a message.\n\n- `person`: A person corrected it.",
+        "type": "string",
+        "enum": [
+          "rule",
+          "model",
+          "person"
+        ]
+      },
+      "MailReading": {
+        "description": "What a message of Google's was read as.",
+        "type": "object",
+        "properties": {
+          "answer_within_hours": {
+            "description": "Only when the mail states it.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "uint32",
+            "minimum": 0
+          },
+          "asks": {
+            "description": "What Google asks for, each thing once.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deadline": {
+            "description": "Only when the mail states one.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "gmb": {
+            "description": "The GBP it is about, as its reader saw it; one it names outright goes first.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MailKind"
+          },
+          "reasons": {
+            "description": "Why, in Google's words.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "description": "One line, English.",
+            "type": "string"
+          },
+          "topic": {
+            "$ref": "#/components/schemas/MailTopic"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "topic",
+          "kind",
+          "gmb",
+          "summary",
+          "asks",
+          "reasons",
+          "deadline",
+          "answer_within_hours"
+        ]
+      },
+      "MailReadingEdit": {
+        "description": "Absent fields stay.",
+        "type": "object",
+        "properties": {
+          "deadline": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "default": null
+          },
+          "gmb": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "default": null
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "topic": {
+            "description": "Of a kind that is of any topic.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailTopic"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "MailSend": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "description": "What goes, as the operator leaves it.",
+            "type": "string"
+          },
+          "files": {
+            "description": "At most 18 MiB in all; never stored.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailFile"
+            }
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "body",
+          "files"
+        ]
+      },
+      "MailStanding": {
+        "description": "Auto-generated discriminant enum variants\n\n- `reply_ready`: A draft waits for the operator.\n- `sending`: A draft goes by itself.\n- `reply_due`: Google waits for an answer, or has been silent too long; no draft yet.\n- `waiting`: Google's turn.\n- `quiet`: Nothing to do.",
+        "type": "string",
+        "enum": [
+          "needs_you",
+          "done",
+          "reply_ready",
+          "sending",
+          "reply_due",
+          "waiting",
+          "quiet"
+        ]
+      },
+      "MailState": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "is": {
+                "type": "string",
+                "const": "needs_you"
+              },
+              "why": {
+                "$ref": "#/components/schemas/MailWhy"
+              }
+            },
+            "required": [
+              "is",
+              "why"
+            ]
+          },
+          {
+            "description": "A draft waits for the operator.",
+            "type": "object",
+            "properties": {
+              "is": {
+                "type": "string",
+                "const": "reply_ready"
+              }
+            },
+            "required": [
+              "is"
+            ]
+          },
+          {
+            "description": "A draft goes by itself.",
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "is": {
+                "type": "string",
+                "const": "sending"
+              }
+            },
+            "required": [
+              "is",
+              "at"
+            ]
+          },
+          {
+            "description": "Google waits for an answer, or has been silent too long; no draft yet.",
+            "type": "object",
+            "properties": {
+              "is": {
+                "type": "string",
+                "const": "reply_due"
+              }
+            },
+            "required": [
+              "is"
+            ]
+          },
+          {
+            "description": "Google's turn.",
+            "type": "object",
+            "properties": {
+              "is": {
+                "type": "string",
+                "const": "waiting"
+              },
+              "until": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "is",
+              "until"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "is": {
+                "type": "string",
+                "const": "done"
+              }
+            },
+            "required": [
+              "is"
+            ]
+          },
+          {
+            "description": "Nothing to do.",
+            "type": "object",
+            "properties": {
+              "is": {
+                "type": "string",
+                "const": "quiet"
+              }
+            },
+            "required": [
+              "is"
+            ]
+          }
+        ]
+      },
+      "MailTopic": {
+        "type": "string",
+        "enum": [
+          "verification",
+          "suspension",
+          "reviews",
+          "activity",
+          "access",
+          "profile",
+          "other"
+        ]
+      },
+      "MailWhy": {
+        "description": "Why a case needs the operator.",
+        "oneOf": [
+          {
+            "description": "What Google said is the operator's to act on.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "kind"
+              },
+              "kind": {
+                "$ref": "#/components/schemas/MailKind"
+              }
+            },
+            "required": [
+              "code",
+              "kind"
+            ]
+          },
+          {
+            "description": "A date Google set runs.",
+            "type": "object",
+            "properties": {
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "code": {
+                "type": "string",
+                "const": "deadline"
+              }
+            },
+            "required": [
+              "code",
+              "at"
+            ]
+          },
+          {
+            "description": "The draft lacks what only the operator has.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "needs"
+              },
+              "needs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": [
+              "code",
+              "needs"
+            ]
+          },
+          {
+            "description": "Google answers nothing new, however often asked.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "asked_often"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          },
+          {
+            "description": "Google is silent, and nothing here takes a reply.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "unanswered"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          },
+          {
+            "description": "Google asks in a mail that takes no reply.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "no_reply"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          },
+          {
+            "description": "Not read; `null`: not yet.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "unread"
+              },
+              "error": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "code",
+              "error"
+            ]
+          },
+          {
+            "description": "Neither read nor answered until this is mended.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "stuck"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "error"
+            ]
+          },
+          {
+            "description": "The writer had nothing to say.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "nothing_to_say"
+              },
+              "why": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "why"
+            ]
+          },
+          {
+            "description": "Cut off while sending: check the thread.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "may_have_gone_out"
+              }
+            },
+            "required": [
+              "code"
+            ]
+          },
+          {
+            "description": "The reply was not written, or not sent.",
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "const": "failed"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "error"
+            ]
+          }
         ]
       },
       "MapConfig": {
@@ -33335,6 +36284,7 @@
         ]
       },
       "Rule": {
+        "description": "- `google_mail`: A case of Google's mail turned to a person.",
         "type": "string",
         "enum": [
           "new_lead",
@@ -33347,7 +36297,8 @@
           "review_changed",
           "review_gone",
           "review_reappeared",
-          "scan_failed"
+          "scan_failed",
+          "google_mail"
         ]
       },
       "RulesBody": {
@@ -33356,42 +36307,9 @@
           "rules": {
             "description": "`{\"new_lead\": true, \"review_gone\": false, …}`: the rules to change.",
             "type": "object",
-            "properties": {
-              "access_requested": {
-                "type": "boolean"
-              },
-              "booked": {
-                "type": "boolean"
-              },
-              "contact_overdue": {
-                "type": "boolean"
-              },
-              "new_lead": {
-                "type": "boolean"
-              },
-              "payment_received": {
-                "type": "boolean"
-              },
-              "review_changed": {
-                "type": "boolean"
-              },
-              "review_gone": {
-                "type": "boolean"
-              },
-              "review_new": {
-                "type": "boolean"
-              },
-              "review_reappeared": {
-                "type": "boolean"
-              },
-              "scan_failed": {
-                "type": "boolean"
-              },
-              "source_silent": {
-                "type": "boolean"
-              }
-            },
-            "additionalProperties": false
+            "additionalProperties": {
+              "type": "boolean"
+            }
           }
         },
         "additionalProperties": false,
@@ -35341,6 +38259,66 @@
           "google"
         ]
       },
+      "VerificationAttempt": {
+        "description": "A try to verify a GBP, as Google's mail tells it.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "case_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "message_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "method": {
+            "$ref": "#/components/schemas/VerificationMethod"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/VerificationOutcome"
+          },
+          "reasons": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "method",
+          "outcome",
+          "reasons",
+          "summary",
+          "case_id",
+          "message_id"
+        ]
+      },
+      "VerificationMethod": {
+        "type": "string",
+        "enum": [
+          "video",
+          "call",
+          "unknown"
+        ]
+      },
+      "VerificationOutcome": {
+        "type": "string",
+        "enum": [
+          "in_review",
+          "rejected",
+          "offered",
+          "failed",
+          "verified"
+        ]
+      },
       "Viewport": {
         "type": "object",
         "properties": {
@@ -36036,6 +39014,44 @@
                 "US",
                 "CA",
                 "GB",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [],
+          "type": "object"
+        }
+      },
+      "email": {
+        "description": "Google's mail about the caller's GBPs, as cases.",
+        "key": "i",
+        "params": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "path": "/email",
+        "query": {
+          "properties": {
+            "case": {
+              "description": "The case open.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "show": {
+              "description": "Which cases are listed; without it, those needing the operator.",
+              "enum": [
+                "all",
+                "needs_you",
+                "waiting",
+                "automatic",
                 null
               ],
               "type": [

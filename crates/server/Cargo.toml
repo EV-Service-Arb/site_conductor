@@ -22,6 +22,7 @@ testing = ["sa_panel/testing", "tower/util"]
 
 [dependencies]
 axum = { workspace = true, features = ["ws"] }
+base64.workspace = true
 clap.workspace = true
 color-eyre.workspace = true
 ev_lib = { workspace = true, features = ["settings", "error_monitoring", "api", "api_ws"] }
@@ -71,7 +72,6 @@ ev_lib = { workspace = true, features = ["api_docs"] }
 
 [dev-dependencies]
 axum = { workspace = true, features = ["multipart"] }
-base64.workspace = true
 gmaps_optimal_placement = { workspace = true, features = ["testing"] }
 hmac.workspace = true
 image.workspace = true

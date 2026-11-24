@@ -287,6 +287,44 @@ export const VIEWS = {
         "type": "object"
       }
     },
+    "email": {
+      "path": "/email",
+      "description": "Google's mail about the caller's GBPs, as cases.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "case": {
+            "description": "The case open.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "show": {
+            "description": "Which cases are listed; without it, those needing the operator.",
+            "enum": [
+              "all",
+              "needs_you",
+              "waiting",
+              "automatic",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "key": "i"
+    },
     "gbp": {
       "path": "/gbps/{gmb}",
       "description": "A GBP's window as its own page.",

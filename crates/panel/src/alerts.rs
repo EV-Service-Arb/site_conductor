@@ -399,7 +399,7 @@ impl Panel {
 	/// destination its audience reaches but `skip`'s, so a claim never stands without its messages.
 	/// `outgoing` is what a recipient is sent, `None` for nothing.
 	#[expect(clippy::too_many_arguments, reason = "the candidate and the pass's context, each named at the call site")]
-	async fn fan_out_one(
+	pub(crate) async fn fan_out_one(
 		&self,
 		tx: &mut sqlx::SqliteConnection,
 		rule: Rule,

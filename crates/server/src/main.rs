@@ -19,7 +19,7 @@ use sa_server::{
 	concierge::{Concierge, DevIdentity},
 	forward::{Forward, Services},
 	grafana::Grafana,
-	http, live,
+	http, live, mail,
 	signin::{SignIn, SignInConfig},
 	telegram::{self, BotApi, BotName},
 	tokens, trash,
@@ -183,7 +183,8 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			accounts: accounts.clone(),
 		};
 		let google = sa_places::Google::try_new(keys, Arc::new(rank), Arc::new(store.clone()))?.spend(spend);
-		eyre::Ok(Panel::new(store, settings.data_key()?, settings.renewal()?, google, accounts))
+		let smtp = Arc::new(sa_panel::mail::Gmail);
+		eyre::Ok(Panel::new(store, settings.data_key()?, settings.renewal()?, google, accounts, smtp))
 	};
 	match cli.cmd {
 		Cmd::Migrate => {
@@ -368,6 +369,14 @@ async fn serve(
 	let metered = panel.clone();
 	let purger = panel.clone();
 	let grafana_root = format!("{}/grafana/", config.panel_origin.trim_end_matches('/'));
+	let mail = mail::Worker {
+		panel: panel.clone(),
+		model: model.clone(),
+		tell: match &telegram {
+			Some(tg) => Some((tg.locale, config.panel_origin.parse().wrap_err("the panel's origin is not a URL")?)),
+			None => None,
+		},
+	};
 	let sign_in = SignIn::new(panel, concierge, config);
 	let forward = match &services {
 		Some(services) => Some(Forward::new(sign_in.clone(), services.clone())),
@@ -467,6 +476,7 @@ async fn serve(
 		};
 		let usage = sa_server::usage::run(engine.clone(), services.clone(), browsers_followed, stopped.clone());
 		let inboxes = sa_server::connections::follow(engine.clone(), stopped.clone());
+		let mail = mail::run(mail, stopped.clone());
 		let tokens = async {
 			if let Some(services) = &services {
 				tokens::run(engine, services.clone(), stopped.clone()).await;
@@ -485,7 +495,7 @@ async fn serve(
 		};
 		let meters = sa_server::meters::run(metered, readers, publish, stopped.clone());
 		let workers = sandbox.run(stopped.clone());
-		tokio::join!(bot, feed, usage, inboxes, tokens, grafana, purge, meters, catalog, workers);
+		tokio::join!(bot, feed, usage, inboxes, mail, tokens, grafana, purge, meters, catalog, workers);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

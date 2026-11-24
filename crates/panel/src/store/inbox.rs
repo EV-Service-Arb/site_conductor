@@ -1,6 +1,7 @@
 //! Where the follower of each gmail's inbox stands, and the mail it has logged.
 
 use eyre::WrapErr;
+use sa_core::mail::Named;
 use sqlx::SqliteConnection;
 
 use crate::inbox::Cursor;
@@ -57,11 +58,13 @@ pub(crate) async fn logged(conn: &mut SqliteConnection, gmail: i64, message: &st
 		.wrap_err("looking a message up in the log")
 }
 
-/// The gmail's live GBPs: id, name, place id, address.
-pub(crate) async fn gmbs(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Vec<(i64, Option<String>, Option<String>, Option<String>)>> {
-	sqlx::query_as("SELECT id, name, place_id, address FROM gmbs WHERE gmail_id = $1 AND removed_at IS NULL ORDER BY id")
-		.bind(gmail)
-		.fetch_all(&mut *conn)
-		.await
-		.wrap_err("listing a gmail's GBPs")
+/// The gmail's live GBPs, as a message may name them.
+pub(crate) async fn gmbs(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Vec<Named>> {
+	let rows: Vec<(i64, Option<String>, Option<String>, Option<String>)> =
+		sqlx::query_as("SELECT id, name, place_id, address FROM gmbs WHERE gmail_id = $1 AND removed_at IS NULL ORDER BY id")
+			.bind(gmail)
+			.fetch_all(&mut *conn)
+			.await
+			.wrap_err("listing a gmail's GBPs")?;
+	Ok(rows.into_iter().map(|(id, name, place_id, address)| Named { id, name, place_id, address }).collect())
 }

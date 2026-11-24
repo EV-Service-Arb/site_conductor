@@ -629,7 +629,7 @@ async fn add_gmb(State(s): State<ApiState>, Spends(caller, by): Spends<PlacesReq
 }
 
 /// A present `null` is `Some(None)`; an absent field `None`, by `#[serde(default)]`.
-fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
+pub(crate) fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<Option<T>>, D::Error> {
 	Option::<T>::deserialize(d).map(Some)
 }
 

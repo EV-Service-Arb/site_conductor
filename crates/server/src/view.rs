@@ -98,6 +98,14 @@ pub enum View {
 	/// Where the caller's alerts go, and which.
 	#[view("/user/alerts", key = 'e')]
 	Alerts,
+	/// Google's mail about the caller's GBPs, as cases.
+	#[view("/email", key = 'i')]
+	Email {
+		/// The case open.
+		case: Option<i64>,
+		/// Which cases are listed; without it, those needing the operator.
+		show: Option<MailShow>,
+	},
 	/// Asking for a permission the caller lacks, then on to where they were going.
 	#[view("/access")]
 	Access {
@@ -199,6 +207,19 @@ pub enum Tab {
 	Verification,
 	/// A suspended GBP's appeal.
 	Appeal,
+}
+
+/// Which of Google's mail is listed.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MailShow {
+	/// Waiting for the operator.
+	NeedsYou,
+	/// Waiting for Google.
+	Waiting,
+	All,
+	/// What goes by itself.
+	Automatic,
 }
 
 /// What the Add a GBP panel starts from.

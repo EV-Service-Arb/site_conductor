@@ -8,6 +8,7 @@ import { AccountView } from "@/views/account";
 import { AdminTokensView } from "@/views/admin-tokens";
 import { AlertsView } from "@/views/alerts";
 import { AssistantView } from "@/views/assistant";
+import { EmailView } from "@/views/email";
 import { Home } from "@/views/home";
 import { KitQr } from "@/views/kit";
 import { MembersView } from "@/views/members";
@@ -61,6 +62,8 @@ function framed(at: Exclude<At, { view: "access" | "kit_qr" }>): ReactNode {
       return <MembersView />;
     case "alerts":
       return <AlertsView />;
+    case "email":
+      return <EmailView />;
     case "gbp":
     case "gmail":
     case "category":

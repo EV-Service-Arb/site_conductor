@@ -500,6 +500,7 @@ pub struct Found {
 pub struct Hints {
 	pub read_only: bool,
 	pub idempotent: bool,
+	/// It removes something, or speaks to someone outside.
 	pub destructive: bool,
 	/// The priced items it may buy: a Places request, a cloud phone's minutes.
 	pub spends: Vec<Item>,
@@ -564,7 +565,7 @@ pub(crate) fn hints(method: &str, op: &Operation) -> Hints {
 	Hints {
 		read_only: method == "get",
 		idempotent: matches!(method, "get" | "put" | "delete"),
-		destructive: method == "delete",
+		destructive: method == "delete" || op.extensions.get("x-outward") == Some(&Value::Bool(true)),
 		spends: op
 			.extensions
 			.get("x-spends")

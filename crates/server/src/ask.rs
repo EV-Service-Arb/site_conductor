@@ -54,12 +54,12 @@ Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[l
 }
 
 /// The model that answered: a fallback's, when it stood in.
-fn answered_by(reply: &Value) -> eyre::Result<&str> {
+pub(crate) fn answered_by(reply: &Value) -> eyre::Result<&str> {
 	reply["model"].as_str().ok_or_else(|| eyre::eyre!("the model answered without its name: {reply}"))
 }
 
 /// What an answer read and wrote, as its `usage` says.
-fn tokens(reply: &Value) -> eyre::Result<[(ModelTokens, i64); 4]> {
+pub(crate) fn tokens(reply: &Value) -> eyre::Result<[(ModelTokens, i64); 4]> {
 	let usage = &reply["usage"];
 	let n = |field: &str| usage[field].as_i64().ok_or_else(|| eyre::eyre!("the model's usage has no {field}: {usage}"));
 	Ok([
@@ -284,7 +284,7 @@ impl Asking<'_> {
 			from,
 		};
 		let mut tab = match bill {
-			Bill::Ours => match state.sign_in.panel.model_tab(by, &answer.id, started).await? {
+			Bill::Ours => match state.sign_in.panel.model_tab(by, &answer.id, "The assistant's answer", started).await? {
 				Ok(tab) => Some(tab),
 				Err(why) => {
 					answer.text = format!("I can't answer on the panel's Claude: {why}.");

@@ -638,6 +638,17 @@ POST   /brands/{id}/photos                  slow
 GET    /brands/{id}/photos/{file}
 PATCH  /brands/{id}/photos/{file}
 DELETE /brands/{id}/photos/{file}
+GET    /mail/cases
+GET    /mail/cases/{id}
+PATCH  /mail/cases/{id}
+PATCH  /mail/messages/{id}
+POST   /mail/cases/{id}/draft               slow
+POST   /mail/drafts/{id}/send               fresh, slow
+PUT    /mail/drafts/{id}
+DELETE /mail/drafts/{id}
+GET    /mail/auto
+PUT    /mail/auto                           fresh
+GET    /gmbs/{id}/mail
 GET    /gmbs/{id}/kit
 PUT    /gmbs/{id}/kit
 POST   /gmbs/{id}/kit/shown
