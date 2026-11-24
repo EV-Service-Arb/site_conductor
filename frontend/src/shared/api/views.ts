@@ -554,12 +554,8 @@ export const VIEWS = {
             ]
           },
           "pressure": {
-            "description": "The pressure field, at this radius in metres.",
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
+            "description": "The pressure field drawn.",
+            "type": "boolean"
           },
           "schematic": {
             "description": "The schematic base map, not the satellite.",
@@ -602,26 +598,13 @@ export const VIEWS = {
               "null"
             ]
           },
-          "tiers": {
-            "additionalProperties": {
-              "properties": {
-                "show": {
-                  "type": "boolean"
-                },
-                "weight": {
-                  "format": "double",
-                  "type": "number"
-                }
-              },
-              "required": [
-                "weight",
-                "show"
-              ],
-              "type": "object"
+          "tiers_shown": {
+            "description": "The tiers of competitors shown, by name; without it, every one.",
+            "items": {
+              "type": "string"
             },
-            "description": "Tiers whose weight or visibility was moved off the study's own.",
             "type": [
-              "object",
+              "array",
               "null"
             ]
           },

@@ -3267,10 +3267,6 @@
     "en": "Search queries · {n}",
     "t": "Поисковые запросы · {n}"
   },
-  "placement.radius": {
-    "en": "Radius λ {km} km",
-    "t": "Радиус λ {km} км"
-  },
   "placement.refused.country": {
     "en": "The area is in another country than the category",
     "t": "Область находится в другой стране, чем категория"
@@ -3306,10 +3302,6 @@
   "placement.tier.show": {
     "en": "Show {tier}",
     "t": "Показать {tier}"
-  },
-  "placement.tier.weight": {
-    "en": "Weight of one {tier}",
-    "t": "Вес одного объекта уровня {tier}"
   },
   "placement.title": {
     "en": "Map",

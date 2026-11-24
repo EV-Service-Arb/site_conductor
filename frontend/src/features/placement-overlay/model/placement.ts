@@ -125,11 +125,10 @@ export interface MapView {
   from: "pick" | "scope" | null;
   /** The area it is drawn over, by slug; `""`: one being drawn. */
   area: string | null;
-  /** On, at this radius in metres. */
-  pressure: number | null;
+  pressure: boolean;
   competitors: boolean;
-  /** Tiers whose weight or visibility was moved off the study's own. */
-  tiers: NonNullable<Home["tiers"]> | null;
+  /** The tiers of competitors shown; `null`: every one. */
+  tiers: readonly string[] | null;
   opacity: number;
   hideImputed: boolean;
 }
@@ -145,12 +144,18 @@ export function useMapView(): MapView {
     study: study === undefined ? scoped : study === "" ? null : parseStudy(study),
     from: study !== undefined && study !== "" ? "pick" : study === undefined && scoped !== null ? "scope" : null,
     area: home.area ?? null,
-    pressure: home.pressure ?? null,
+    pressure: home.pressure === true,
     competitors: home.competitors === true,
-    tiers: home.tiers ?? null,
+    tiers: home.tiers_shown ?? null,
     opacity: home.opacity ?? 0.5,
     hideImputed: home.hide_imputed === true,
   };
+}
+
+/** The tiers of `data` shown, `null` every one: as `?heat`, `?tiers_shown` waits for the study that has them. */
+export function tiersShown(view: MapView, data: Data | null): readonly string[] | null {
+  const own = data?.trade?.tiers.map((x) => x.name);
+  return view.tiers?.every((x) => own?.includes(x)) ? view.tiers : null;
 }
 
 /** A category placement can study: one in a country it has a grid for. */
@@ -172,9 +177,9 @@ export function setMapView(change: Partial<MapView>): void {
     ...(change.heat !== undefined && { heat: change.heat ?? undefined }),
     ...(change.study !== undefined && { study: change.study === null ? "" : studyText(change.study) }),
     ...(change.area !== undefined && { area: change.area ?? undefined }),
-    ...(change.pressure !== undefined && { pressure: change.pressure === null ? undefined : Math.round(change.pressure) }),
+    ...(change.pressure !== undefined && { pressure: change.pressure }),
     ...(change.competitors !== undefined && { competitors: change.competitors }),
-    ...(change.tiers !== undefined && { tiers: change.tiers ?? undefined }),
+    ...(change.tiers !== undefined && { tiers_shown: change.tiers === null ? undefined : [...change.tiers] }),
     ...(change.opacity !== undefined && { opacity: change.opacity }),
     ...(change.hideImputed !== undefined && { hide_imputed: change.hideImputed }),
   });

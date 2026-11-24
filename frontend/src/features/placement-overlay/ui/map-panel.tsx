@@ -16,7 +16,7 @@ import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { type T, useLocale, useT, placement as placementKeys, state, hotbar } from "@/shared/i18n";
 import { type Base, setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
 
-import { type Ages, type Data, type Layer, type Legend, type MapView, type Query, type Refusal, type Studied, parseStudy, pull, setMapView, studiable, studyText, useMapView, usePlacement, useStudied } from "../model/placement";
+import { type Ages, type Data, type Layer, type Legend, type MapView, type Query, type Refusal, type Studied, parseStudy, pull, setMapView, studiable, studyText, tiersShown, useMapView, usePlacement, useStudied } from "../model/placement";
 
 const LAYOUT = {
   column: "flex w-80 flex-col",
@@ -101,13 +101,10 @@ export function MapPanel() {
               <Row
                 icon={Waves}
                 label={t(placementKeys.pressure, "Competitor pressure")}
-                warn={untraded ?? (view.pressure !== null && legend?.pressure?.levels === null ? t(placementKeys.noPressure, "nothing in view under pressure") : undefined)}
-                on={view.pressure !== null}
-                // on at the trade's own radius: none drawn, none to start from
-                disabled={view.pressure === null && data?.trade == null}
-                onToggle={() => setMapView({ pressure: view.pressure === null ? data!.trade!.lambda_m : null })}
+                warn={untraded ?? (view.pressure && legend?.pressure?.levels === null ? t(placementKeys.noPressure, "nothing in view under pressure") : undefined)}
+                on={view.pressure}
+                onToggle={() => setMapView({ pressure: !view.pressure })}
               />
-              {view.pressure !== null && <Radius lambda={view.pressure} />}
               <Row
                 icon={Store}
                 label={t(placementKeys.competitors, "Competitors")}
@@ -115,7 +112,7 @@ export function MapPanel() {
                 on={view.competitors}
                 onToggle={() => setMapView({ competitors: !view.competitors })}
               />
-              {data?.trade != null && <Tiers view={view} trade={data.trade} />}
+              {data?.trade != null && <Tiers shown={tiersShown(view, data)} trade={data.trade} />}
               <Row icon={MapPin} label={t(hotbar.places, "Google's places")} on={places} onToggle={() => showPlaces(!places)} />
             </Section>
           )}
@@ -412,29 +409,27 @@ function Heat({ view, data, legend }: { view: MapView; data: Data; legend: Legen
 
 type TradeData = NonNullable<Data["trade"]>;
 
-/** Each tier of competitor: shown or not, and how much one weighs in the pressure. */
-function Tiers({ view, trade }: { view: MapView; trade: TradeData }) {
+/** Each tier of competitor, its marks shown or not; `shown` `null`: every one. */
+function Tiers({ shown, trade }: { shown: readonly string[] | null; trade: TradeData }) {
   const t = useT();
-  const tune = (name: string, change: Partial<{ weight: number; show: boolean }>) => {
-    const own = trade.tiers.find((x) => x.name === name)!;
-    const now = view.tiers?.[name] ?? { weight: own.weight, show: true };
-    setMapView({ tiers: { ...view.tiers, [name]: { ...now, ...change } } });
+  const all = trade.tiers.map((x) => x.name);
+  const toggle = (name: string) => {
+    const next = all.filter((x) => (shown?.includes(x) ?? true) !== (x === name));
+    setMapView({ tiers: next.length === all.length ? null : next });
   };
   return (
     <div className="flex flex-col pl-6">
       {trade.tiers.map((tier) => {
-        const tuned = view.tiers?.[tier.name] ?? { weight: tier.weight, show: true };
-        const Shown = tuned.show ? Eye : EyeOff;
+        const on = shown?.includes(tier.name) ?? true;
+        const Shown = on ? Eye : EyeOff;
         return (
           <div key={tier.name} className="flex items-center gap-2 px-2 py-0.5">
-            <button type="button" aria-pressed={tuned.show} aria-label={t(placementKeys.tier.show, "Show {tier}", { tier: tier.name })} onClick={() => tune(tier.name, { show: !tuned.show })} className="text-ink-soft hover:text-ink">
+            <button type="button" aria-pressed={on} aria-label={t(placementKeys.tier.show, "Show {tier}", { tier: tier.name })} onClick={() => toggle(tier.name)} className="text-ink-soft hover:text-ink">
               <Shown className="size-4" />
             </button>
-            <span className={cn("w-24 shrink-0 truncate", !tuned.show && "text-ink-soft")}>
+            <span className={cn("min-w-0 flex-1 truncate", !on && "text-ink-soft")}>
               {tier.name} <span className="tabular-nums text-ink-soft">({tier.fetched_s.length})</span>
             </span>
-            <Slider min={0} max={2} step={0.05} value={tuned.weight} onValueChange={(w) => tune(tier.name, { weight: w })} aria-label={t(placementKeys.tier.weight, "Weight of one {tier}", { tier: tier.name })} />
-            <span className="w-8 shrink-0 text-right tabular-nums text-ink-soft">{tuned.weight.toFixed(2)}</span>
           </div>
         );
       })}
@@ -461,6 +456,7 @@ function DataSection({ view, data, ages, notice, pulling, pullFailed, drawn, pic
   const t = useT();
   const me = useMe();
   const trade = data.trade;
+  const shown = tiersShown(view, data);
   return (
     <Section title={t(placementKeys.data, "Data")}>
       {notice !== null && <Note tone="warn">{notice.text}</Note>}
@@ -477,7 +473,7 @@ function DataSection({ view, data, ages, notice, pulling, pullFailed, drawn, pic
       {trade !== null && trade.categories.length > 0 && (
         <Fold title={t(placementKeys.googleCategories, "Google categories")} open>
           {trade.categories.map((c) => {
-            const n = c.counts.filter((_, i) => view.tiers?.[trade.tiers[i]!.name]?.show !== false).reduce((a, b) => a + b, 0);
+            const n = c.counts.filter((_, i) => shown?.includes(trade.tiers[i]!.name) ?? true).reduce((a, b) => a + b, 0);
             return (
               n > 0 && (
                 <span key={c.kind} className="flex items-center gap-2 px-2 py-0.5">
@@ -565,17 +561,7 @@ export function MapPreview() {
   const view = useMapView();
   if (placement.status !== "ok") return placement.status === "unconnected" ? t(placementKeys.unconnected, "Placement not connected") : t(placementKeys.title, "Map");
   const heat = placement.data?.layers.find((l) => l.id === view.heat)?.name ?? t(placementKeys.noHeat, "No heat");
-  return [heat, placement.data?.name ?? t(placementKeys.noArea, "no area picked"), view.pressure !== null && placement.data?.trade != null && t(placementKeys.pressureOn, "pressure on")].filter(Boolean).join(" · ");
-}
-
-function Radius({ lambda }: { lambda: number }) {
-  const t = useT();
-  return (
-    <div className="flex items-center gap-2 px-2 py-1 pl-8">
-      <span className="w-24 shrink-0 text-ink-mid">{t(placementKeys.radius, "Radius λ {km} km", { km: (lambda / 1000).toFixed(1) })}</span>
-      <Slider min={250} max={10000} step={250} value={lambda} onValueChange={(v) => setMapView({ pressure: v })} />
-    </div>
-  );
+  return [heat, placement.data?.name ?? t(placementKeys.noArea, "no area picked"), view.pressure && placement.data?.trade != null && t(placementKeys.pressureOn, "pressure on")].filter(Boolean).join(" · ");
 }
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -601,13 +587,12 @@ function Fold({ title, open: initial = false, children }: { title: string; open?
 }
 
 /** `warn`: on or off, it draws nothing here, and why. */
-function Row({ icon: Icon, label, warn, on, disabled, onToggle }: { icon: ComponentType<{ className?: string }>; label: string; warn?: string | undefined; on: boolean; disabled?: boolean; onToggle: () => void }) {
+function Row({ icon: Icon, label, warn, on, onToggle }: { icon: ComponentType<{ className?: string }>; label: string; warn?: string | undefined; on: boolean; onToggle: () => void }) {
   const Shown = on ? Eye : EyeOff;
   return (
     <button
       type="button"
       aria-pressed={on}
-      disabled={disabled}
       onClick={onToggle}
       title={warn}
       className={cn("flex h-(--control-h-sm) items-center gap-2 rounded-control px-2 text-left text-ink-mid hover:bg-hover hover:text-ink", on && "text-ink", warn !== undefined && "text-accent-warn hover:text-accent-warn")}
