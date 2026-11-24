@@ -167,6 +167,16 @@ pub struct Caller {
 	pub granted: Option<sa_core::agent::Approval>,
 }
 
+impl Caller {
+	/// Who is at the session: the actor while acting, whosever account it is.
+	pub(crate) fn person(&self) -> Uuid {
+		match &self.actor {
+			Some(a) => a.sub.parse().expect("an actor's sub is its own user's id"),
+			None => self.user_id,
+		}
+	}
+}
+
 impl<S: Send + Sync> FromRequestParts<S> for Caller {
 	type Rejection = std::convert::Infallible;
 

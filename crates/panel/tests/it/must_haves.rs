@@ -54,6 +54,7 @@ async fn draft(p: &Panel, owner: Uuid, name: &str) -> Gmb {
 			label: None,
 			note: None,
 		}],
+		note: None,
 	};
 	p.create_gmb(owner, unplaced, now()).await.unwrap().unwrap()
 }

@@ -35,6 +35,14 @@
     "en": "least used first · a GBP gets each at most once",
     "t": "сначала наименее использованные · каждый GBP получает каждый не больше раза"
   },
+  "gmbs.note": {
+    "en": "Your note: only you see it",
+    "t": "Ваша заметка: видите только вы"
+  },
+  "gmbs.note.add": {
+    "en": "Click to add a note",
+    "t": "Нажмите, чтобы добавить заметку"
+  },
   "kit.block.off": {
     "en": "kit off",
     "t": "набор выключен"

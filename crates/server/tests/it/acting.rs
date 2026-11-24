@@ -115,6 +115,50 @@ async fn acting_as_another_is_their_account_with_the_actors_permissions_but_the_
 	assert_eq!(me["permissions"], json!(admin()), "one's own session holds the bound ones");
 }
 
+/// A note on a GBP is read by whoever wrote it and no one else: an actor reads and writes their own, never the subject's.
+#[tokio::test]
+async fn a_note_on_a_gbp_is_its_writers_alone() {
+	let db = TestDb::create().await;
+	let (app, ..) = setup(&db, admin()).await;
+	let mut derek = Browser::default();
+	derek.sign_in_as(&app, "derek@dzcadvertising.com").await;
+	let new = json!({
+		"name": "Lyon 7", "trade": "gcid:plumber", "state": "draft", "spots": [{"lat": 45.76, "lng": 4.84}], "note": "  by the depot\n"
+	});
+	let (status, draft) = derek.call(&app, Method::POST, "/api/v1/gmbs", Some(new)).await;
+	assert_eq!(status, StatusCode::CREATED, "{draft}");
+	let gmb = format!("/api/v1/gmbs/{}", draft["id"]);
+	let uri = format!("{gmb}/note");
+	assert_eq!(derek.call(&app, Method::GET, &uri, None).await, (StatusCode::OK, json!({"note": "by the depot"})));
+	for other in ["/api/v1/gmails".to_owned(), format!("{gmb}/log")] {
+		let (_, body) = derek.call(&app, Method::GET, &other, None).await;
+		assert!(!body.to_string().contains("by the depot"), "{other} carries no note: {body}");
+	}
+
+	let mut actor = Browser::default();
+	actor.sign_in(&app).await;
+	for (method, body) in [(Method::GET, None), (Method::PUT, Some(json!({"note": "mine"})))] {
+		assert_eq!(actor.call(&app, method, &uri, body).await.0, StatusCode::NOT_FOUND, "another's GBP");
+	}
+	actor.call(&app, Method::PUT, "/api/v1/me/acting", Some(json!({"user_id": DEREK}))).await;
+	assert_eq!(actor.call(&app, Method::GET, &uri, None).await, (StatusCode::OK, json!({"note": null})), "never the subject's");
+	assert_eq!(actor.call(&app, Method::PUT, &uri, Some(json!({"note": "watch this one"}))).await.0, StatusCode::NO_CONTENT);
+	assert_eq!(actor.call(&app, Method::GET, &uri, None).await.1, json!({"note": "watch this one"}));
+	assert_eq!(derek.call(&app, Method::GET, &uri, None).await.1, json!({"note": "by the depot"}), "one each");
+
+	for bad in [" ".to_owned(), "é".repeat(4001)] {
+		assert_eq!(derek.call(&app, Method::PUT, &uri, Some(json!({"note": bad}))).await.0, StatusCode::BAD_REQUEST);
+	}
+	assert_eq!(
+		derek.call(&app, Method::PUT, &uri, Some(json!({"note": "é".repeat(4000)}))).await.0,
+		StatusCode::NO_CONTENT,
+		"characters, not bytes"
+	);
+	assert_eq!(derek.call(&app, Method::PUT, &uri, Some(json!({"note": null}))).await.0, StatusCode::NO_CONTENT);
+	assert_eq!(derek.call(&app, Method::GET, &uri, None).await.1, json!({"note": null}));
+	assert_eq!(actor.call(&app, Method::GET, &uri, None).await.1, json!({"note": "watch this one"}), "the actor's stays");
+}
+
 #[tokio::test]
 async fn acting_needs_act_as_and_a_browsers_session() {
 	let db = TestDb::create().await;

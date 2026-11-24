@@ -513,6 +513,8 @@
   "gmbs.live.title": "Live reviews over the last 30 days",
   "gmbs.live.week": "7d",
   "gmbs.none": "No GMBs yet.",
+  "gmbs.note": "Your note: only you see it",
+  "gmbs.note.add": "Click to add a note",
   "gmbs.place.move": "Move location",
   "gmbs.place.set": "Set location",
   "gmbs.readiness.title": "Must-haves ready before Google's form",

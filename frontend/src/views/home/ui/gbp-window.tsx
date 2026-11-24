@@ -5,7 +5,7 @@ import { Badge, Button, NativeSelect, NativeSelectOption, Skeleton, Tabs, TabsLi
 import { CalendarClock, ChevronLeft, ChevronRight, Copy, ExternalLink, Globe, Hash, History, ImageIcon, Mail, MapPin, MonitorSmartphone, Pencil, Phone, QrCode, RefreshCw, ShieldAlert, ShieldCheck, Star, Store, Tag, UserCog, Video } from "lucide-react";
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
-import { CategoryChip, NewBrand, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, TradeName, useGoogleList, narrowed, openWindow, readyCount, under, syncGmb, useBrands, useGmails, useGmbTags, useOnMap, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
+import { CategoryChip, GmbNote, NewBrand, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, TradeName, useGoogleList, narrowed, openWindow, readyCount, under, syncGmb, useBrands, useGmails, useGmbTags, useOnMap, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { api, ok, reviewArchive } from "@/shared/api";
 import { type Changed, type Closed, type Country, type GbpRole, type Gmail, type Gmb, type GmbEdit, type LogDto, type LoggedDto, type Tab, gbpRoleValues, mustHaveValues } from "@/shared/api/schema";
@@ -232,6 +232,7 @@ function LocationHeader({ k, listed: { gmb, gmail } }: { k: Key; listed: Listed 
           .filter(Boolean)
           .flatMap((part, i) => (i === 0 ? [<span key={i}>{part}</span>] : [<span key={`d${i}`}>{dot}</span>, <span key={i}>{part}</span>]))}
       </p>
+      <GmbNote key={gmb.id} gmb={gmb.id} />
     </header>
   );
 }

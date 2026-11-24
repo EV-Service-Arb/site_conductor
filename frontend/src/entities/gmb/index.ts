@@ -21,6 +21,7 @@ export { VersionDiff, VersionRead } from "./ui/version-diff";
 export { CategoryChip } from "./ui/category-chip";
 export { BrandMark, NewBrand, useSites } from "./ui/brand";
 export { LiveReviews } from "./ui/live-reviews";
+export { GmbNote, NOTE_MAX } from "./ui/gmb-note";
 export { DEVICE_NAME, PROVIDER_NAME } from "./model/browser-names";
 export { gmbs, trades, browser, windowKeys, scopeKeys, trash, undo, move, kit, areaKeys, brandKeys } from "./model/i18n";
 export { AreaDraw, type Drawn } from "./ui/area-draw";

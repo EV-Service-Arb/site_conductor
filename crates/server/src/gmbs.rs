@@ -15,7 +15,7 @@ use sa_core::{
 use sa_panel::{
 	Panel, Refused,
 	categories::Mine,
-	gmbs::{Edit, Existing, Gmail, Gmb, GoogleCategory, Unplaced},
+	gmbs::{Edit, Existing, Gmail, Gmb, GoogleCategory, Note, Unplaced},
 };
 use serde::{Deserialize, Serialize};
 
@@ -279,6 +279,8 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/gmbs/{id}/sync", USER, sync_gmb),
 		ApiRoute::new(M::GET, "/gmbs/{id}/photos/{photo}", USER, gmb_photo),
 		ApiRoute::new(M::GET, "/gmbs/{id}/log", USER, gmb_log),
+		ApiRoute::new(M::GET, "/gmbs/{id}/note", USER, gmb_note),
+		ApiRoute::new(M::PUT, "/gmbs/{id}/note", USER, set_gmb_note),
 		ApiRoute::new(M::DELETE, "/gmbs/{id}", USER, remove_gmb),
 		ApiRoute::new(M::PUT, "/gmbs/enabled", USER, switch_gmbs),
 		ApiRoute::new(M::PUT, "/gmbs/trade", USER, set_gmb_trades),
@@ -561,6 +563,8 @@ pub(crate) struct NewUnplaced {
 	/// A draft's candidate spots, 1–20, in order: its location the first's.
 	#[serde(default)]
 	spots: Vec<sa_panel::gmbs::Spot>,
+	/// The caller's own note on it, as `PUT /gmbs/{id}/note`.
+	note: Option<String>,
 }
 
 /// Creates a GBP no place is known of: a draft by its spots, or one verifying or suspended (off
@@ -576,6 +580,7 @@ async fn create_gmb(State(s): State<ApiState>, Extension(caller): Extension<Call
 		country: b.country,
 		at: b.location,
 		spots: b.spots,
+		note: b.note.map(|text| Note { by: caller.person(), text }),
 	};
 	let added = s.sign_in.panel.create_gmb(caller.user_id, unplaced, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = added.id, state = %added.state, "GBP without a place created");
@@ -774,6 +779,39 @@ async fn gmb_log(State(panel): State<Panel>, Extension(caller): Extension<Caller
 			})
 			.collect(),
 	}))
+}
+
+/// What the caller noted on a GBP: theirs alone, read by nobody else.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "GmbNote")]
+pub(crate) struct NoteDto {
+	/// Plain text; `null`: none.
+	note: Option<String>,
+}
+
+/// The caller's own note on a GBP. While acting as another, the actor's own on it, never the
+/// subject's.
+async fn gmb_note(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>) -> ApiResult<Json<NoteDto>> {
+	Ok(Json(NoteDto {
+		note: panel.gmb_note(caller.user_id, caller.person(), gmb).await??,
+	}))
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct SetNote {
+	#[schemars(length(max = 4000))]
+	note: Option<String>,
+}
+
+/// Writes the caller's own note on a GBP, in any state; `null` takes it away. Nobody else reads it,
+/// and it is not in the GBP's log.
+///
+/// 400 empty or past 4000 characters.
+async fn set_gmb_note(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id: gmb }): Ids<Id<i64>>, Body(SetNote { note }): Body<SetNote>) -> ApiResult<NoContent> {
+	panel.set_gmb_note(caller.user_id, caller.person(), gmb, note.as_deref()).await??;
+	tracing::info!(user_id = %caller.person(), gmb_id = gmb, "note on a GBP written");
+	Ok(NoContent)
 }
 
 /// Removes a GBP to the trash.

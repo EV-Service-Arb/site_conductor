@@ -29,6 +29,7 @@ pub use crate::{
 /// The rows of a page of a GBP's log.
 pub const LOG_PAGE: u32 = 100;
 const MAX_SPOTS: usize = 20;
+const MAX_NOTE: usize = 4000;
 
 /// A GBP that is on Google already, added under a gmail.
 #[derive(Clone, Debug)]
@@ -60,6 +61,14 @@ pub struct Unplaced {
 	pub at: Option<LatLng>,
 	/// A draft's, at least one.
 	pub spots: Vec<Spot>,
+	pub note: Option<Note>,
+}
+
+/// A person's own note on a GBP: `by` alone reads it.
+#[derive(Clone, Debug)]
+pub struct Note {
+	pub by: Uuid,
+	pub text: String,
 }
 
 /// What changes of a GBP; each absent is left, `Some(None)` clears it.
@@ -149,6 +158,14 @@ fn name(raw: &str) -> Result<String, Refused> {
 	match raw.trim() {
 		"" => Err(Refused::Invalid("a GBP's name is not empty".to_owned())),
 		n => Ok(n.to_owned()),
+	}
+}
+
+fn note(raw: &str) -> Result<&str, Refused> {
+	match raw.trim() {
+		"" => Err(Refused::Invalid("a note is not empty: null for none".to_owned())),
+		n if n.chars().count() > MAX_NOTE => Err(Refused::Invalid(format!("a note is at most {MAX_NOTE} characters"))),
+		n => Ok(n),
 	}
 }
 
@@ -313,9 +330,10 @@ impl Panel {
 			};
 			u.at.map(on_earth).transpose()?;
 			trade_listed(Some(&u.trade), u.country)?;
-			Ok((n, spots))
+			let note = u.note.as_ref().map(|n| note(&n.text).map(|text| (n.by, text))).transpose()?;
+			Ok((n, spots, note))
 		});
-		let (name, spots) = match checked {
+		let (name, spots, note) = match checked {
 			Ok(n) => n,
 			Err(r) => return Ok(Err(r)),
 		};
@@ -357,6 +375,9 @@ impl Panel {
 		if !spots.is_empty() {
 			db::set_spots(&mut tx, owner, added.id, &spots).await?;
 			added = db::gmb_of(&mut tx, None, added.id).await?.expect("added in this transaction");
+		}
+		if let Some((by, text)) = note {
+			db::set_note(&mut tx, by, added.id, Some(text)).await?;
 		}
 		db::log(&mut tx, Some(added.id), added.gmail_id, Some(owner), now, &Event::Added { state: added.state }).await?;
 		tx.commit().await.wrap_err("committing a GBP without a place")?;
@@ -663,6 +684,33 @@ impl Panel {
 	pub async fn gmb_log(&self, owner: Uuid, id: i64, before: Option<i64>, kinds: &[EventKind]) -> eyre::Result<Result<Vec<Logged>, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a GBP's log")?;
 		Ok(db::events(&mut conn, owner, id, before, kinds, LOG_PAGE).await?.ok_or(Refused::NotFound))
+	}
+
+	/// `by`'s own note on the owner's GBP `id`.
+	pub async fn gmb_note(&self, owner: Uuid, by: Uuid, id: i64) -> eyre::Result<Result<Option<String>, Refused>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a note")?;
+		if db::gmb_of(&mut conn, Some(owner), id).await?.is_none() {
+			return Ok(Err(Refused::NotFound));
+		}
+		Ok(Ok(db::note(&mut conn, by, id).await?))
+	}
+
+	/// `by`'s own note on the owner's GBP `id`; `None` takes it away. Never logged: the log is the owner's.
+	pub async fn set_gmb_note(&self, owner: Uuid, by: Uuid, id: i64, text: Option<&str>) -> eyre::Result<Result<(), Refused>> {
+		let text = match text.map(note).transpose() {
+			Ok(t) => t,
+			Err(r) => return Ok(Err(r)),
+		};
+		let mut tx = self.store.begin_write().await?;
+		if !is_open(&mut tx).await? {
+			return Ok(Err(Refused::Closed));
+		}
+		if db::gmb_of(&mut tx, Some(owner), id).await?.is_none() {
+			return Ok(Err(Refused::NotFound));
+		}
+		db::set_note(&mut tx, by, id, text).await?;
+		tx.commit().await.wrap_err("committing a note")?;
+		Ok(Ok(()))
 	}
 
 	/// `event` of the owner's gmail `gmail`'s browser in the log of `gmb` it ran for, else of each GBP under the gmail.
