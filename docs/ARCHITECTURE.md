@@ -1204,7 +1204,7 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
 
 - **Whose a message is.** Authentic: its one From is @google.com exactly and Gmail's own first
   `Authentication-Results` passes DMARC for it; a look-alike is an impersonation, in a case of its own.
-  Google's other mail is in the log alone.
+  Ours: what Gmail says the account sent, whatever its From. Google's other mail is in the log alone.
 - **Joining.** A reply joins what it answers (Message-IDs), else its Gmail thread's conversation, else
   its case number's; a notice only its number's: Gmail threads the notices of every profile together.
 - **The GBP** of a message: by hand, else the one it names, else the one its profile link is known by
@@ -1212,10 +1212,16 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   verification and another for its page.
 - **The model** runs on the gmail's owner's own Claude, else the panel's, charged to them; without
   either or a balance, mail waits and its case says so. The writer's facts are the case, Google's other
-  readings of the GBP and the GBP; what it lacks is a need, and a draft with one never goes by itself.
+  readings of the GBP, the GBP, and, of a case about reviews, those review_archive sees gone (a full page
+  of them is no count); what it lacks is a need, and a draft with one never goes by itself. Where the
+  archive does not track the GBP the list is a need; while it does not answer, the reply waits.
+- **Whose turn.** A deflection, a refusal, or silence past Google's term (48 h where it gave none) is
+  pressed. What Google asks for is its operator's, the reply ready around it. A specialist of Google's
+  is waited for, told of, and pressed once. A case is settled by a later reading of its GBP, or the GBP's
+  move to verified.
 - **A reply** goes as the gmail, to the last message of the case that takes one. `sending` is committed
-  before SMTP; one left so is never tried again. A held one goes only while its topic's switch
-  (`verification`, `reviews`; off unless its owner's) is on, its case is as it was, and fewer than
+  before SMTP; one left so is never tried again. A held one (never one to what Google asks) goes only while its
+  topic's switch (`verification`, `reviews`; off unless its owner's) is on, its case is as it was, and fewer than
   `MAX_ASKS` of ours went unanswered; a person may send past that. Only production's goes by itself: a
   copy of its database would answer Google too.
 
@@ -1368,7 +1374,8 @@ feed (2 s)        GET <service>/api/conductor/notifications?after=<cursor>&limit
                   `next`; a note that fails fails the page, the cursor stays (loud, never skipped); 404:
                   a service not cut over, said once, asked again every 60 s
 own               told in the write that made it so, or found due every 2 s (`own_alerts`); Google's mail
-                  every 60 s: a case turned to a person, once per message and turn, for 6 days
+                  every 60 s: a case turned to a person or to a specialist of Google's, once per message
+                  and turn, for 6 days
 told              once per (rule, event): kept 30 days, sealed; in the inbox of each person of its
                   audience; queued for each destination of theirs reached, its filter passed, their access
                   confirmed within the hour
