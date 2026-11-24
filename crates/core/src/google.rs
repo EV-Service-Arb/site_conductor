@@ -79,19 +79,29 @@ pub fn drawn(slices: &[Slice]) -> Result<Vec<Drawn>, Invalid> {
 		.collect()
 }
 
-/// What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone.
+/// What an admin sets an account to: its real money per slice, the APIs the guard leaves alone, and its credits.
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize, schemars::JsonSchema)]
 pub struct Hold {
 	/// Every slice's.
 	pub allow: BTreeMap<String, Allow>,
 	/// APIs on its billed projects the guard leaves alone: spending with no lever but the backstop.
 	pub unguarded: Vec<String>,
+	/// Each credit's balance, as the console read it.
+	pub credits: Vec<Credit>,
 }
 
 impl Hold {
-	/// Refused when no slice is [`crate::meters::SLICE`], or `allow` misses a slice, names one that is not, or holds a
-	/// day past its month or no amount.
+	/// Refused when no slice is [`crate::meters::SLICE`], `allow` misses a slice, names one that is not, or holds a
+	/// day past its month or no amount, or a credit has no name, no amount, or another's id.
 	pub fn check(&self, slices: &[Drawn]) -> Result<(), Invalid> {
+		for (i, c) in self.credits.iter().enumerate() {
+			if c.name.trim().is_empty() || !c.left.is_finite() || c.left < 0.0 {
+				return Err(Invalid::new(format!("credit {:?}: a name, and what is left 0 or more", c.name)));
+			}
+			if c.id.as_ref().is_some_and(|id| self.credits[..i].iter().any(|o| o.id.as_ref() == Some(id))) {
+				return Err(Invalid::new(format!("credit {:?}: its id is another's too", c.name)));
+			}
+		}
 		if !slices.iter().any(|s| s.name == crate::meters::SLICE) {
 			return Err(Invalid::new(format!("no slice is {:?}, which every meter falls in", crate::meters::SLICE)));
 		}
@@ -125,7 +135,6 @@ pub struct Held {
 	pub table: String,
 	/// Usage before this day is not drawn.
 	pub since: Date,
-	pub credits: Vec<Credit>,
 	#[serde(flatten)]
 	pub hold: Hold,
 }

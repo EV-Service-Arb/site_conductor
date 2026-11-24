@@ -1,4 +1,4 @@
-# Every Google billing account a key or credential of ours is on (docs/spec/google.md): read off its BigQuery billing export by the conductor's meters, held by the guard (crates/guard) to what an admin sets it to in the meters card, and the conductor's config for what it `provides`.
+# Every Google billing account a key or credential of ours is on (docs/spec/google.md): read off its BigQuery billing export by the conductor's meters, held by the guard (crates/guard) to what an admin sets it to in the meters card (its allowances, unguarded APIs and credits), and the conductor's config for what it `provides`.
 {
   accounts = [
     {
@@ -8,10 +8,6 @@
         reader = { file = "~/.config/gcloud/accounting-reader.json"; }; # accounting-reader@gen-lang-client-0759123990
         since = "2026-10-13"; # usage before this day is not drawn
       };
-      # A credit's balance is the console's reading at `read`, less what the export brought in after it.
-      credits = [
-        { id = "Starter:Credit-010027-EEDB26-C25F67"; name = "GCP Free Credit"; read = "2026-11-23T19:55:00Z"; left = 100.94; ends = "2027-01-13"; }
-      ];
       # What its keys are for, each slot optional; secrets as `{ env = "…"; }` or `{ file = "…"; }`.
       provides = {
         places = { key = { env = "GOOGLE_MAPS_KEY_EVINVEST"; }; }; # Places, Geocoding
@@ -22,13 +18,11 @@
     {
       name = "v7916"; # v79166789533@gmail.com
       export = null; # its billing account 01AFF0-385455-2AC92F is closed: nothing of ours uses it. Once open: gmp-demo-project-985008120.billing.gcp_billing_export_v1_01AFF0_385455_2AC92F, its reader ~/.config/gcloud/v7916-reader.json
-      credits = [ ];
       provides.places = { key = { env = "GOOGLE_MAPS_KEY"; }; }; # Maps Platform Demo API Key: Places, Geocoding, Maps JS, Routes, YouTube
     }
     {
       name = "icos1"; # 1cryptoicos@gmail.com
       export = null; # its billing account is not open yet: nothing of ours uses it. Its reader, once it is: ~/.config/gcloud/icos1-reader.json (accounting-reader@gmp-demo-project-232535659)
-      credits = [ ];
       provides.places = { key = { env = "GOOGLE_MAPS_KEY_ICOS1"; }; }; # Maps Platform Demo API Key: Places, Geocoding, Maps JS, Routes
     }
   ];

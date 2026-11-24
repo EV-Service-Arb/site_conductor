@@ -335,11 +335,11 @@ fn plan(read: &Read) -> Vec<Result<(Vec<Row>, Vec<Act>)>> {
 					Allow { day: 0.0, month: 0.0 }
 				}
 			};
-			let configured: BTreeSet<&str> = account.credits.iter().filter_map(|c| c.id.as_deref()).collect();
+			let configured: BTreeSet<&str> = account.hold.credits.iter().filter_map(|c| c.id.as_deref()).collect();
 			let unknown: Vec<&String> = seen.drawn.keys().filter(|id| !configured.contains(id.as_str())).collect();
 			ensure!(
 				unknown.is_empty(),
-				"{}: the export draws on credits {unknown:?} with no `credits` entry in nix/google.nix",
+				"{}: the export draws on credits {unknown:?} with no credit of that id in its hold (the admin's meters card)",
 				seen.account
 			);
 			let enabled = |p: &str, api: &str| seen.enabled.get(p).is_some_and(|on| on.iter().any(|a| a == api));
@@ -397,6 +397,7 @@ fn plan(read: &Read) -> Vec<Result<(Vec<Row>, Vec<Act>)>> {
 			// a credit gone a day early: Google's day ends in Pacific time, and a credit gone a day early only caps sooner
 			let tomorrow = today.checked_add(1.day())?;
 			let credits: f64 = account
+				.hold
 				.credits
 				.iter()
 				.map(|c| c.left_on(c.id.as_ref().map_or(0.0, |id| seen.drawn.get(id).copied().unwrap_or(0.0)), tomorrow))
@@ -822,7 +823,7 @@ fn seen(google: &Google, table: &str, now: Timestamp, month: &str, day_began: Ti
 			"SELECT c.id, UNIX_SECONDS(TIMESTAMP_TRUNC(export_time, HOUR)), c.amount FROM `{table}`, UNNEST(credits) c WHERE c.type IN {BALANCES}"
 		))? {
 			let id = text(&r[0])?.to_owned();
-			let read = account.credits.iter().find(|c| c.id.as_deref() == Some(&id)).map(|c| c.read);
+			let read = account.hold.credits.iter().find(|c| c.id.as_deref() == Some(&id)).map(|c| c.read);
 			let exported = Timestamp::from_second(num(&r[1])? as i64)?;
 			let entry = drawn.entry(id).or_insert(0.0);
 			if read.is_none_or(|t| exported >= t) {

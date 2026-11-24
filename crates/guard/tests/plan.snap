@@ -114,5 +114,5 @@ Error: a: the guard runs or reads through run.googleapis.com on p, which it must
 Error: a: the guard runs or reads through bigquery.googleapis.com on p, which it must never cap, zero or disable: name each in the account's `unguarded`
 == a slice missing from allow: the definition refused
 Error: a: `allow` names no "LLM": each slice's day and month, 0 for none
-== a credit drawn that nix/google.nix does not name stops the tick
-Error: a: the export draws on credits ["c2"] with no `credits` entry in nix/google.nix
+== a credit drawn that its hold does not name stops the tick
+Error: a: the export draws on credits ["c2"] with no credit of that id in its hold (the admin's meters card)

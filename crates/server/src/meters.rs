@@ -383,9 +383,11 @@ pub(crate) async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersD
 	for (a, bill) in panel.bills().await? {
 		let spend = panel.spend(&a.name, Vendor::Google, now).await?;
 		let digest = panel.definition(a).await?.map(|d| d.digest());
+		let hold = panel.hold(&a.name).await?;
+		let set = hold.as_ref().map_or(&[][..], |h| h.credits.as_slice()); // no hold, no credit set
 		let (credits, unnamed_credits, allowances, guard) = match &bill {
 			None => (Vec::new(), Vec::new(), Vec::new(), None),
-			Some((bill, read_at)) => standing(a, bill, *read_at, digest.as_deref(), now)?,
+			Some((bill, read_at)) => standing(set, bill, *read_at, digest.as_deref(), now)?,
 		};
 		accounts.push(AccountDto {
 			credits,
@@ -397,7 +399,7 @@ pub(crate) async fn meters(State(panel): State<Panel>) -> ApiResult<Json<MetersD
 			places: a.provides.places.is_some(),
 			browser: a.provides.browser.is_some(),
 			exported: a.export.is_some(),
-			hold: panel.hold(&a.name).await?,
+			hold,
 			spend: spend.map(|s| SpendDto {
 				cost: s.cost_micros as f64 / 1e6,
 				net: s.net_micros as f64 / 1e6,
@@ -487,15 +489,15 @@ pub(crate) async fn meter_readings(State(panel): State<Panel>, Params(q): Params
 	}))
 }
 
-/// `account`'s credits off `bill`, read at `read_at`, and its allowances as the guard last held them.
-fn standing(account: &sa_places::Account, bill: &Bill, read_at: Timestamp, digest: Option<&str>, now: Timestamp) -> eyre::Result<Standing> {
+/// The credits `set` in an account's hold off `bill`, read at `read_at`, and its allowances as the guard last held them.
+fn standing(set: &[sa_core::google::Credit], bill: &Bill, read_at: Timestamp, digest: Option<&str>, now: Timestamp) -> eyre::Result<Standing> {
 	let today = now.to_zoned(jiff::tz::TimeZone::UTC).date();
 	let window_from = now - SignedDuration::from_hours(BURN_DAYS * 24);
-	let named: Vec<&str> = account.credits.iter().filter_map(|c| c.id.as_deref()).collect();
+	let named: Vec<&str> = set.iter().filter_map(|c| c.id.as_deref()).collect();
 	let mut unnamed: Vec<String> = bill.draws.iter().map(|d| d.credit.clone()).filter(|id| !named.contains(&id.as_str())).collect();
 	unnamed.dedup();
-	let mut credits = Vec::with_capacity(account.credits.len());
-	for c in &account.credits {
+	let mut credits = Vec::with_capacity(set.len());
+	for c in set {
 		let draws: Vec<&sa_panel::meters::Draw> = bill.draws.iter().filter(|d| Some(d.credit.as_str()) == c.id.as_deref()).collect(); // none until the export first names it
 		let since_read = draws.iter().filter(|d| d.hour >= c.read).map(|d| d.amount_micros).sum::<i64>() as f64 / 1e6;
 		let burnt = -(draws.iter().filter(|d| d.hour >= window_from).map(|d| d.amount_micros).sum::<i64>() as f64) / 1e6;

@@ -39,12 +39,22 @@ function HoldEditor({ account: a, slices, onSaved }: { account: MeterAccount; sl
     Object.fromEntries(slices.flatMap((s) => (["day", "month"] as const).map((f) => [`${s}.${f}`, a.hold === null ? "" : String(a.hold.allow[s]?.[f] ?? "")])));
   const [drafts, setDrafts] = useState(start);
   const [unguarded, setUnguarded] = useState(a.hold === null ? "" : a.hold.unguarded.join("\n"));
+  type Draft = { id: string; name: string; read: string; left: string; ends: string };
+  const [credits, setCredits] = useState<Draft[]>(
+    a.hold === null ? [] : a.hold.credits.map((c) => ({ id: c.id ?? "", name: c.name, read: c.read, left: String(c.left), ends: c.ends })),
+  );
+  const editCredit = (i: number, f: keyof Draft) => (e: { target: { value: string } }) =>
+    setCredits((cs) => cs.map((c, j) => (j === i ? { ...c, [f]: e.target.value } : c)));
   const [busy, setBusy] = useState(false);
   const num = (k: string) => (drafts[k] === "" ? undefined : Number(drafts[k]));
-  const invalid = slices.some((s) => {
-    const [d, m] = [num(`${s}.day`), num(`${s}.month`)];
-    return d === undefined || m === undefined || !Number.isFinite(d) || !Number.isFinite(m) || d < 0 || d > m;
-  });
+  const badCredit = (c: Draft) =>
+    c.name.trim() === "" || c.left === "" || !Number.isFinite(Number(c.left)) || Number(c.left) < 0 || Number.isNaN(Date.parse(c.read)) || !/^\d{4}-\d{2}-\d{2}$/.test(c.ends);
+  const invalid =
+    credits.some(badCredit) ||
+    slices.some((s) => {
+      const [d, m] = [num(`${s}.day`), num(`${s}.month`)];
+      return d === undefined || m === undefined || !Number.isFinite(d) || !Number.isFinite(m) || d < 0 || d > m;
+    });
   const save = () => {
     const body: Hold = {
       allow: Object.fromEntries(slices.map((s) => [s, { day: num(`${s}.day`)!, month: num(`${s}.month`)! }])),
@@ -52,6 +62,7 @@ function HoldEditor({ account: a, slices, onSaved }: { account: MeterAccount; sl
         .split(/\s+/)
         .map((u) => u.trim())
         .filter((u) => u !== ""),
+      credits: credits.map((c) => ({ id: c.id.trim() === "" ? null : c.id.trim(), name: c.name.trim(), read: new Date(c.read).toISOString(), left: Number(c.left), ends: c.ends })),
     };
     setBusy(true);
     ok(api.PUT("/admin/meters/accounts/{name}/hold", { params: { path: { name: a.name } }, body }))
@@ -92,6 +103,26 @@ function HoldEditor({ account: a, slices, onSaved }: { account: MeterAccount; sl
         {t(tokens.meters.unguardedLabel, "Left alone by the guard, one API a line (no lever but the backstop)")}
         <Textarea rows={3} className="font-mono text-xs" value={unguarded} onChange={(e) => setUnguarded(e.target.value)} />
       </label>
+      <div className="flex flex-col gap-1 text-ink-soft">
+        {t(tokens.meters.creditsLabel, "Credits, as the console's Credits page reads them (id once the export names it)")}
+        {credits.map((c, i) => (
+          <div key={i} className="flex flex-wrap items-center gap-1">
+            <Input size={size} className="w-40" placeholder={t(tokens.meters.creditName, "name")} aria-invalid={c.name.trim() === "" || undefined} value={c.name} onChange={editCredit(i, "name")} />
+            <Input size={size} className="w-56 font-mono text-xs" placeholder={t(tokens.meters.creditId, "id (once exported)")} value={c.id} onChange={editCredit(i, "id")} />
+            <Input type="number" inputMode="decimal" min={0} step="any" size={size} className="w-24 tabular-nums" placeholder={t(tokens.meters.creditLeft, "left")} value={c.left} onChange={editCredit(i, "left")} />
+            <Input size={size} className="w-48 font-mono text-xs" placeholder={t(tokens.meters.creditRead, "read at (RFC 3339)")} aria-invalid={Number.isNaN(Date.parse(c.read)) || undefined} value={c.read} onChange={editCredit(i, "read")} />
+            <Input type="date" size={size} className="w-36" aria-label={t(tokens.meters.creditEnds, "ends")} value={c.ends} onChange={editCredit(i, "ends")} />
+            <Button type="button" variant="ghost" size={button("sm")} onClick={() => setCredits((cs) => cs.filter((_, j) => j !== i))}>
+              {t(tokens.meters.creditRemove, "Remove")}
+            </Button>
+          </div>
+        ))}
+        <div>
+          <Button type="button" variant="ghost" size={button("sm")} onClick={() => setCredits((cs) => [...cs, { id: "", name: "", read: new Date().toISOString(), left: "", ends: "" }])}>
+            {t(tokens.meters.creditAdd, "Add a credit")}
+          </Button>
+        </div>
+      </div>
       <div>
         <Button type="button" size={button("sm")} disabled={busy || invalid} onClick={save}>
           {t(tokens.meters.holdSave, "Hold to this")}

@@ -2896,6 +2896,21 @@ export interface components {
          * @enum {string}
          */
         Country: "FR" | "US" | "CA" | "GB";
+        /** @description A credit's balance, as the console read it: Google gives none out. */
+        CreditInput: {
+            /** Format: date */
+            ends: string;
+            /** @description Google's, once the export first shows it drawn. */
+            id?: string | null;
+            /** Format: double */
+            left: number;
+            name: string;
+            /**
+             * Format: date-time
+             * @description When the console showed `left`.
+             */
+            read: string;
+        };
         /** @description What the country's grid means to the trade, per cell. */
         Demand: {
             /** @description Derived before `expr` reads them, in order. */
@@ -3281,12 +3296,14 @@ export interface components {
             /** Format: int64 */
             version: number;
         };
-        /** @description What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone. */
+        /** @description What an admin sets an account to: its real money per slice, the APIs the guard leaves alone, and its credits. */
         Hold: {
             /** @description Every slice's. */
             allow: {
                 [key: string]: components["schemas"]["Allow"];
             };
+            /** @description Each credit's balance, as the console read it. */
+            credits: components["schemas"]["CreditInput"][];
             /** @description APIs on its billed projects the guard leaves alone: spending with no lever but the backstop. */
             unguarded: string[];
         };
@@ -5284,6 +5301,7 @@ export type Connections = components['schemas']['Connections'];
 export type Consent = components['schemas']['Consent'];
 export type Cost = components['schemas']['Cost'];
 export type Country = components['schemas']['Country'];
+export type CreditInput = components['schemas']['CreditInput'];
 export type Demand = components['schemas']['Demand'];
 export type Destination = components['schemas']['Destination'];
 export type DestinationKind = components['schemas']['DestinationKind'];
@@ -6156,14 +6174,14 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone. */
+        /** @description What an admin sets an account to: its real money per slice, the APIs the guard leaves alone, and its credits. */
         requestBody: {
             content: {
                 "application/json": components["schemas"]["Hold"];
             };
         };
         responses: {
-            /** @description What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone. */
+            /** @description What an admin sets an account to: its real money per slice, the APIs the guard leaves alone, and its credits. */
             200: {
                 headers: {
                     [name: string]: unknown;

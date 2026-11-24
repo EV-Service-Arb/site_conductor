@@ -195,6 +195,7 @@ fn hold(allow: f64) -> Hold {
 	Hold {
 		allow: [(sa_core::meters::SLICE.to_owned(), Allow { day: allow, month: allow })].into(),
 		unguarded: vec![],
+		credits: vec![],
 	}
 }
 
@@ -399,14 +400,11 @@ async fn an_accounts_bill_is_read_whole_by_slice_with_its_credits_and_the_guards
 		left: 100.0,
 		ends: jiff::civil::date(2099, 1, 1),
 	};
-	let mut w = World::on(vec![(
-		Account {
-			credits: vec![credit],
-			..both("a", 0.0).0
-		},
-		Some(0.0),
-	)])
-	.await;
+	let mut w = World::on(vec![both("a", 0.0)]).await;
+	let (status, held) = w
+		.call(Method::PUT, "/api/v1/admin/meters/accounts/a/hold", Some(json!(Hold { credits: vec![credit], ..hold(0.0) })))
+		.await;
+	assert_eq!(status, StatusCode::OK, "a credit is the admin's to set: {held}");
 	let now = Timestamp::now();
 	let a = w.panel.accounts().get("a").unwrap().clone();
 	let digest = w.panel.definition(&a).await.unwrap().unwrap().digest();
@@ -501,16 +499,18 @@ async fn an_account_is_used_once_held_and_its_hold_is_published_beside_its_expor
 		[Some(0), None, None],
 		"u is held by nothing, x has no export"
 	);
-	let zero = json!({ "allow": { "maps": { "day": 0.0, "month": 0.0 } }, "unguarded": [] });
+	let zero = json!({ "allow": { "maps": { "day": 0.0, "month": 0.0 } }, "unguarded": [], "credits": [] });
 	let (status, refused) = w.call(Method::PUT, "/api/v1/admin/meters/accounts/x/hold", Some(zero.clone())).await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "nothing holds an account without an export: {refused}");
 	let (status, _) = w.call(Method::PUT, "/api/v1/admin/meters/accounts/u/hold", Some(zero)).await;
 	assert_eq!(status, StatusCode::OK);
 	assert_eq!(rank.rank(PlacesRequest::Details, &names).await.unwrap(), [Some(0), Some(0), None], "u once held");
 
-	let (status, refused) = w.call(Method::PUT, "/api/v1/admin/meters/accounts/a/hold", Some(json!({ "allow": {}, "unguarded": [] }))).await;
+	let (status, refused) = w
+		.call(Method::PUT, "/api/v1/admin/meters/accounts/a/hold", Some(json!({ "allow": {}, "unguarded": [], "credits": [] })))
+		.await;
 	assert_eq!(status, StatusCode::BAD_REQUEST, "a hold short of a slice: {refused}");
-	let set = json!({ "allow": { "maps": { "day": 2.0, "month": 10.0 } }, "unguarded": ["run.googleapis.com"] });
+	let set = json!({ "allow": { "maps": { "day": 2.0, "month": 10.0 } }, "unguarded": ["run.googleapis.com"], "credits": [] });
 	let (status, held) = w.call(Method::PUT, "/api/v1/admin/meters/accounts/a/hold", Some(set.clone())).await;
 	assert_eq!((status, &held), (StatusCode::OK, &set));
 	let (_, meters) = w.call(Method::GET, "/api/v1/admin/meters", None).await;
@@ -537,7 +537,7 @@ async fn an_account_is_used_once_held_and_its_hold_is_published_beside_its_expor
 		.call(
 			Method::PUT,
 			"/api/v1/admin/meters/accounts/a/hold",
-			Some(json!({ "allow": { "maps": { "day": 0.0, "month": 0.0 } }, "unguarded": [] })),
+			Some(json!({ "allow": { "maps": { "day": 0.0, "month": 0.0 } }, "unguarded": [], "credits": [] })),
 		)
 		.await;
 	assert_eq!(status, StatusCode::OK);

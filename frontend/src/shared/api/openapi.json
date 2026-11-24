@@ -861,7 +861,7 @@
           }
         ],
         "requestBody": {
-          "description": "What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone.",
+          "description": "What an admin sets an account to: its real money per slice, the APIs the guard leaves alone, and its credits.",
           "content": {
             "application/json": {
               "schema": {
@@ -873,7 +873,7 @@
         },
         "responses": {
           "200": {
-            "description": "What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone.",
+            "description": "What an admin sets an account to: its real money per slice, the APIs the guard leaves alone, and its credits.",
             "content": {
               "application/json": {
                 "schema": {
@@ -28324,6 +28324,41 @@
           "GB"
         ]
       },
+      "CreditInput": {
+        "description": "A credit's balance, as the console read it: Google gives none out.",
+        "type": "object",
+        "properties": {
+          "ends": {
+            "type": "string",
+            "format": "date"
+          },
+          "id": {
+            "description": "Google's, once the export first shows it drawn.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "left": {
+            "type": "number",
+            "format": "double"
+          },
+          "name": {
+            "type": "string"
+          },
+          "read": {
+            "description": "When the console showed `left`.",
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "name",
+          "read",
+          "left",
+          "ends"
+        ]
+      },
       "Demand": {
         "description": "What the country's grid means to the trade, per cell.",
         "type": "object",
@@ -29516,7 +29551,7 @@
         ]
       },
       "Hold": {
-        "description": "What an admin sets an account to: its real money per slice, and the APIs the guard leaves alone.",
+        "description": "What an admin sets an account to: its real money per slice, the APIs the guard leaves alone, and its credits.",
         "type": "object",
         "properties": {
           "allow": {
@@ -29524,6 +29559,13 @@
             "type": "object",
             "additionalProperties": {
               "$ref": "#/components/schemas/Allow"
+            }
+          },
+          "credits": {
+            "description": "Each credit's balance, as the console read it.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CreditInput"
             }
           },
           "unguarded": {
@@ -29536,7 +29578,8 @@
         },
         "required": [
           "allow",
-          "unguarded"
+          "unguarded",
+          "credits"
         ]
       },
       "Imap": {

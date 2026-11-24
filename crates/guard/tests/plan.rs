@@ -185,7 +185,7 @@ fn plan() {
 		),
 		replay(
 			d,
-			"a credit drawn that nix/google.nix does not name stops the tick",
+			"a credit drawn that its hold does not name stops the tick",
 			&none,
 			OWN,
 			100.0,

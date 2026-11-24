@@ -930,23 +930,24 @@ Only then does the browser open it.
 **Google accounts.** Free units, credits and the money kept are per billing account, so each is
 declared once, in `nix/google.nix`, which the config file (`--config`, `google`:
 `sa_places::Account`, and `slices`) imports whole: its export (`null` until its billing account is
-open: then nothing of ours uses it), its reader and the day it is read from, its credits as the
-console read them, and what it `provides`, each slot optional: `places` (Places, Geocoding),
+open: then nothing of ours uses it), its reader and the day it is read from, and what it `provides`,
+each slot optional: `places` (Places, Geocoding),
 `browser` (Maps JS). What it is **held** to an admin sets in the meters card (`PUT
 /admin/meters/accounts/{name}/hold`, `sa_core::google::Hold`, kept in `google_holds`, every one):
 `allow` for every slice, a Pacific day's and month's real money (`{ day; month; }`, 0 for none; the
 conductor holds the month of `maps`, `sa_core::meters::SLICE`, which every meter falls in, at rank
 1; the guard holds both of every slice at Google), and `unguarded`, the APIs the guard leaves alone
-(below). `Hold::check` refuses a slice missing or unknown, an amount below 0 or not finite, and a
-day past its month. An account with no export or no hold is not used. What of it is no secret is
+(below), and its credits as the console's Credits page read them (`id` once the export names it).
+`Hold::check` refuses a slice missing or unknown, an amount below 0 or not finite, a day past its
+month, and a credit with no name, no amount or another's id. An account with no export or no hold is not used. What of it is no secret is
 `sa_core::google`'s, which the conductor and the guard both read. Every key bills on its account (docs/spec/google.md); each use of ours is
 stored with the account that paid (`usage.account`). N accounts are one with N× the free units,
 the money capped per account.
 
 ```text
-nix/google.nix  accounts = [ { name, export { table, reader, since } | null, credits, provides { places?, browser?, ads? } } … ]
+nix/google.nix  accounts = [ { name, export { table, reader, since } | null, provides { places?, browser?, ads? } } … ]
                 slices = [ { name, service, sku? } … ]
-the admin       PUT …/accounts/{name}/hold { allow { <slice> = { day, month } }, unguarded [ <api> ] } ─▶ google_holds
+the admin       PUT …/accounts/{name}/hold { allow { <slice> = { day, month } }, unguarded [ <api> ], credits [ … ] } ─▶ google_holds
 the conductor   each minute, a definition (sa_core::google::Definition: the account less its secrets, its hold,
                 the slices) changed ─▶ <export dataset>.definition, with its reader
   ├─ the guard (crates/guard, Cloud Run): the exports baked into its image; each tick reads each one's latest
@@ -1000,10 +1001,10 @@ which the next read of the bill brings back: the admin's meters card and sa-mete
 slice's day and month, its levers, the APIs spending with no lever and those disabled, and
 whether it holds the definition the conductor publishes now. To add an account: its *Standard usage cost* export
 into a dataset, a service account with BigQuery Data Viewer on it and Job User on its project (its
-key the `reader`), an entry here with its `since`, each credit as the console's Credits page
-reads it (`id` once the export names it), then `guard-deploy` (it makes the dataset's `definition`
-table, the reader its editor); then its hold in the meters card, `unguarded` from the guard's dry
-run (`nix run .#guard`: what it would disable and what it refuses, never guessed).
+key the `reader`), an entry here with its `since`, then `guard-deploy` (it makes the dataset's
+`definition` table, the reader its editor); then its hold in the meters card: its credits as the
+console's Credits page reads them, `unguarded` from the guard's dry run (`nix run .#guard`: what it
+would disable and what it refuses, never guessed).
 
 **A meter is the vendor's count, plus ours since it, on one account.** dev, prod, placement and
 anything else billed on an account draw on its free units, and each database sees only its own.

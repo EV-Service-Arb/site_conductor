@@ -12,8 +12,6 @@ pub struct Account {
 	pub name: String,
 	/// `None` until its billing account is open and exported: nothing of ours uses it, and the guard has nothing to hold.
 	pub export: Option<Export>,
-	/// Each credit's balance, as the console read it.
-	pub credits: Vec<sa_core::google::Credit>,
 	pub provides: Provides,
 }
 
@@ -25,7 +23,6 @@ impl Account {
 			name: self.name.clone(),
 			table: export.table.clone(),
 			since: export.since,
-			credits: self.credits.clone(),
 			hold,
 		})
 	}
