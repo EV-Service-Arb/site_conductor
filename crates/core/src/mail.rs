@@ -12,7 +12,7 @@ const RE_ASK: SignedDuration = SignedDuration::from_hours(48);
 /// A video or an appeal is decided on within it, if Google gave no other term.
 const IN_REVIEW: SignedDuration = SignedDuration::from_hours(24 * 7);
 /// Ours in a case since Google last gave something new; past it a person decides.
-const MAX_ASKS: usize = 6;
+pub const MAX_ASKS: usize = 6;
 /// What goes by itself waits this long after ours before it.
 const APART: SignedDuration = SignedDuration::from_hours(12);
 /// An inbox not read for this long may hold Google's answer.
@@ -405,43 +405,61 @@ pub fn trimmed(raw: &str) -> String {
 }
 
 /// A GBP as a message may name it.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Named {
 	pub id: i64,
-	pub name: Option<String>,
+	/// Its name now, then those it had.
+	pub names: Vec<String>,
 	pub place_id: Option<String>,
 	pub address: Option<String>,
 }
 
 /// The GBPs `text` names, by name or place id, else by their address's first line. A longer name takes
-/// its words first: one GBP's name may begin another's.
+/// its words first, and one whose words go on in capitals is another's, known here or not: one GBP's name
+/// may begin another's.
 pub fn named(text: &str, gbps: &[Named]) -> BTreeSet<i64> {
-	let text = squeezed(text);
-	let by = |marks: Vec<(i64, String)>| {
-		let mut marks: Vec<(i64, String)> = marks.into_iter().map(|(id, m)| (id, squeezed(&m))).filter(|(_, m)| m.chars().count() >= NAMES_FROM).collect();
-		marks.sort_by_key(|(_, m)| std::cmp::Reverse(m.len()));
+	let Words { text, capitals } = Words::of(text);
+	let goes_on = |end: usize| {
+		let rest = &text[end..];
+		let next = rest.trim_start_matches([' ', ',', '-']);
+		next.len() < rest.len() && capitals.contains(&(text.len() - next.len()))
+	};
+	// a name's rank: the one it has now before one it had
+	let by = |marks: Vec<(i64, usize, String)>, whole_name: bool| {
+		let mut marks: Vec<(i64, usize, String)> = marks
+			.into_iter()
+			.map(|(id, rank, m)| (id, rank, squeezed(&m)))
+			.filter(|(.., m)| m.chars().count() >= NAMES_FROM)
+			.collect();
+		marks.sort_by_key(|(_, rank, m)| (std::cmp::Reverse(m.len()), *rank));
 		let mut left = text.clone();
 		let mut found = BTreeSet::new();
-		for (id, mark) in marks {
+		for (id, _, mark) in marks {
 			let at: Vec<usize> = left.match_indices(&mark).map(|(i, _)| i).filter(|&i| whole(&left, i, mark.len())).collect();
-			if at.is_empty() {
-				continue;
-			}
-			found.insert(id);
 			for i in at {
+				if !(whole_name && goes_on(i + mark.len())) {
+					found.insert(id);
+				}
 				left.replace_range(i..i + mark.len(), &"\0".repeat(mark.len()));
 			}
 		}
 		found
 	};
-	let names = by(gbps.iter().flat_map(|g| [&g.name, &g.place_id].into_iter().flatten().map(|m| (g.id, m.clone()))).collect());
-	if !names.is_empty() {
-		return names;
+	let names = by(
+		gbps.iter().flat_map(|g| g.names.iter().enumerate().map(|(rank, n)| (g.id, rank, n.clone()))).collect(),
+		true,
+	);
+	let places = by(gbps.iter().filter_map(|g| Some((g.id, 0, g.place_id.clone()?))).collect(), false);
+	let named: BTreeSet<i64> = names.union(&places).copied().collect();
+	if !named.is_empty() {
+		return named;
 	}
-	by(gbps
-		.iter()
-		.filter_map(|g| Some((g.id, g.address.as_deref()?.split(',').next().expect("split yields one").to_owned())))
-		.collect())
+	by(
+		gbps.iter()
+			.filter_map(|g| Some((g.id, 0, g.address.as_deref()?.split(',').next().expect("split yields one").to_owned())))
+			.collect(),
+		false,
+	)
 }
 
 /// What decides which case a message joins.
@@ -537,6 +555,8 @@ pub struct Draft {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum About {
 	Unknown,
+	/// A live one, as its reader saw it or its conversation tells two: shown as its, never answered by itself.
+	Likely,
 	Live,
 	Removed,
 }
@@ -579,7 +599,7 @@ pub struct Case<'a> {
 	pub elsewhere: &'a [Said],
 	/// Another conversation, open, its latest of that topic, carries what is asked of Google for its GBP.
 	pub asked_elsewhere: bool,
-	/// Its topic's replies go by themselves.
+	/// Its GBP's replies on its topic go by themselves.
 	pub switched: bool,
 	/// Why its mail is not read or its reply not written: no Claude, no balance.
 	pub stuck: Option<&'a str>,
@@ -700,7 +720,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 			send_at,
 			needs: lacks,
 			..
-		}) if lacks.is_empty() && press(c, now).is_some() => {
+		}) if lacks.is_empty() && press(c, now).is_ok() => {
 			return State::Sending {
 				at: send_at.expect("a held draft goes at a moment"),
 			};
@@ -710,7 +730,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 			needs: lacks,
 			..
 		}) =>
-			return match (lacks.is_empty(), asks, asked(&heard)) {
+			return match (lacks.is_empty(), asks, asked(c.messages)) {
 				(false, ..) => needs(Why::Needs { needs: lacks.clone() }),
 				(true, true, _) => needs(Why::Kind { kind: Kind::Asks }),
 				(true, false, asked) if asked >= MAX_ASKS => needs(Why::AskedOften { asked }),
@@ -756,13 +776,13 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 			}) => needs(Why::Kind { kind }),
 			_ if sent_at.is_some() => needs(Why::MayHaveGoneOut),
 			Some(Word { kind: Kind::Routed, .. }) if last.sent => needs(Why::Unanswered { since: until }),
-			_ => reply(c, &heard, Some(until)),
+			_ => reply(c, Some(until)),
 		}
 	};
 	if last.sent || sent_at.is_some() {
 		return match word {
 			Some(w) if w.kind.resolves(c.topic) => State::Done { by: Settled::Here },
-			Some(w) if w.at > sent_at.unwrap_or(last.at) => reply(c, &heard, None),
+			Some(w) if w.at > sent_at.unwrap_or(last.at) => reply(c, None),
 			_ => silence(),
 		};
 	}
@@ -774,7 +794,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	};
 	let or_deadline = |otherwise| deadline.map_or(otherwise, |at| needs(Why::Deadline { at }));
 	match w.turn {
-		Turn::Reply => reply(c, &heard, None),
+		Turn::Reply => reply(c, None),
 		Turn::Google => or_deadline(silence()),
 		Turn::Nobody => or_deadline(State::Quiet),
 		Turn::Settled if w.kind.resolves(c.topic) => State::Done { by: Settled::Here },
@@ -799,28 +819,80 @@ pub fn due(c: &Case<'_>, now: Timestamp) -> bool {
 	}
 }
 
-/// From when a reply lacking nothing may go to Google by itself; `None`, never.
-pub fn press(c: &Case<'_>, now: Timestamp) -> Option<Timestamp> {
+/// Why nothing goes to Google by itself in a case.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(tag = "is", rename_all = "snake_case")]
+#[schemars(rename = "MailHalt")]
+pub enum Halt {
+	/// Its GBP's replies on its topic are not switched on.
+	Off,
+	/// Which GBP it is about is not certain.
+	Uncertain,
+	/// Its GBP is in the trash.
+	Removed,
+	/// Google's last word is not read.
+	Unread,
+	/// Nothing in it takes a reply.
+	NoReply,
+	/// Its GBP's latest conversation on the topic carries it.
+	Elsewhere,
+	/// What it asks for is given.
+	Settled,
+	/// What Google asks is its operator's to give.
+	Asked,
+	/// Google was asked that often and gave nothing new.
+	Limit { asked: usize },
+	/// Google's turn, until then.
+	Google { until: Timestamp },
+	/// What Google said is its operator's to act on.
+	Operators,
+	/// Its inbox is two accounts', or it was written to another.
+	Account,
+	/// Its inbox was not read for an hour.
+	Stale,
+}
+
+/// From when a reply lacking nothing may go to Google by itself.
+pub fn press(c: &Case<'_>, now: Timestamp) -> Result<Timestamp, Halt> {
+	if !c.switched {
+		return Err(Halt::Off);
+	}
+	match c.about {
+		About::Unknown | About::Likely => return Err(Halt::Uncertain),
+		About::Removed => return Err(Halt::Removed),
+		About::Live => {}
+	}
 	let heard = heard(c);
-	let (w, r) = (word(c, &heard)?, said(&heard)?);
-	let to = counterpart(c.messages.iter())?;
-	let ours = heard.iter().rev().find(|m| m.sent);
-	let presses = match w.kind {
-		Kind::SelfServe | Kind::OptionsExhausted | Kind::ReinstatementRefused | Kind::ReviewsNoData | Kind::ReviewsLiveAlready | Kind::CallFailed => true,
-		_ => w.turn == Turn::Google && now >= term(&heard, None),
-	};
-	let goes = c.switched
-		&& presses
-		&& r.asks.is_empty()
-		&& w.kind.topic().is_none_or(|t| t == c.topic)
-		&& c.about == About::Live
-		&& !c.asked_elsewhere
-		&& settled(c).is_none()
-		&& over(c, &heard).is_none()
-		&& (to.addressed || heard.iter().any(|m| m.sent && m.addressed))
-		&& asked(&heard) < MAX_ASKS
-		&& c.read.is_none_or(|read| now.duration_since(read) <= STALE);
-	goes.then(|| ours.map_or(to.at, |m| later(m.at, APART)))
+	let (w, r) = word(c, &heard).zip(said(&heard)).ok_or(Halt::Unread)?;
+	let to = counterpart(c.messages.iter()).ok_or(Halt::NoReply)?;
+	if c.asked_elsewhere {
+		return Err(Halt::Elsewhere);
+	}
+	if settled(c).is_some() || over(c, &heard).is_some() {
+		return Err(Halt::Settled);
+	}
+	if !r.asks.is_empty() || w.kind == Kind::Asks {
+		return Err(Halt::Asked);
+	}
+	let asked = asked(c.messages);
+	if asked >= MAX_ASKS {
+		return Err(Halt::Limit { asked });
+	}
+	let until = term(&heard, None);
+	match w.kind {
+		_ if w.kind.topic().is_some_and(|t| t != c.topic) => return Err(Halt::Operators),
+		Kind::SelfServe | Kind::OptionsExhausted | Kind::ReinstatementRefused | Kind::ReviewsNoData | Kind::ReviewsLiveAlready | Kind::CallFailed => {}
+		_ if w.turn != Turn::Google => return Err(Halt::Operators),
+		_ if now < until => return Err(Halt::Google { until }),
+		_ => {}
+	}
+	if !(to.addressed || heard.iter().any(|m| m.sent && m.addressed)) {
+		return Err(Halt::Account);
+	}
+	if c.read.is_some_and(|read| now.duration_since(read) > STALE) {
+		return Err(Halt::Stale);
+	}
+	Ok(heard.iter().rev().find(|m| m.sent).map_or(to.at, |m| later(m.at, APART)))
 }
 
 /// Whom a reply goes to: Google's last message from an address that takes one, unless it refuses it.
@@ -937,8 +1009,41 @@ fn fixed(subject: &str) -> Option<Kind> {
 
 /// Lowercase, apostrophes and dashes plain, runs of whitespace one space: Google sets and wraps names its own way.
 fn squeezed(s: &str) -> String {
-	let plain = s.to_lowercase().replace(['’', 'ʼ', '‘'], "'").replace(['–', '—', '‑', '‐'], "-");
+	let plain = plain(s).to_lowercase();
 	plain.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn plain(s: &str) -> String {
+	s.replace(['’', 'ʼ', '‘'], "'").replace(['–', '—', '‑', '‐'], "-")
+}
+
+/// A text as [`squeezed`], each paragraph a line.
+struct Words {
+	text: String,
+	/// Where a letter was a capital.
+	capitals: BTreeSet<usize>,
+}
+impl Words {
+	fn of(s: &str) -> Self {
+		static PARAGRAPH: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\n\s*\n").expect("a constant"));
+		let (mut text, mut capitals) = (String::new(), BTreeSet::new());
+		for (n, paragraph) in PARAGRAPH.split(&plain(s)).enumerate() {
+			for (at, word) in paragraph.split_whitespace().enumerate() {
+				match (n, at) {
+					(0, 0) => {}
+					(_, 0) => text.push('\n'),
+					_ => text.push(' '),
+				}
+				for c in word.chars() {
+					if c.is_uppercase() {
+						capitals.insert(text.len());
+					}
+					text.extend(c.to_lowercase());
+				}
+			}
+		}
+		Self { text, capitals }
+	}
 }
 
 /// How many of `lines`, from the first, say who wrote what follows: "On … wrote:", "Le … a écrit :",
@@ -1018,11 +1123,12 @@ fn term(heard: &[&Message], sent_at: Option<Timestamp>) -> Timestamp {
 }
 
 /// Ours since Google last gave something new.
-fn asked(heard: &[&Message]) -> usize {
+pub fn asked(messages: &[Message]) -> usize {
 	let new = |k: Kind| matches!(k.turn(), Turn::Operator | Turn::Settled) || matches!(k, Kind::Asks | Kind::ReinstatementPartial);
-	heard
+	messages
 		.iter()
 		.rev()
+		.filter(|m| m.heard())
 		.take_while(|m| m.sent || !m.reading.as_ref().is_some_and(|r| new(r.kind)))
 		.filter(|m| m.sent)
 		.count()
@@ -1065,11 +1171,11 @@ fn settled(c: &Case<'_>) -> Option<Settled> {
 }
 
 /// A reply of ours is due: of Google's word, or its `silence` since.
-fn reply(c: &Case<'_>, heard: &[&Message], silence: Option<Timestamp>) -> State {
+fn reply(c: &Case<'_>, silence: Option<Timestamp>) -> State {
 	let why = match (counterpart(c.messages.iter()), silence) {
 		(None, Some(since)) => Why::Unanswered { since },
 		(None, None) => Why::NoReply,
-		(Some(_), _) if asked(heard) >= MAX_ASKS => Why::AskedOften { asked: asked(heard) },
+		(Some(_), _) if asked(c.messages) >= MAX_ASKS => Why::AskedOften { asked: asked(c.messages) },
 		(Some(_), _) => match c.stuck {
 			None => return State::ReplyDue,
 			Some(error) => Why::Stuck { error: error.to_owned() },
@@ -1238,7 +1344,7 @@ mod tests {
 
 		let gbp = |id, name: &str, address: Option<&str>| Named {
 			id,
-			name: Some(name.to_owned()),
+			names: vec![name.to_owned()],
 			place_id: None,
 			address: address.map(str::to_owned),
 		};
@@ -1259,6 +1365,14 @@ mod tests {
 		assert_eq!(one("Plomberie Dupont – Lyon’s"), [1], "a dash and an apostrophe are Google's own");
 		assert_eq!(one("Plomberie Dupont - Lyonnaise"), [] as [i64; 0], "a word is whole");
 		assert_eq!(one("A video"), [] as [i64; 0]);
+		let alone = |text: &str| named(text, &gbps[..1]).into_iter().collect::<Vec<_>>();
+		assert_eq!(alone("video for Plomberie Dupont - Lyon, Est (at 9 Av. Basse)"), [] as [i64; 0], "another's, not known here");
+		assert_eq!(alone("video for Plomberie Dupont - Lyon\n- Nord"), [] as [i64; 0], "wrapped");
+		assert_eq!(alone("You can now manage Plomberie Dupont - Lyon\n\nView profile"), [1]);
+		assert_eq!(alone("“Plomberie Dupont - Lyon, 3 Rue Haute”"), [1]);
+		let renamed = [Named { names: vec!["Dupont Lyon".into(), "Plomberie Dupont - Lyon".into()], ..gbps[0].clone() }, gbp(4, "Plomberie Dupont - Lyon", None)];
+		assert_eq!(named("Dupont Lyon is verified", &renamed), BTreeSet::from([1]));
+		assert_eq!(named("Plomberie Dupont - Lyon is verified", &renamed), BTreeSet::from([4]), "whose name it is now");
 	}
 
 	#[test]
@@ -1459,7 +1573,7 @@ mod tests {
 		let later = [told("2026-10-06T10:10:00Z", Kind::CallFailed)];
 		let failed = Case { elsewhere: &later, ..case(&m) };
 		assert_eq!(state(&failed, now), State::ReplyDue, "the call was held, and failed");
-		assert_eq!(press(&failed, now), Some(t("2026-10-05T22:00:00Z")));
+		assert_eq!(press(&failed, now), Ok(t("2026-10-05T22:00:00Z")));
 		let held = [later[0], told("2026-10-06T10:15:00Z", Kind::Verified)];
 		assert_eq!(state(&Case { elsewhere: &held, ..case(&m) }, now), State::Done { by: Settled::Elsewhere(held[1]) });
 		assert_eq!(state(&Case { done: Some(5), ..case(&m) }, now), State::Done { by: Settled::Hand });

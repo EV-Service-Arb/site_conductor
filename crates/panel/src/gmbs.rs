@@ -681,9 +681,10 @@ impl Panel {
 	}
 
 	/// A page of the owner's GBP `id`'s log before event `before`, newest first, of `kinds` (none: every kind).
-	pub async fn gmb_log(&self, owner: Uuid, id: i64, before: Option<i64>, kinds: &[EventKind]) -> eyre::Result<Result<Vec<Logged>, Refused>> {
+	pub async fn gmb_log(&self, owner: Uuid, id: i64, before: Option<i64>, kinds: &[EventKind], now: Timestamp) -> eyre::Result<Result<Vec<Logged>, Refused>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a GBP's log")?;
-		Ok(db::events(&mut conn, owner, id, before, kinds, LOG_PAGE).await?.ok_or(Refused::NotFound))
+		let filed = self.filed_mail(&mut conn, owner, now).await?;
+		Ok(db::events(&mut conn, owner, id, before, kinds, &filed, LOG_PAGE).await?.ok_or(Refused::NotFound))
 	}
 
 	/// `by`'s own note on the owner's GBP `id`.

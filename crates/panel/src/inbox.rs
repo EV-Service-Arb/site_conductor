@@ -1,5 +1,5 @@
 //! A gmail's inbox followed for its mail with Google (docs/ARCHITECTURE.md, Tokens and GBPs): each
-//! message logged once, on each GBP of the gmail it names, else the gmail's, and what is about a
+//! message logged once, on each GBP it names, else the gmail's, and what is about a
 //! Business Profile kept ([`crate::mail`]); read through a [`Mailbox`], in `serve` [`Gmail`].
 
 use std::{
@@ -9,6 +9,7 @@ use std::{
 
 use eyre::WrapErr;
 use jiff::Timestamp;
+use sa_core::mail::Named;
 
 pub use crate::imap::Gmail;
 use crate::{
@@ -24,6 +25,15 @@ const SNIPPET: usize = 200;
 
 /// As which account each gmail's inbox was last read to its end, and when, since the start.
 pub(crate) type Reads = Arc<Mutex<HashMap<i64, (String, Timestamp)>>>;
+
+/// The GBPs each gmail's mail was last matched with: its own, its owner's others.
+pub(crate) type NamedAs = Arc<Mutex<HashMap<i64, (Vec<Named>, Vec<Named>)>>>;
+
+/// The GBPs a message names, its subject with it.
+fn named(subject: Option<&str>, text: &str, gbps: &[Named]) -> Vec<i64> {
+	let read = subject.into_iter().chain([text]).collect::<Vec<_>>().join("\n\n");
+	sa_core::mail::named(&read, gbps).into_iter().collect()
+}
 
 /// A mailbox the follower reads.
 pub trait Mailbox: Sync {
@@ -121,6 +131,7 @@ impl Panel {
 				None => return Ok(false),
 			}
 		}
+		self.rename_mail(gmail).await?;
 		if !more {
 			if imap.checked.error.is_some() {
 				let mut tx = self.store.begin_write().await?;
@@ -131,6 +142,39 @@ impl Panel {
 			self.inboxes_read.lock().expect("never poisoned: no panic while held").insert(gmail, was);
 		}
 		Ok(more)
+	}
+
+	/// The gmail's mail matched again once its owner's GBPs are named otherwise than when it last was, by each
+	/// message's own words; one they do not name stays as it was.
+	async fn rename_mail(&self, gmail: i64) -> eyre::Result<()> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for whom mail names")?;
+		let gbps = db::gmbs(&mut conn, gmail).await?;
+		if self.mail_named.lock().expect("never poisoned: no panic while held").get(&gmail) == Some(&gbps) {
+			return Ok(());
+		}
+		let mut found = Vec::new();
+		for (mail, message, subject, was) in mail_db::naming(&mut conn, gmail).await? {
+			// a text that does not open names nothing: its case says so
+			let Ok(text) = self.mail_text(&mut conn, gmail, &message, mail).await? else { continue };
+			let names = |gbps: &[Named]| named(subject.as_deref(), &text, gbps);
+			let own = names(&gbps.0);
+			let about = if own.is_empty() { names(&gbps.1) } else { own };
+			if let [one] = about.as_slice()
+				&& was != Some(*one)
+			{
+				found.push((mail, *one));
+			}
+		}
+		drop(conn);
+		if !found.is_empty() {
+			let mut tx = self.store.begin_write().await?;
+			for (mail, gmb) in found {
+				mail_db::set_gmb(&mut tx, mail, gmb).await?;
+			}
+			tx.commit().await.wrap_err("committing whom mail names")?;
+		}
+		self.mail_named.lock().expect("never poisoned: no panic while held").insert(gmail, gbps);
+		Ok(())
 	}
 
 	/// A batch of one mailbox logged, with its cursor moved in one write; `None`, another took it or the inbox was
@@ -155,13 +199,14 @@ impl Panel {
 		// in Spam, only what is proved Google's is mail with it
 		for m in batch.mails.iter().filter(|m| !m.spam || m.authentic) {
 			let message = m.message.to_string();
-			let read = m.subject.iter().chain([&m.text]).map(String::as_str).collect::<Vec<_>>().join("\n");
-			let named: Vec<i64> = sa_core::mail::named(&read, &own).into_iter().collect();
-			let about = match named.is_empty() {
-				true => sa_core::mail::named(&read, &others).into_iter().collect(),
-				false => named.clone(),
+			let words = sa_core::mail::trimmed(&m.text);
+			let of = |gbps: &[Named]| {
+				let own = named(m.subject.as_deref(), &words, gbps);
+				if own.is_empty() { named(None, &m.text, gbps) } else { own }
 			};
-			self.keep_mail(&mut tx, gmail, m, &about, &mut cases, now).await?;
+			let (by_gmails, by_others) = (of(&own), of(&others));
+			let about = if by_gmails.is_empty() { &by_others } else { &by_gmails };
+			self.keep_mail(&mut tx, gmail, m, about, &mut cases, now).await?;
 			if db::logged(&mut tx, gmail, &message).await? {
 				continue;
 			}
@@ -179,7 +224,7 @@ impl Panel {
 				snippet,
 				sent: m.sent,
 			};
-			match named.as_slice() {
+			match about.as_slice() {
 				[] => gmbs_db::log(&mut tx, None, Some(gmail), None, now, &event).await?,
 				named =>
 					for &gmb in named {

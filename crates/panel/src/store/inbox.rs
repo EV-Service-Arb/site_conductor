@@ -2,7 +2,7 @@
 
 use eyre::WrapErr;
 use sa_core::mail::Named;
-use sqlx::SqliteConnection;
+use sqlx::{SqliteConnection, types::Json};
 
 use crate::inbox::{Cursor, Folder};
 
@@ -62,15 +62,25 @@ pub(crate) async fn logged(conn: &mut SqliteConnection, gmail: i64, message: &st
 
 /// The live GBPs of the gmail's owner, as a message may name them: the gmail's, and their others'.
 pub(crate) async fn gmbs(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<(Vec<Named>, Vec<Named>)> {
-	type Row = (i64, Option<String>, Option<String>, Option<String>, bool);
+	type Row = (i64, Option<String>, Json<Vec<String>>, Option<String>, Option<String>, bool);
 	let rows: Vec<Row> = sqlx::query_as(
-		"SELECT b.id, b.name, b.place_id, b.address, b.gmail_id IS g.id FROM gmbs b JOIN gmails g ON g.owner = b.owner WHERE g.id = $1 AND b.removed_at IS NULL ORDER BY b.id",
+		"SELECT b.id, b.name, (SELECT json_group_array(DISTINCT c.value ->> 'from') FROM gmb_events e, json_each(e.data, '$.changes') c \
+		   WHERE e.gmb_id = b.id AND e.kind IN ('edited', 'synced') AND c.value ->> 'field' = 'name' AND c.value ->> 'from' IS NOT NULL), \
+		 b.place_id, b.address, b.gmail_id IS g.id FROM gmbs b JOIN gmails g ON g.owner = b.owner WHERE g.id = $1 AND b.removed_at IS NULL ORDER BY b.id",
 	)
 	.bind(gmail)
 	.fetch_all(&mut *conn)
 	.await
 	.wrap_err("listing the GBPs of a gmail's owner")?;
 	let (own, others): (Vec<Row>, Vec<Row>) = rows.into_iter().partition(|(.., own)| *own);
-	let named = |rows: Vec<Row>| rows.into_iter().map(|(id, name, place_id, address, _)| Named { id, name, place_id, address }).collect();
+	let named = |rows: Vec<Row>| {
+		let one = |(id, name, had, place_id, address, _): Row| Named {
+			id,
+			names: name.into_iter().chain(had.0).collect(),
+			place_id,
+			address,
+		};
+		rows.into_iter().map(one).collect()
+	};
 	Ok((named(own), named(others)))
 }

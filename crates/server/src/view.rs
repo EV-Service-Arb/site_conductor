@@ -257,8 +257,14 @@ pub struct Add {
 #[derive(Clone, Copy, Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Issue {
+	/// A date Google set runs on a case of its mail that waits for the operator.
+	MailDeadline,
 	/// A lead waits past its contact time.
 	Overdue,
+	/// Google asks for something, or its mail waits for the operator otherwise.
+	MailAsks,
+	/// A reply to Google waits to be confirmed.
+	MailReply,
 	/// Suspended on Google.
 	Suspended,
 	/// The archive's walks of it fail.

@@ -1,7 +1,7 @@
 //! People's gmails and the GBPs each manages. Never deleted: a removed row keeps its id, which
 //! the services hold.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use eyre::WrapErr;
 use jiff::Timestamp;
@@ -11,6 +11,7 @@ use sqlx::SqliteConnection;
 use uuid::Uuid;
 
 use super::{connections::Checked, from_db, to_db};
+use crate::mail::SentBy;
 
 const GMB: &str = "SELECT b.id, b.owner, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
 	b.trade, b.brand_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.role, b.owner_gmail, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, b.synced_at, \
@@ -319,21 +320,35 @@ pub struct Logged {
 	pub gmail_id: Option<i64>,
 	/// Its gmail's, not its own.
 	pub of_gmail: bool,
+	/// An email of ours: who sent it.
+	pub sent_by: Option<SentBy>,
 	pub event: Event,
 }
 
+/// Of which GBP a message kept is, by its gmail and Gmail's id of it, and who sent it.
+pub type Filed = HashMap<(i64, String), (Option<i64>, Option<SentBy>)>;
+
 /// A page of GBP `gmb`'s log before event `before`, newest first, of `kinds` (none: every kind); each of its
-/// gmails' own while it was under it. `None`: no live GBP of the owner's.
-pub async fn events(conn: &mut SqliteConnection, owner: Uuid, gmb: i64, before: Option<i64>, kinds: &[EventKind], limit: u32) -> eyre::Result<Option<Vec<Logged>>> {
+/// gmails' own while it was under it; an email `filed` with a GBP is that one's. `None`: no live GBP of the owner's.
+pub async fn events(conn: &mut SqliteConnection, owner: Uuid, gmb: i64, before: Option<i64>, kinds: &[EventKind], filed: &Filed, limit: u32) -> eyre::Result<Option<Vec<Logged>>> {
 	let Some(b) = gmb_of(conn, Some(owner), gmb).await? else {
 		return Ok(None);
 	};
 	let kinds: Vec<&'static str> = kinds.iter().map(|k| k.into()).collect();
+	// its own, and the other GBPs'
+	let keys = |own: bool| {
+		let of = filed.iter().filter(|(_, (g, _))| g.is_some_and(|g| (g == gmb) == own));
+		let keys: Vec<String> = of.map(|((gmail, message), _)| format!("{gmail}:{message}")).collect();
+		serde_json::to_string(&keys).expect("keys serialize")
+	};
 	type Row = (i64, i64, Option<String>, Option<i64>, bool, String);
 	let rows: Vec<Row> = sqlx::query_as(
 		"SELECT e.id, e.at, u.name, e.gmail_id, e.gmb_id IS NULL, e.data FROM gmb_events e LEFT JOIN users u ON u.user_id = e.by \
-		 WHERE (e.gmb_id = $1 OR (e.gmb_id IS NULL AND e.at >= $3 AND e.gmail_id IS \
-		   coalesce((SELECT o.gmail_id FROM gmb_events o WHERE o.gmb_id = $1 AND o.id > e.id ORDER BY o.id LIMIT 1), $2))) \
+		 WHERE CASE WHEN e.kind = 'email' AND e.gmail_id || ':' || (e.data ->> 'message') IN (SELECT value FROM json_each($7)) THEN \
+		     e.id = (SELECT min(o.id) FROM gmb_events o WHERE o.kind = 'email' AND o.gmail_id = e.gmail_id AND o.data ->> 'message' = e.data ->> 'message') \
+		   WHEN e.kind = 'email' AND e.gmail_id || ':' || (e.data ->> 'message') IN (SELECT value FROM json_each($8)) THEN 0 \
+		   ELSE e.gmb_id = $1 OR (e.gmb_id IS NULL AND e.at >= $3 AND e.gmail_id IS \
+		     coalesce((SELECT o.gmail_id FROM gmb_events o WHERE o.gmb_id = $1 AND o.id > e.id ORDER BY o.id LIMIT 1), $2)) END \
 		 AND ($4 IS NULL OR e.id < $4) AND ($5 = '[]' OR e.kind IN (SELECT value FROM json_each($5))) \
 		 ORDER BY e.id DESC LIMIT $6",
 	)
@@ -343,19 +358,27 @@ pub async fn events(conn: &mut SqliteConnection, owner: Uuid, gmb: i64, before: 
 	.bind(before)
 	.bind(serde_json::to_string(&kinds).expect("kinds serialize"))
 	.bind(limit)
+	.bind(keys(true))
+	.bind(keys(false))
 	.fetch_all(&mut *conn)
 	.await
 	.wrap_err("reading a GBP's log")?;
 	let logged = rows
 		.into_iter()
 		.map(|(id, at, by, gmail_id, of_gmail, data)| {
+			let event: Event = serde_json::from_str(&data).wrap_err_with(|| format!("GBP event {id}"))?;
+			let mail = match &event {
+				Event::Email { message, .. } => gmail_id.and_then(|g| filed.get(&(g, message.clone()))),
+				_ => None,
+			};
 			Ok(Logged {
 				id,
 				at: from_db(at)?,
 				by,
 				gmail_id,
-				of_gmail,
-				event: serde_json::from_str(&data).wrap_err_with(|| format!("GBP event {id}"))?,
+				of_gmail: of_gmail && mail.is_none_or(|(g, _)| g.is_none()),
+				sent_by: mail.and_then(|(_, by)| by.clone()),
+				event,
 			})
 		})
 		.collect::<eyre::Result<_>>()?;

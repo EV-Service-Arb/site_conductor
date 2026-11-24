@@ -661,6 +661,7 @@ GET    /mail/cases
 GET    /mail/cases/{id}
 PATCH  /mail/cases/{id}
 PATCH  /mail/messages/{id}
+PUT    /mail/cases/{id}/given
 POST   /mail/cases/{id}/draft               slow
 POST   /mail/drafts/{id}/send               fresh, slow
 PUT    /mail/drafts/{id}
@@ -669,6 +670,10 @@ POST   /mail/drafts/{id}/restore
 GET    /mail/auto
 PUT    /mail/auto                           fresh
 GET    /gmbs/{id}/mail
+GET    /gmbs/{id}/documents
+POST   /gmbs/{id}/documents                 slow
+GET    /gmbs/{id}/documents/{document}
+DELETE /gmbs/{id}/documents/{document}
 GET    /gmbs/{id}/kit
 PUT    /gmbs/{id}/kit
 POST   /gmbs/{id}/kit/shown

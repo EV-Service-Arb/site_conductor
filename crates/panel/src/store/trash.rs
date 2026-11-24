@@ -234,12 +234,14 @@ pub(crate) async fn purge(conn: &mut SqliteConnection, now: Timestamp, keep_by_d
 	disconnect(conn, gmails).await
 }
 
-/// No one's note outlives its GBP.
+/// No one's note outlives its GBP, nor what was given for it.
 async fn forget_notes(conn: &mut SqliteConnection) -> eyre::Result<()> {
-	sqlx::query("DELETE FROM gmb_notes WHERE gmb_id IN (SELECT id FROM gmbs WHERE purged_at IS NOT NULL)")
-		.execute(&mut *conn)
-		.await
-		.wrap_err("deleting the notes on purged GBPs")?;
+	for sql in [
+		"DELETE FROM gmb_notes WHERE gmb_id IN (SELECT id FROM gmbs WHERE purged_at IS NOT NULL)",
+		"DELETE FROM gmb_documents WHERE gmb_id IN (SELECT id FROM gmbs WHERE purged_at IS NOT NULL)",
+	] {
+		sqlx::query(sql).execute(&mut *conn).await.wrap_err("deleting what is kept on purged GBPs")?;
+	}
 	Ok(())
 }
 

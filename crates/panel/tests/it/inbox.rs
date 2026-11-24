@@ -133,7 +133,7 @@ async fn a_thread_naming_a_gbp_is_its_and_one_naming_none_the_gmails_each_once()
 	let emails = |gmb: i64| {
 		let p = p.clone();
 		async move {
-			p.gmb_log(owner, gmb, None, &[EventKind::Email])
+			p.gmb_log(owner, gmb, None, &[EventKind::Email], Timestamp::now())
 				.await
 				.unwrap()
 				.unwrap()

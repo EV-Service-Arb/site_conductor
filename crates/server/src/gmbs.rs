@@ -226,6 +226,8 @@ pub struct LoggedDto {
 	pub gmail_id: Option<i64>,
 	/// Its gmail's (a browser run for the gmail alone), not its own.
 	pub of_gmail: bool,
+	/// An email of ours: who sent it.
+	pub sent_by: Option<sa_panel::mail::SentBy>,
 	#[serde(flatten)]
 	pub event: sa_panel::gmbs::Event,
 }
@@ -767,7 +769,7 @@ async fn gmb_log(State(panel): State<Panel>, Extension(caller): Extension<Caller
 				.map_err(|_| Refusal::new(Code::BadRequest, format!("no kind of event {k:?}")))
 		})
 		.collect::<Result<Vec<_>, _>>()?;
-	let page = panel.gmb_log(caller.user_id, gmb, q.before, &kinds).await??;
+	let page = panel.gmb_log(caller.user_id, gmb, q.before, &kinds, Timestamp::now()).await??;
 	let full = page.len() == usize::try_from(sa_panel::gmbs::LOG_PAGE).expect("a page fits");
 	Ok(Json(LogDto {
 		next: page.last().filter(|_| full).map(|l| l.id),
@@ -779,6 +781,7 @@ async fn gmb_log(State(panel): State<Panel>, Extension(caller): Extension<Caller
 				by: l.by,
 				gmail_id: l.gmail_id,
 				of_gmail: l.of_gmail,
+				sent_by: l.sent_by,
 				event: l.event,
 			})
 			.collect(),

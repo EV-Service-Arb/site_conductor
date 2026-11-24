@@ -289,7 +289,7 @@ pub(crate) async fn unhold(conn: &mut SqliteConnection, case: i64) -> eyre::Resu
 pub(crate) async fn let_go(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<()> {
 	for sql in [
 		"UPDATE mail_drafts SET state = 'proposed' WHERE state = 'held' AND case_id IN (SELECT id FROM mail_cases WHERE gmail_id = $1)",
-		"DELETE FROM gmail_mail_auto WHERE gmail_id = $1",
+		"DELETE FROM gmb_mail_auto WHERE gmb_id IN (SELECT id FROM gmbs WHERE gmail_id = $1)",
 	] {
 		sqlx::query(sql).bind(gmail).execute(&mut *conn).await.wrap_err("letting a gmail's automatic replies go")?;
 	}
@@ -326,6 +326,68 @@ pub(crate) async fn mails(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Res
 	.fetch_all(&mut *conn)
 	.await
 	.wrap_err("listing a person's mail with Google")
+}
+
+/// What each of the owner's cases asked of its person and was given, oldest first: the case, the item, the document.
+pub(crate) async fn given(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<(i64, String, Option<i64>)>> {
+	sqlx::query_as(
+		"SELECT v.case_id, v.item, v.document_id FROM mail_given v JOIN mail_cases c ON c.id = v.case_id JOIN gmails g ON g.id = c.gmail_id \
+		 WHERE g.owner = $1 AND g.removed_at IS NULL ORDER BY v.given_at",
+	)
+	.bind(owner)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing what a person gave")
+}
+
+/// Given, by `document` if by one; `false`, not given any more.
+pub(crate) async fn give(conn: &mut SqliteConnection, case: i64, item: &str, given: bool, document: Option<i64>, by: Uuid, now: Timestamp) -> eyre::Result<()> {
+	let set = match given {
+		true => sqlx::query(
+			"INSERT INTO mail_given (case_id, item, document_id, given_by, given_at) VALUES ($1, $2, $3, $4, $5) \
+			 ON CONFLICT (case_id, item) DO UPDATE SET document_id = excluded.document_id, given_by = excluded.given_by, given_at = excluded.given_at",
+		)
+		.bind(case)
+		.bind(item)
+		.bind(document)
+		.bind(by)
+		.bind(to_db(now)),
+		false => sqlx::query("DELETE FROM mail_given WHERE case_id = $1 AND item = $2").bind(case).bind(item),
+	};
+	set.execute(&mut *conn).await.wrap_err("keeping what a person gave")?;
+	Ok(())
+}
+
+/// The gmail's messages that may name a GBP, each with the one it names as kept.
+pub(crate) async fn naming(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Vec<(i64, String, Option<String>, Option<i64>)>> {
+	sqlx::query_as("SELECT id, message, subject, gmb_id FROM mails WHERE gmail_id = $1 AND (authentic OR sent) ORDER BY id")
+		.bind(gmail)
+		.fetch_all(&mut *conn)
+		.await
+		.wrap_err("listing a gmail's mail to name")
+}
+
+pub(crate) async fn set_gmb(conn: &mut SqliteConnection, mail: i64, gmb: i64) -> eyre::Result<()> {
+	sqlx::query("UPDATE mails SET gmb_id = $2 WHERE id = $1")
+		.bind(mail)
+		.bind(gmb)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("naming a message's GBP")?;
+	Ok(())
+}
+
+/// By Message-ID, who sent each reply the conductor handed to SMTP: a person's name; `None`, it went by itself.
+pub(crate) async fn senders(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<HashMap<String, Option<String>>> {
+	let rows: Vec<(String, Option<String>)> = sqlx::query_as(
+		"SELECT d.message_id, u.name FROM mail_drafts d LEFT JOIN users u ON u.user_id = d.decided_by \
+		 JOIN mail_cases c ON c.id = d.case_id JOIN gmails g ON g.id = c.gmail_id WHERE g.owner = $1 AND d.state IN ('sending', 'sent')",
+	)
+	.bind(owner)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing who sent a person's replies")?;
+	Ok(rows.into_iter().collect())
 }
 
 /// Each case's latest draft, of the owner's gmails not removed.
@@ -561,10 +623,10 @@ pub(crate) async fn decide(conn: &mut SqliteConnection, id: i64, d: &Decided<'_>
 	Ok(())
 }
 
-/// The topics whose replies go by themselves, per gmail of the owner's not removed.
+/// The topics whose replies go by themselves, per GBP of the owner's not removed.
 pub(crate) async fn auto(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<(i64, Topic)>> {
 	let rows: Vec<(i64, String)> =
-		sqlx::query_as("SELECT a.gmail_id, a.topic FROM gmail_mail_auto a JOIN gmails g ON g.id = a.gmail_id WHERE g.owner = $1 AND g.removed_at IS NULL ORDER BY a.gmail_id, a.topic")
+		sqlx::query_as("SELECT a.gmb_id, a.topic FROM gmb_mail_auto a JOIN gmbs b ON b.id = a.gmb_id WHERE b.owner = $1 AND b.removed_at IS NULL ORDER BY a.gmb_id, a.topic")
 			.bind(owner)
 			.fetch_all(&mut *conn)
 			.await
@@ -572,14 +634,14 @@ pub(crate) async fn auto(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Resu
 	rows.into_iter().map(|(g, t)| Ok((g, t.parse().wrap_err("a stored topic")?))).collect()
 }
 
-pub(crate) async fn set_auto(conn: &mut SqliteConnection, gmail: i64, topic: Topic, on: bool) -> eyre::Result<()> {
+pub(crate) async fn set_auto(conn: &mut SqliteConnection, gmb: i64, topic: Topic, on: bool) -> eyre::Result<()> {
 	let topic: &'static str = topic.into();
 	let sql = match on {
-		true => "INSERT INTO gmail_mail_auto (gmail_id, topic) VALUES ($1, $2) ON CONFLICT DO NOTHING",
-		false => "DELETE FROM gmail_mail_auto WHERE gmail_id = $1 AND topic = $2",
+		true => "INSERT INTO gmb_mail_auto (gmb_id, topic) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+		false => "DELETE FROM gmb_mail_auto WHERE gmb_id = $1 AND topic = $2",
 	};
 	sqlx::query(sql)
-		.bind(gmail)
+		.bind(gmb)
 		.bind(topic)
 		.execute(&mut *conn)
 		.await
@@ -609,10 +671,10 @@ pub(crate) async fn set_stuck(conn: &mut SqliteConnection, owner: Uuid, why: Opt
 /// A purged gmail's mail, its cases and drafts.
 pub(crate) async fn forget(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<()> {
 	for sql in [
+		"DELETE FROM mail_given WHERE case_id IN (SELECT id FROM mail_cases WHERE gmail_id = $1)",
 		"DELETE FROM mail_drafts WHERE case_id IN (SELECT id FROM mail_cases WHERE gmail_id = $1)",
 		"DELETE FROM mails WHERE gmail_id = $1",
 		"DELETE FROM mail_cases WHERE gmail_id = $1",
-		"DELETE FROM gmail_mail_auto WHERE gmail_id = $1",
 	] {
 		sqlx::query(sql).bind(gmail).execute(&mut *conn).await.wrap_err("forgetting a purged gmail's mail")?;
 	}

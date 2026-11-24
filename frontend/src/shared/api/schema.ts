@@ -1584,6 +1584,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/gmbs/{id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What was given for a GBP (a Kbis, a bill, a photo of its sign), for Google's next ask and the appeal. */
+        get: operations["documents"];
+        put?: never;
+        /** Keeps a document for a GBP, ≤ 10 MiB, sealed. 409 it has 50. Answers its documents. */
+        post: operations["add_document"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/gmbs/{id}/documents/{document}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A GBP's document, whole. */
+        get: operations["document"];
+        put?: never;
+        post?: never;
+        /** Removes a GBP's document for good; what it was given as is not given any more. */
+        delete: operations["remove_document"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/gmbs/{id}/kit": {
         parameters: {
             query?: never;
@@ -2038,9 +2074,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The gmails and topics whose replies go by themselves, a quarter of an hour after they are written. */
+        /** The GBPs and topics whose replies go by themselves, a quarter of an hour after they are written. */
         get: operations["mail_auto"];
-        /** Lets replies on a topic of a gmail's go by themselves, or no more. 400 a topic that never does. */
+        /** Lets replies on a topic of each of the caller's GBPs named go by themselves, or no more. 400 a topic that never does; 404 one not theirs. */
         put: operations["set_mail_auto"];
         post?: never;
         delete?: never;
@@ -2101,6 +2137,23 @@ export interface paths {
          * @description 400 nothing in the case takes a reply, or both an instruction and a body; 409 its last message is answered, or the case changed meanwhile; 503 no Claude to write it, or it or the review archive does not answer.
          */
         post: operations["draft_mail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/mail/cases/{id}/given": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Marks what a case wants of its person given, or not. 400 its GBP is not known; 409 it asks that no more. */
+        put: operations["give_mail"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2822,6 +2875,11 @@ export interface components {
             ping: boolean;
             /** @description The channel's webhook: Edit channel → Integrations → Webhooks. */
             url: string;
+        };
+        AddDocument: {
+            file: components["schemas"]["MailFile"];
+            /** @description What Google asked that it answers. */
+            given_for?: string | null;
         };
         AddEmail: {
             address: string;
@@ -3896,6 +3954,31 @@ export interface components {
             /** @description Google's, from its last Sync, as `hours`, `google_primary` and `photos`. */
             website: string | null;
         };
+        /** @description A document kept for a GBP. */
+        GmbDocument: {
+            /** @description RFC 3339. */
+            added_at: string;
+            /** @description What Google asked that it answers. */
+            given_for: string | null;
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /**
+             * Format: int64
+             * @description Bytes.
+             */
+            size: number;
+            type: string;
+        };
+        GmbDocumentFile: {
+            base64: string;
+            name: string;
+            type: string;
+        };
+        /** @description `GET /gmbs/{id}/documents`, newest first. */
+        GmbDocuments: {
+            documents: components["schemas"]["GmbDocument"][];
+        };
         /** @description Absent fields stay; `null` clears. */
         GmbEdit: {
             /** @default null */
@@ -4439,6 +4522,8 @@ export interface components {
             id: number;
             /** @description Its gmail's (a browser run for the gmail alone), not its own. */
             of_gmail: boolean;
+            /** @description An email of ours: who sent it. */
+            sent_by: components["schemas"]["MailSentBy"] | null;
         } & ({
             /** @constant */
             kind: "added";
@@ -4516,23 +4601,47 @@ export interface components {
             /** @description Gmail's X-GM-THRID, hex: the thread's address in Gmail. */
             thread: string;
         });
-        /** @description A topic whose replies go by themselves. */
+        /** @description A topic of a GBP's whose replies go by themselves. */
         MailAuto: {
             /** Format: int64 */
-            gmail_id: number;
+            gmb_id: number;
             topic: components["schemas"]["MailTopic"];
         };
         MailAutoSwitch: {
-            /** Format: int64 */
-            gmail: number;
+            gmbs: number[];
             on: boolean;
             /** @description `verification` or `reviews`. */
             topic: components["schemas"]["MailTopic"];
+        };
+        /** @description What goes by itself in a case. */
+        MailAutomation: {
+            /**
+             * Format: uint
+             * @description Ours since Google last gave something new.
+             */
+            asked: number;
+            /** @description Why nothing does; `null`: its next reply does, if it lacks nothing. */
+            halt: components["schemas"]["MailHalt"] | null;
+            /**
+             * Format: uint
+             * @description Past it a person decides.
+             */
+            limit: number;
         };
         /** @description `GET /mail/auto`: those switched on. */
         MailAutos: {
             /** @description Whether this conductor sends any by itself: production's alone. */
             by_itself: boolean;
+            /**
+             * Format: int64
+             * @description How long a reply waits before it goes, in minutes.
+             */
+            hold_minutes: number;
+            /**
+             * Format: uint
+             * @description How often Google is asked, at most, until it gives something new.
+             */
+            limit: number;
             on: components["schemas"]["MailAuto"][];
             /** @description The topics that can be. */
             topics: components["schemas"]["MailTopic"][];
@@ -4544,8 +4653,12 @@ export interface components {
         };
         /** @description A conversation with Google, or a lone notice of its. */
         MailCase: {
+            /** @description The other GBPs its messages are about. */
+            also: number[];
             /** @description What Google asks in its last word. */
             asks: string[];
+            /** @description What goes by itself in it. */
+            auto: components["schemas"]["MailAutomation"];
             /** @description Whether a person said so of them, over its mail. */
             by_hand: components["schemas"]["MailByHand"];
             /** @description RFC 3339; Google's, past too, until it is answered. */
@@ -4554,6 +4667,8 @@ export interface components {
             draft: components["schemas"]["MailDraft"] | null;
             /** Format: int64 */
             gmail_id: number;
+            /** @description By a person's word or Google's own words; else it is likely, and nothing of it goes by itself. */
+            gmb_certain: boolean;
             /**
              * Format: int64
              * @description The GBP it is about; `null`: not known.
@@ -4576,6 +4691,8 @@ export interface components {
             /** @description Gmail's thread of its last message: `POST /gmails/{id}/browser/thread` opens it. */
             thread: string;
             topic: components["schemas"]["MailTopic"];
+            /** @description That, and what its draft lacks, each given or not. */
+            wanted: components["schemas"]["MailWanted"][];
         };
         /** @description `GET /mail/cases/{id}`. */
         MailCaseDetail: {
@@ -4660,6 +4777,16 @@ export interface components {
             /** @description `image/jpeg`. */
             type: string;
         };
+        MailGive: {
+            /**
+             * Format: int64
+             * @description The document of its GBP's it is given by.
+             */
+            document?: number | null;
+            given: boolean;
+            /** @description One of the case's `wanted`. */
+            item: string;
+        };
         /** @description The reviews of a GBP the review archive sees gone. */
         MailGone: {
             /** @description More may be gone: `reviews` is a page, not their count. */
@@ -4671,6 +4798,51 @@ export interface components {
             /** @constant */
             state: "unknown";
             why: string;
+        };
+        /** @description Why nothing goes to Google by itself in a case. */
+        MailHalt: {
+            /** @constant */
+            is: "off";
+        } | {
+            /** @constant */
+            is: "uncertain";
+        } | {
+            /** @constant */
+            is: "removed";
+        } | {
+            /** @constant */
+            is: "unread";
+        } | {
+            /** @constant */
+            is: "no_reply";
+        } | {
+            /** @constant */
+            is: "elsewhere";
+        } | {
+            /** @constant */
+            is: "settled";
+        } | {
+            /** @constant */
+            is: "asked";
+        } | {
+            /** Format: uint */
+            asked: number;
+            /** @constant */
+            is: "limit";
+        } | {
+            /** @constant */
+            is: "google";
+            /** Format: date-time */
+            until: string;
+        } | {
+            /** @constant */
+            is: "operators";
+        } | {
+            /** @constant */
+            is: "account";
+        } | {
+            /** @constant */
+            is: "stale";
         };
         /**
          * @description What a message of Google's says.
@@ -4736,6 +4908,8 @@ export interface components {
             kind: components["schemas"]["MailKind"] | null;
             /** @description Why, in Google's words. */
             reasons: string[];
+            /** @description Ours: who sent it. */
+            sent_by: components["schemas"]["MailSentBy"] | null;
             /** @description Gmail has it in Spam. */
             spam: boolean;
             subject: string | null;
@@ -4759,6 +4933,8 @@ export interface components {
             /** @description `null`: ours, or not read. */
             reading: components["schemas"]["MailReading"] | null;
             sent: boolean;
+            /** @description Ours: who sent it. */
+            sent_by: components["schemas"]["MailSentBy"] | null;
             /** @description Gmail has it in Spam. */
             spam: boolean;
             subject: string | null;
@@ -4834,8 +5010,25 @@ export interface components {
             as_is: boolean;
             /** @description What goes, as the operator leaves it. */
             body: string;
-            /** @description At most the case's `files_max` in all; never stored. */
+            /**
+             * @description Documents of its GBP's, by id.
+             * @default []
+             */
+            documents?: number[];
+            /** @description At most the case's `files_max` in all, with the documents; never stored. */
             files: components["schemas"]["MailFile"][];
+        };
+        /** @description Who sent a message of ours. */
+        MailSentBy: {
+            /** @constant */
+            is: "itself";
+        } | {
+            /** @constant */
+            is: "person";
+            name: string;
+        } | {
+            /** @constant */
+            is: "gmail";
         };
         /** @description What settled a case. */
         MailSettled: {
@@ -4889,6 +5082,16 @@ export interface components {
         };
         /** @enum {string} */
         MailTopic: "verification" | "suspension" | "reviews" | "activity" | "access" | "profile" | "other";
+        /** @description What a case wants of its person. */
+        MailWanted: {
+            /**
+             * Format: int64
+             * @description The GBP's document it was given by.
+             */
+            document: number | null;
+            given: boolean;
+            item: string;
+        };
         /**
          * @description Who speaks in a message.
          *
@@ -6451,6 +6654,7 @@ export type ActionState = components['schemas']['ActionState'];
 export type Actor = components['schemas']['Actor'];
 export type AddChat = components['schemas']['AddChat'];
 export type AddDiscord = components['schemas']['AddDiscord'];
+export type AddDocument = components['schemas']['AddDocument'];
 export type AddEmail = components['schemas']['AddEmail'];
 export type AddPush = components['schemas']['AddPush'];
 export type AddSlack = components['schemas']['AddSlack'];
@@ -6557,6 +6761,9 @@ export type Gmail = components['schemas']['Gmail'];
 export type GmailForPerson = components['schemas']['GmailForPerson'];
 export type Gmails = components['schemas']['Gmails'];
 export type Gmb = components['schemas']['Gmb'];
+export type GmbDocument = components['schemas']['GmbDocument'];
+export type GmbDocumentFile = components['schemas']['GmbDocumentFile'];
+export type GmbDocuments = components['schemas']['GmbDocuments'];
 export type GmbEdit = components['schemas']['GmbEdit'];
 export type GmbKit = components['schemas']['GmbKit'];
 export type GmbMail = components['schemas']['GmbMail'];
@@ -6608,6 +6815,7 @@ export type LogDto = components['schemas']['LogDto'];
 export type LoggedDto = components['schemas']['LoggedDto'];
 export type MailAuto = components['schemas']['MailAuto'];
 export type MailAutoSwitch = components['schemas']['MailAutoSwitch'];
+export type MailAutomation = components['schemas']['MailAutomation'];
 export type MailAutos = components['schemas']['MailAutos'];
 export type MailByHand = components['schemas']['MailByHand'];
 export type MailCase = components['schemas']['MailCase'];
@@ -6619,7 +6827,9 @@ export type MailDraftAsk = components['schemas']['MailDraftAsk'];
 export type MailDraftEdit = components['schemas']['MailDraftEdit'];
 export type MailDraftState = components['schemas']['MailDraftState'];
 export type MailFile = components['schemas']['MailFile'];
+export type MailGive = components['schemas']['MailGive'];
 export type MailGone = components['schemas']['MailGone'];
+export type MailHalt = components['schemas']['MailHalt'];
 export type MailKind = components['schemas']['MailKind'];
 export type MailLine = components['schemas']['MailLine'];
 export type MailMessage = components['schemas']['MailMessage'];
@@ -6628,10 +6838,12 @@ export type MailReading = components['schemas']['MailReading'];
 export type MailReadingEdit = components['schemas']['MailReadingEdit'];
 export type MailSaid = components['schemas']['MailSaid'];
 export type MailSend = components['schemas']['MailSend'];
+export type MailSentBy = components['schemas']['MailSentBy'];
 export type MailSettled = components['schemas']['MailSettled'];
 export type MailStanding = components['schemas']['MailStanding'];
 export type MailState = components['schemas']['MailState'];
 export type MailTopic = components['schemas']['MailTopic'];
+export type MailWanted = components['schemas']['MailWanted'];
 export type MailWho = components['schemas']['MailWho'];
 export type MailWhy = components['schemas']['MailWhy'];
 export type MapConfig = components['schemas']['MapConfig'];
@@ -20828,6 +21040,529 @@ export interface operations {
             };
         };
     };
+    documents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /gmbs/{id}/documents`, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GmbDocuments"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    add_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddDocument"];
+            };
+        };
+        responses: {
+            /** @description `GET /gmbs/{id}/documents`, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GmbDocuments"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                document: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GmbDocumentFile"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_document: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                document: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     gmb_kit: {
         parameters: {
             query: {
@@ -25564,6 +26299,140 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["MailDraftAsk"];
+            };
+        };
+        responses: {
+            /** @description `GET /mail/cases/{id}`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailCaseDetail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    give_mail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailGive"];
             };
         };
         responses: {

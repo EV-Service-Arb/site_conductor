@@ -25,7 +25,7 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel, Refused,
-	mail::{Brief, ByHand, Case, CaseEdit, Draft, FILES_MAX, File, Kept, ReadBy, ReadingEdit, Sent, Text, Unread, Written},
+	mail::{Brief, ByHand, Case, CaseEdit, Draft, FILES_MAX, File, Kept, ReadBy, ReadingEdit, Sent, SentBy, Text, Unread, Wanted, Written},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -66,6 +66,10 @@ pub struct CaseDto {
 	pub gmail_id: i64,
 	/// The GBP it is about; `null`: not known.
 	pub gmb_id: Option<i64>,
+	/// By a person's word or Google's own words; else it is likely, and nothing of it goes by itself.
+	pub gmb_certain: bool,
+	/// The other GBPs its messages are about.
+	pub also: Vec<i64>,
 	pub topic: Topic,
 	/// Whether a person said so of them, over its mail.
 	pub by_hand: ByHand,
@@ -83,6 +87,10 @@ pub struct CaseDto {
 	pub said: Option<Kind>,
 	/// What Google asks in its last word.
 	pub asks: Vec<String>,
+	/// That, and what its draft lacks, each given or not.
+	pub wanted: Vec<Wanted>,
+	/// What goes by itself in it.
+	pub auto: AutomationDto,
 	/// Its draft, until it is answered; what it lacks in `draft.needs`.
 	pub draft: Option<DraftDto>,
 	/// The cases a person made part of it.
@@ -102,6 +110,8 @@ impl CaseDto {
 			id: c.id,
 			gmail_id: c.gmail,
 			gmb_id: c.gmb,
+			gmb_certain: c.gmb_certain,
+			also: c.also.clone(),
 			topic: c.topic,
 			by_hand: c.by_hand,
 			subject: google.unwrap_or(last).subject.clone(),
@@ -112,11 +122,29 @@ impl CaseDto {
 			last: MailLineDto::of(c, last),
 			said: read.map(|r| r.kind),
 			asks: read.map(|r| r.asks.clone()).unwrap_or_default(), // not read: nothing asked is known
+			wanted: c.wanted(),
+			auto: AutomationDto {
+				halt: c.press.err(),
+				asked: c.asked(),
+				limit: rules::MAX_ASKS,
+			},
 			draft: draft.map(DraftDto::from),
 			joined: c.joined.clone(),
 			stuck: c.stuck.clone(),
 		}
 	}
+}
+
+/// What goes by itself in a case.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MailAutomation")]
+pub struct AutomationDto {
+	/// Why nothing does; `null`: its next reply does, if it lacks nothing.
+	pub halt: Option<rules::Halt>,
+	/// Ours since Google last gave something new.
+	pub asked: usize,
+	/// Past it a person decides.
+	pub limit: usize,
 }
 
 /// Who speaks in a message.
@@ -150,6 +178,8 @@ pub struct MailLineDto {
 	pub reasons: Vec<String>,
 	/// Gmail has it in Spam.
 	pub spam: bool,
+	/// Ours: who sent it.
+	pub sent_by: Option<SentBy>,
 }
 impl MailLineDto {
 	fn of(c: &Case, m: &Kept) -> Self {
@@ -169,6 +199,7 @@ impl MailLineDto {
 			summary: read.map(|r| r.summary.clone()),
 			reasons: read.map(|r| r.reasons.clone()).unwrap_or_default(), // not read: none is known
 			spam: m.spam,
+			sent_by: m.sent_by.clone(),
 		}
 	}
 }
@@ -223,6 +254,8 @@ pub struct MessageDto {
 	pub read_by: Option<ReadBy>,
 	/// Why it is not read, once given up on.
 	pub read_error: Option<String>,
+	/// Ours: who sent it.
+	pub sent_by: Option<SentBy>,
 }
 impl MessageDto {
 	fn of(m: &Kept, text: &Text) -> Self {
@@ -241,6 +274,7 @@ impl MessageDto {
 			reading: m.said.reading.clone(),
 			read_by: m.read_by,
 			read_error: m.said.read_error.clone(),
+			sent_by: m.sent_by.clone(),
 		}
 	}
 }
@@ -303,11 +337,11 @@ pub struct GmbMailDto {
 	pub lines: Vec<MailLineDto>,
 }
 
-/// A topic whose replies go by themselves.
+/// A topic of a GBP's whose replies go by themselves.
 #[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
 #[schemars(rename = "MailAuto")]
 pub struct AutoDto {
-	pub gmail_id: i64,
+	pub gmb_id: i64,
 	pub topic: Topic,
 }
 
@@ -320,6 +354,10 @@ pub struct AutosDto {
 	pub topics: Vec<Topic>,
 	/// Whether this conductor sends any by itself: production's alone.
 	pub by_itself: bool,
+	/// How long a reply waits before it goes, in minutes.
+	pub hold_minutes: i64,
+	/// How often Google is asked, at most, until it gives something new.
+	pub limit: usize,
 }
 
 impl From<&Draft> for DraftDto {
@@ -533,6 +571,11 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::PUT, "/mail/drafts/{id}", USER, edit_mail_draft),
 		ApiRoute::new(M::DELETE, "/mail/drafts/{id}", USER, dismiss_mail_draft),
 		ApiRoute::new(M::POST, "/mail/drafts/{id}/restore", USER, restore_mail_draft),
+		ApiRoute::new(M::PUT, "/mail/cases/{id}/given", USER, give_mail),
+		ApiRoute::new(M::GET, "/gmbs/{id}/documents", USER, documents),
+		ApiRoute::new(M::POST, "/gmbs/{id}/documents", SLOW, add_document).layer(|h| h.layer(DefaultBodyLimit::max(SEND_MAX))),
+		ApiRoute::new(M::GET, "/gmbs/{id}/documents/{document}", USER, document),
+		ApiRoute::new(M::DELETE, "/gmbs/{id}/documents/{document}", USER, remove_document),
 		ApiRoute::new(M::GET, "/mail/auto", USER, mail_auto),
 		ApiRoute::new(M::PUT, "/mail/auto", FRESH, set_mail_auto),
 		ApiRoute::new(M::GET, "/gmbs/{id}/mail", USER, gmb_mail),
@@ -553,7 +596,7 @@ pub(crate) struct Listed {
 async fn mail_cases(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<Listed>) -> ApiResult<Json<CasesDto>> {
 	let now = Timestamp::now();
 	let cases = panel.mail_cases(caller.user_id, now).await?;
-	let listed = |c: &&Case| !routine(c) && q.gmail.is_none_or(|g| c.gmail == g) && q.gmb.is_none_or(|g| c.gmb == Some(g)) && q.state.is_none_or(|s| Standing::from(&c.state) == s);
+	let listed = |c: &&Case| !routine(c) && q.gmail.is_none_or(|g| c.gmail == g) && q.gmb.is_none_or(|g| c.of(g)) && q.state.is_none_or(|s| Standing::from(&c.state) == s);
 	Ok(Json(CasesDto {
 		cases: cases.iter().filter(listed).map(|c| CaseDto::of(c, now)).collect(),
 	}))
@@ -689,8 +732,11 @@ async fn draft_mail(State(state): State<ApiState>, Spends(caller, by): Spends<Mo
 pub(crate) struct SendDraft {
 	/// What goes, as the operator leaves it.
 	body: String,
-	/// At most the case's `files_max` in all; never stored.
+	/// At most the case's `files_max` in all, with the documents; never stored.
 	files: Vec<SendFile>,
+	/// Documents of its GBP's, by id.
+	#[serde(default)]
+	documents: Vec<i64>,
 	/// It goes with no file although the draft lacks something (`needs`).
 	as_is: bool,
 }
@@ -705,6 +751,137 @@ pub(crate) struct SendFile {
 	base64: String,
 }
 
+impl TryFrom<SendFile> for File {
+	type Error = Refusal<Code>;
+
+	fn try_from(f: SendFile) -> ApiResult<Self> {
+		let bytes = base64::engine::general_purpose::STANDARD
+			.decode(&f.base64)
+			.map_err(|e| Refusal::new(Code::BadRequest, format!("{}: {e}", f.name)))?;
+		Ok(Self {
+			name: f.name,
+			kind: f.r#type,
+			bytes,
+		})
+	}
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "MailGive")]
+pub(crate) struct Give {
+	/// One of the case's `wanted`.
+	item: String,
+	given: bool,
+	/// The document of its GBP's it is given by.
+	document: Option<i64>,
+}
+
+/// Marks what a case wants of its person given, or not. 400 its GBP is not known; 409 it asks that no more.
+async fn give_mail(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>, Body(b): Body<Give>) -> ApiResult<Json<CaseDetailDto>> {
+	state
+		.sign_in
+		.panel
+		.give_mail(caller.user_id, caller.person(), id, &b.item, b.given, b.document, Timestamp::now())
+		.await??;
+	detail(&state, caller.user_id, id).await
+}
+
+/// A document kept for a GBP.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "GmbDocument")]
+pub struct DocumentDto {
+	pub id: i64,
+	pub name: String,
+	pub r#type: String,
+	/// Bytes.
+	pub size: i64,
+	/// What Google asked that it answers.
+	pub given_for: Option<String>,
+	/// RFC 3339.
+	pub added_at: String,
+}
+
+/// `GET /gmbs/{id}/documents`, newest first.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "GmbDocuments")]
+pub struct DocumentsDto {
+	pub documents: Vec<DocumentDto>,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "GmbDocumentFile")]
+pub struct DocumentFileDto {
+	pub name: String,
+	pub r#type: String,
+	pub base64: String,
+}
+
+async fn documents_of(panel: &Panel, owner: Uuid, gmb: i64) -> ApiResult<Json<DocumentsDto>> {
+	let documents = panel.documents(owner, gmb).await??;
+	Ok(Json(DocumentsDto {
+		documents: documents
+			.into_iter()
+			.map(|d| DocumentDto {
+				id: d.id,
+				name: d.name,
+				r#type: d.kind,
+				size: d.size,
+				given_for: d.given_for,
+				added_at: d.added_at.to_string(),
+			})
+			.collect(),
+	}))
+}
+
+/// What was given for a GBP (a Kbis, a bill, a photo of its sign), for Google's next ask and the appeal.
+async fn documents(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<Json<DocumentsDto>> {
+	documents_of(&panel, caller.user_id, id).await
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "AddDocument")]
+pub(crate) struct AddDocument {
+	file: SendFile,
+	/// What Google asked that it answers.
+	given_for: Option<String>,
+}
+
+/// Keeps a document for a GBP, ≤ 10 MiB, sealed. 409 it has 50. Answers its documents.
+async fn add_document(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>, Body(b): Body<AddDocument>) -> ApiResult<Json<DocumentsDto>> {
+	let file = File::try_from(b.file)?;
+	let document = panel
+		.add_document(caller.user_id, caller.person(), id, &file, b.given_for.as_deref(), Timestamp::now())
+		.await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = id, document, "a document kept");
+	documents_of(&panel, caller.user_id, id).await
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct DocumentIn {
+	id: i64,
+	document: i64,
+}
+
+/// A GBP's document, whole.
+async fn document(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(DocumentIn { id, document }): Ids<DocumentIn>) -> ApiResult<Json<DocumentFileDto>> {
+	let f = panel.document(caller.user_id, id, document).await??;
+	Ok(Json(DocumentFileDto {
+		name: f.name,
+		r#type: f.kind,
+		base64: base64::engine::general_purpose::STANDARD.encode(f.bytes),
+	}))
+}
+
+/// Removes a GBP's document for good; what it was given as is not given any more.
+async fn remove_document(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(DocumentIn { id, document }): Ids<DocumentIn>) -> ApiResult<NoContent> {
+	panel.remove_document(caller.user_id, id, document).await??;
+	tracing::info!(user_id = %caller.user_id, gmb_id = id, document, "a document removed");
+	Ok(NoContent)
+}
+
 /// Sends a draft to Google as the case's gmail, once: the recipient is the case's (`recipient`).
 ///
 /// 400 nothing in the case takes a reply, or a file is not base64; 409 another message came since it was
@@ -716,23 +893,11 @@ async fn send_mail_draft(
 	Ids(Id { id }): Ids<Id<i64>>,
 	Body(b): Body<SendDraft>,
 ) -> ApiResult<Json<CaseDetailDto>> {
-	let files = b
-		.files
-		.into_iter()
-		.map(|f| {
-			let bytes = base64::engine::general_purpose::STANDARD
-				.decode(&f.base64)
-				.map_err(|e| Refusal::new(Code::BadRequest, format!("{}: {e}", f.name)))?;
-			Ok(File {
-				name: f.name,
-				kind: f.r#type,
-				bytes,
-			})
-		})
-		.collect::<ApiResult<Vec<_>>>()?;
+	let files = b.files.into_iter().map(File::try_from).collect::<ApiResult<Vec<_>>>()?;
 	let sent = Sent {
 		body: &b.body,
 		files,
+		documents: &b.documents,
 		as_is: b.as_is,
 	};
 	let case = state.sign_in.panel.send_mail_draft(caller.user_id, caller.person(), id, sent, Timestamp::now()).await??;
@@ -777,13 +942,15 @@ async fn restore_mail_draft(_: Outward, State(state): State<ApiState>, Extension
 	detail(&state, caller.user_id, case).await
 }
 
-/// The gmails and topics whose replies go by themselves, a quarter of an hour after they are written.
+/// The GBPs and topics whose replies go by themselves, a quarter of an hour after they are written.
 async fn mail_auto(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<AutosDto>> {
 	let auto = panel.mail_auto(caller.user_id).await?;
 	Ok(Json(AutosDto {
 		by_itself: auto.by_itself,
-		on: auto.on.into_iter().map(|(gmail_id, topic)| AutoDto { gmail_id, topic }).collect(),
+		on: auto.on.into_iter().map(|(gmb_id, topic)| AutoDto { gmb_id, topic }).collect(),
 		topics: sa_panel::mail::AUTO.to_vec(),
+		hold_minutes: rules::HOLD.as_mins(),
+		limit: rules::MAX_ASKS,
 	}))
 }
 
@@ -791,16 +958,16 @@ async fn mail_auto(State(panel): State<Panel>, Extension(caller): Extension<Call
 #[serde(deny_unknown_fields)]
 #[schemars(rename = "MailAutoSwitch")]
 pub(crate) struct SwitchAuto {
-	gmail: i64,
+	gmbs: Vec<i64>,
 	/// `verification` or `reviews`.
 	topic: Topic,
 	on: bool,
 }
 
-/// Lets replies on a topic of a gmail's go by themselves, or no more. 400 a topic that never does.
+/// Lets replies on a topic of each of the caller's GBPs named go by themselves, or no more. 400 a topic that never does; 404 one not theirs.
 async fn set_mail_auto(_: Outward, State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<SwitchAuto>) -> ApiResult<Json<AutosDto>> {
-	panel.set_mail_auto(caller.user_id, b.gmail, b.topic, b.on).await??;
-	tracing::info!(user_id = %caller.user_id, gmail_id = b.gmail, topic = ?b.topic, on = b.on, "automatic replies switched");
+	panel.set_mail_auto(caller.user_id, &b.gmbs, b.topic, b.on).await??;
+	tracing::info!(user_id = %caller.user_id, gmbs = ?b.gmbs, topic = ?b.topic, on = b.on, "automatic replies switched");
 	mail_auto(State(panel), Extension(caller)).await
 }
 
@@ -815,7 +982,7 @@ async fn gmb_mail(State(panel): State<Panel>, Extension(caller): Extension<Calle
 	let about = about(&cases, id);
 	Ok(Json(GmbMailDto {
 		attempts: attempts(&about),
-		cases: cases.iter().filter(|c| c.gmb == Some(id) && !routine(c)).map(|c| CaseDto::of(c, now)).collect(),
+		cases: cases.iter().filter(|c| c.of(id) && !routine(c)).map(|c| CaseDto::of(c, now)).collect(),
 		lines: about.iter().map(|(c, m)| MailLineDto::of(c, m)).collect(),
 	}))
 }
@@ -927,7 +1094,7 @@ answer_within_hours: only when it says within how long Google answers, the longe
 		.iter()
 		.map(|g| {
 			let said = |v: &Option<String>, none: &str| v.as_deref().map_or(none.to_owned(), data); // a draft may lack either
-			format!("- {}: {} ({})", g.id, said(&g.name, "unnamed"), said(&g.address, "no address"))
+			format!("- {}: {} ({})", g.id, said(&g.names.first().cloned(), "unnamed"), said(&g.address, "no address"))
 		})
 		.collect();
 	let before: Vec<String> = m

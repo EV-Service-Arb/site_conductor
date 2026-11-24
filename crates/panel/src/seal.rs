@@ -167,6 +167,11 @@ pub fn mail_draft_aad(case: i64, answers: i64) -> Vec<u8> {
 	[b"sa-panel/mail-draft/v1/".as_slice(), &case.to_be_bytes(), &answers.to_be_bytes()].concat()
 }
 
+/// Associated data of a GBP's document, by its name.
+pub fn gmb_document_aad(gmb: i64, name: &str) -> Vec<u8> {
+	[b"sa-panel/gmb-document/v1/".as_slice(), &gmb.to_be_bytes(), name.as_bytes()].concat()
+}
+
 /// Associated data of a gmail's Maps key.
 pub fn gmail_maps_key_aad(gmail_id: i64) -> Vec<u8> {
 	[b"sa-panel/gmail-maps-key/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()

@@ -67,7 +67,10 @@ export const VIEWS = {
       "issue": {
         "description": "The GBPs needing this, first.",
         "enum": [
+          "mail_deadline",
           "overdue",
+          "mail_asks",
+          "mail_reply",
           "suspended",
           "failing",
           "draft",

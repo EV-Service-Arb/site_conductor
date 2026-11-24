@@ -386,8 +386,21 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 		(Method::POST, format!("/mail/drafts/{draft}/send"), Some(json!({ "body": "x", "files": [], "as_is": false }))),
 		(Method::DELETE, format!("/mail/drafts/{draft}"), None),
 		(Method::POST, format!("/mail/drafts/{draft}/restore"), None),
-		(Method::PUT, "/mail/auto".to_owned(), Some(json!({ "gmail": w.gmail, "topic": "reviews", "on": true }))),
+		(Method::PUT, "/mail/auto".to_owned(), Some(json!({ "gmbs": [w.gmb], "topic": "reviews", "on": true }))),
 		(Method::GET, format!("/gmbs/{}/mail", w.gmb), None),
+		(
+			Method::PUT,
+			format!("/mail/cases/{id}/given"),
+			Some(json!({ "item": "x", "given": false, "document": null })),
+		),
+		(Method::GET, format!("/gmbs/{}/documents", w.gmb), None),
+		(
+			Method::POST,
+			format!("/gmbs/{}/documents", w.gmb),
+			Some(json!({ "file": { "name": "a", "type": "image/jpeg", "base64": "AQ==" }, "given_for": null })),
+		),
+		(Method::GET, format!("/gmbs/{}/documents/1", w.gmb), None),
+		(Method::DELETE, format!("/gmbs/{}/documents/1", w.gmb), None),
 	] {
 		let (status, _) = other.call(&w.app, method.clone(), &format!("/api/v1{path}"), body).await;
 		assert_eq!(status.as_u16(), 404, "{method} {path}: another's");
@@ -406,11 +419,45 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 		(status, &corrected["messages"][0]["reading"]["kind"], &corrected["messages"][0]["read_by"]),
 		(200, &json!("call_offered"), &json!("person"))
 	);
-	let (status, auto) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmail": w.gmail, "topic": "reviews", "on": true }))).await;
-	assert_eq!((status, &auto["on"]), (200, &json!([{ "gmail_id": w.gmail, "topic": "reviews" }])));
+	let (status, auto) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmbs": [w.gmb], "topic": "reviews", "on": true }))).await;
+	assert_eq!((status, &auto["on"]), (200, &json!([{ "gmb_id": w.gmb, "topic": "reviews" }])));
 	assert_eq!(auto["by_itself"], true);
-	let (status, _) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmail": w.gmail, "topic": "suspension", "on": true }))).await;
+	let (status, _) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmbs": [w.gmb], "topic": "suspension", "on": true }))).await;
 	assert_eq!(status, 400);
+}
+
+#[tokio::test]
+async fn what_google_asks_is_given_once_kept_and_sent() {
+	let asks = json!({
+		"topic": "verification", "kind": "asks", "gmb": null, "summary": "Asks for the signage.", "asks": ["a photo of the signage"],
+		"reasons": [], "deadline": null, "answer_within_hours": null,
+	});
+	let mut w = World::new(vec![asks, json!({ "body": "Attached.", "needs": ["a photo of the signage"] })], true).await;
+	priced(&w.p, &[(Item::from(ClaudeTokens::Input), 0), (Item::from(ClaudeTokens::Output), 0)]).await;
+	w.arrives(1, SUPPORT, "[1-1234000056789] Your Request to Google", "Plomberie Dupont - Lyon: send a photo of the signage.")
+		.await;
+	w.worker.read_and_write().await.unwrap();
+	let case = w.cases().await.remove(0);
+	assert_eq!(case["wanted"], json!([{ "item": "a photo of the signage", "given": false, "document": null }]), "asked and lacking, once");
+	let path = format!("/gmbs/{}/documents", w.gmb);
+	let file = json!({ "name": "sign.jpg", "type": "image/jpeg", "base64": "AQID" });
+	let (status, kept) = w.call(Method::POST, &path, Some(json!({ "file": file, "given_for": "a photo of the signage" }))).await;
+	assert_eq!((status, &kept["documents"][0]["size"]), (200, &json!(3)));
+	let document = kept["documents"][0]["id"].clone();
+	let (_, whole) = w.call(Method::GET, &format!("{path}/{document}"), None).await;
+	assert_eq!(whole, file);
+	let given = |item: &str| json!({ "item": item, "given": true, "document": document });
+	let (status, _) = w.call(Method::PUT, &format!("/mail/cases/{}/given", case["id"]), Some(given("a bill"))).await;
+	assert_eq!(status, 409, "it asks no bill");
+	let (status, detail) = w.call(Method::PUT, &format!("/mail/cases/{}/given", case["id"]), Some(given("a photo of the signage"))).await;
+	assert_eq!((status, &detail["case"]["wanted"][0]["document"]), (200, &document));
+	let send = json!({ "body": "Attached.", "files": [], "documents": [document], "as_is": false });
+	let (status, _) = w.call(Method::POST, &format!("/mail/drafts/{}/send", case["draft"]["id"]), Some(send)).await;
+	assert_eq!(status, 200);
+	let sent = w.outbox.sent.lock().unwrap()[0].clone();
+	assert_eq!((sent.files[0].name.as_str(), sent.files[0].bytes.as_slice()), ("sign.jpg", [1, 2, 3].as_slice()));
+	let (status, _) = w.call(Method::DELETE, &format!("{path}/{document}"), None).await;
+	assert_eq!(status, 204);
 }
 
 fn review(author: &str, captured: bool) -> GoneReview {
@@ -460,7 +507,7 @@ async fn missing_reviews_are_the_archives_for_the_writer_and_the_operator() {
 	.await;
 	priced(&w.p, &[(Item::from(ClaudeTokens::Input), 0), (Item::from(ClaudeTokens::Output), 0)]).await;
 	let subject = "[1-1234000056789] Your Request to Google";
-	let (status, _) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmail": w.gmail, "topic": "reviews", "on": true }))).await;
+	let (status, _) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmbs": [w.gmb], "topic": "reviews", "on": true }))).await;
 	assert_eq!(status, 200);
 
 	w.arrives(9, SUPPORT, subject, "We received your report of reviews missing from Plomberie Dupont - Lyon.").await;

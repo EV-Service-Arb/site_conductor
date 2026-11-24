@@ -18,6 +18,7 @@ pub mod brands;
 pub mod browsers;
 pub(crate) mod categories;
 pub mod connections;
+pub mod documents;
 pub mod gmbs;
 pub(crate) mod inbox;
 pub mod kit;

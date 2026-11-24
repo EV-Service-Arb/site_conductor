@@ -39,6 +39,7 @@ pub const MAX_ATTEMPTS: i32 = 10;
 
 /// Longest what a mail says may run in a message, in characters.
 const MAX_SUMMARY: usize = 200;
+const MAX_REPLY: usize = 400;
 
 /// Bytes of HMAC in a button's data: 80 bits, far past guessing within Telegram's rate of
 /// callbacks, and short enough for its 64-byte limit.
@@ -133,6 +134,10 @@ pub enum Note {
 		deadline: Option<Timestamp>,
 		/// Gmail put it in Spam.
 		spam: bool,
+		/// Told of before, and waiting still.
+		again: bool,
+		/// The reply that goes by itself.
+		reply: Option<String>,
 	},
 }
 impl Note {
@@ -202,8 +207,12 @@ impl Note {
 				summary,
 				deadline,
 				spam,
+				again,
+				reply,
 			} => {
 				out.push(&match (state, ru) {
+					(_, true) if *again => "✉️ Google: всё ещё ждёт вас".to_owned(),
+					(_, false) if *again => "✉️ Google: it waits on you still".to_owned(),
 					(State::ReplyReady, true) => "✉️ Google: ответ готов, отправьте его".to_owned(),
 					(State::ReplyReady, false) => "✉️ Google: a reply is ready to send".to_owned(),
 					(State::Sending { at }, true) => format!("✉️ Google: ответ уйдёт сам {}", minute(*at)),
@@ -243,6 +252,10 @@ impl Note {
 						out.push(if ru { "\nНужно: " } else { "\nIt needs: " });
 						out.code(&one_line(&needs.join("; "), MAX_SUMMARY));
 					}
+				}
+				if let Some(reply) = reply {
+					out.push(if ru { "\nОтвет: " } else { "\nThe reply: " });
+					out.code(&one_line(reply, MAX_REPLY));
 				}
 				if let Some(at) = deadline {
 					out.push(&if ru { format!("\nДо {}", minute(*at)) } else { format!("\nBy {}", minute(*at)) });
@@ -635,10 +648,12 @@ mod tests {
 			summary: Some("Asks for a photo\nof the signage".into()),
 			deadline: Some("2026-10-10T00:00:00Z".parse().unwrap()),
 			spam: true,
+			again: false,
+			reply: Some("Enable the call.".into()),
 		};
 		assert_eq!(
 			mail.text(Locale::En),
-			"✉️ Google: a reply goes by itself 2026-10-06 10:15 UTC\nGoogle asks · Plomberie Dupont\nAsks for a photo of the signage\nBy 2026-10-10 00:00 UTC\nIt is in Spam"
+			"✉️ Google: a reply goes by itself 2026-10-06 10:15 UTC\nGoogle asks · Plomberie Dupont\nAsks for a photo of the signage\nThe reply: Enable the call.\nBy 2026-10-10 00:00 UTC\nIt is in Spam"
 		);
 		let lacking = |summary: Option<&str>| Note::GoogleMail {
 			state: State::NeedsYou {
@@ -649,6 +664,8 @@ mod tests {
 			summary: summary.map(str::to_owned),
 			deadline: None,
 			spam: false,
+			again: false,
+			reply: None,
 		};
 		assert_eq!(
 			lacking(None).text(Locale::En),
