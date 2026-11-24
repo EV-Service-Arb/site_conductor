@@ -578,7 +578,7 @@
                 gcloud artifacts repositories describe guard --project "$P" --location "$R" >/dev/null 2>&1 ||
                   gcloud artifacts repositories create guard --project "$P" --location "$R" --repository-format docker
                 image="$R-docker.pkg.dev/$P/guard/guard:$(basename ${guardImage} | cut -c1-32)"
-                skopeo copy --dest-creds "oauth2accesstoken:$(gcloud auth print-access-token)" docker-archive:${guardImage} "docker://$image"
+                skopeo copy --insecure-policy --dest-creds "oauth2accesstoken:$(gcloud auth print-access-token)" docker-archive:${guardImage} "docker://$image"
                 gcloud run jobs deploy guard --project "$P" --region "$R" --image "$image" --service-account "$SA" --max-retries 0 --task-timeout 300s
                 GUARD_EXPORTS=$exports GUARD_PROJECT=$P GOOGLE_OAUTH_ACCESS_TOKEN=$(gcloud auth print-access-token --impersonate-service-account="$SA") ${guard}/bin/guard tick --dry-run
                 read -rp "guard-deploy: the tick above is what goes live, now and every 15 minutes. Go? [y/N] " go
