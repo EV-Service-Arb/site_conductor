@@ -54,7 +54,7 @@ export function AddDestination({ className }: { className?: string }) {
           {offered.map((k) => {
             const Icon = METHOD_ICON[KIND[k].by[0]!];
             return (
-              <DropdownMenuItem key={k} onSelect={() => setAdding(k)} className="gap-3 py-2">
+              <DropdownMenuItem key={k} onClick={() => setAdding(k)} className="gap-3 py-2">
                 <Icon className="size-4 shrink-0" />
                 <span className="flex min-w-0 flex-col">
                   <span className="text-ink">{KIND[k].name(t)}</span>

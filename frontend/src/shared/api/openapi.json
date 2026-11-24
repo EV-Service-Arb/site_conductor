@@ -29402,20 +29402,12 @@
               "array",
               "null"
             ],
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint16",
-                "maximum": 65535,
-                "minimum": 0
-              },
-              {
-                "type": "integer",
-                "format": "uint16",
-                "maximum": 65535,
-                "minimum": 0
-              }
-            ],
+            "items": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
             "maxItems": 2,
             "minItems": 2
           },
@@ -35830,20 +35822,12 @@
               "array",
               "null"
             ],
-            "items": [
-              {
-                "type": "integer",
-                "format": "uint16",
-                "maximum": 65535,
-                "minimum": 0
-              },
-              {
-                "type": "integer",
-                "format": "uint16",
-                "maximum": 65535,
-                "minimum": 0
-              }
-            ],
+            "items": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
             "maxItems": 2,
             "minItems": 2
           },

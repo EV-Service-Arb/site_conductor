@@ -10,14 +10,18 @@ export function minutesIn(tz: string, at: Date): number {
   return of("hour") * 60 + of("minute");
 }
 
+/** From and to, in minutes: two, as the document bounds them. */
+export const quietOf = (hours: AlertHours): [number, number] | null => hours.quiet as [number, number] | null;
+
 /** What holds everything but urgent now, and the wall clock it ends at; `null`: nothing does. */
 export function quietNow(hours: AlertHours | null, at: Date): { by: "snooze" | "hours"; until: string } | null {
   if (hours === null) return null;
   const now = minutesIn(hours.tz, at);
   const snoozed = hours.snoozed_until === null ? null : new Date(hours.snoozed_until);
   if (snoozed !== null && snoozed > at) return { by: "snooze", until: clock(minutesIn(hours.tz, snoozed)) };
-  if (hours.quiet === null) return null;
-  const [from, to] = hours.quiet;
+  const quiet = quietOf(hours);
+  if (quiet === null) return null;
+  const [from, to] = quiet;
   const inside = from < to ? from <= now && now < to : now >= from || now < to;
   return inside ? { by: "hours", until: clock(to) } : null;
 }

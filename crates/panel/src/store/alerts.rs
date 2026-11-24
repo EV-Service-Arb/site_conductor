@@ -350,6 +350,7 @@ pub struct Hours {
 	pub tz: String,
 	/// When the daily message goes out.
 	pub daily: u16,
+	#[schemars(with = "Option<[u16; 2]>")] // a tuple's schema is one ajv refuses
 	pub quiet: Option<(u16, u16)>,
 	pub snoozed_until: Option<Timestamp>,
 }

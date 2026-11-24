@@ -23,8 +23,7 @@ const AlertsContext = createContext<Context | null>(null);
 /** One read each of how the caller's alerts are set and of what is unread, for the bell, the strip, the toast and the pages: a change made in one is seen by the others. */
 export function AlertsProvider({ children }: { children: ReactNode }) {
   const me = useMe();
-  // openapi-fetch reads a tuple (`hours.quiet`) as an array
-  const alerts = useResource(api, "/alerts") as Read<Alerts>;
+  const alerts = useResource(api, "/alerts");
   const unread = useResource(api, "/alerts/inbox", { params: { query: { unread: true } }, keep: true });
   const { reload } = alerts;
   const unset = alerts.status === "ok" && alerts.data.hours === null && me.acting === null;

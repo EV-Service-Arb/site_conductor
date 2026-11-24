@@ -1,7 +1,7 @@
 export { type Set, photoSrc, pressAlert, readAlert, readAll, setDestination, setHours } from "./api/alerts";
 export { late, unreached } from "./model/alerts";
 export { AlertsProvider, useAlerts, useNamedGmbs, useNow, useQuiet, useUnread } from "./model/context";
-export { clock, minutesIn, nextAt, quietNow } from "./model/hours";
+export { clock, nextAt, quietOf } from "./model/hours";
 export { alerts } from "./model/i18n";
 export { CADENCES, CADENCE_NAME, FAMILIES, FAMILY_ICON, FAMILY_NAME, METHOD_ICON, METHOD_NAME, RULE_HINT, RULE_NAME, TIERS, TIER_LOOK, TIER_MEANS, TIER_NAME, VARIES } from "./model/names";
 export { keptPush, pushable, resubscribe, subscribePush, unsubscribePush } from "./model/push";

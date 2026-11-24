@@ -44,9 +44,9 @@ function Shown({ alert, told, reload }: { alert: Alert; told: readonly Told[]; r
   const rest = alert.text.split("\n").filter((l) => l.trim() !== "").slice(1);
   const phone = phoneOf(alert.text);
   return (
-    <article className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 md:px-7">
+    <article className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 @3xl:px-7">
       <header className="flex gap-3">
-        <AlertMark alert={alert} className="size-10 max-md:hidden" />
+        <AlertMark alert={alert} className="size-10 @max-3xl:hidden" />
         <div className="min-w-0 space-y-1">
           <h2 className="text-lg font-semibold text-ink">{title}</h2>
           <p className="flex flex-wrap items-center gap-2 text-sm text-ink-soft">
@@ -56,7 +56,7 @@ function Shown({ alert, told, reload }: { alert: Alert; told: readonly Told[]; r
           </p>
         </div>
       </header>
-      <div className="flex flex-col gap-4 md:flex-row md:items-start">
+      <div className="flex flex-col gap-4 @4xl:flex-row @4xl:items-start">
         <div className="min-w-0 flex-1 space-y-1.5">
           {rest.map((l, i) => (
             <p key={i} className="text-sm break-words text-ink">
@@ -67,12 +67,12 @@ function Shown({ alert, told, reload }: { alert: Alert; told: readonly Told[]; r
         {alert.photo && (
           <a href={photoSrc(alert.id)} target="_blank" rel="noreferrer" className="shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element -- the session's own, behind the API */}
-            <img src={photoSrc(alert.id)} alt={t(keys.photo, "The capture it came with")} className="max-h-80 rounded-md border border-border md:max-w-60" />
+            <img src={photoSrc(alert.id)} alt={t(keys.photo, "The capture it came with")} className="max-h-80 rounded-md border border-border @4xl:max-w-60" />
           </a>
         )}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <AlertButtons alert={alert} full onPressed={reload} />
+        <AlertButtons alert={alert} onPressed={reload} />
         {phone !== null && (
           <Button asChild variant="outline" size="sm">
             <a href={`tel:${phone.replace(/[^\d+]/g, "")}`}>
@@ -148,8 +148,8 @@ function Went({ told }: { told: readonly Told[] }) {
           return (
             <li key={w.destination_id} className="flex items-center gap-2.5 text-sm text-ink">
               <Icon className="size-4 shrink-0 text-ink-soft" />
-              <span className="min-w-0 truncate">{[METHOD_NAME[d.method](t), d.title].filter((s) => s !== null).join(" · ")}</span>
-              <span className={cn("ml-auto text-right text-xs", w.state === "dead" ? "text-accent-error" : "text-ink-soft")}>{outcome(w, t, formatDateTime(w.at, locale))}</span>
+              <span className="min-w-0 flex-1 truncate">{[METHOD_NAME[d.method](t), d.title].filter((s) => s !== null).join(" · ")}</span>
+              <span className={cn("max-w-3/5 text-right text-xs", w.state === "dead" ? "text-accent-error" : "text-ink-soft")}>{outcome(w, t, formatDateTime(w.at, locale))}</span>
             </li>
           );
         })}

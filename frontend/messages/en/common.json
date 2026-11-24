@@ -199,7 +199,7 @@
   "alerts.different.add": "Set an alert apart here",
   "alerts.different.alert": "Alert",
   "alerts.different.remove": "{rule}: as its tier",
-  "alerts.differs": "{n} alerts differ",
+  "alerts.differs": "{n} set apart",
   "alerts.done": "Done",
   "alerts.facet.any": "Any of {n}",
   "alerts.facet.brands": "Brands",

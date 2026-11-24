@@ -30,8 +30,8 @@ export const TIER_MEANS: Named<Tier> = {
 
 /** A tier's ink, its dot and the circle behind a row's icon. */
 export const TIER_LOOK: Record<Tier, { ink: string; dot: string; wash: string }> = {
-  urgent: { ink: "text-accent-error", dot: "bg-accent-error", wash: "bg-tint-error-fill text-accent-error" },
-  important: { ink: "text-accent-warn", dot: "bg-accent-warn", wash: "bg-tint-warn-fill text-accent-warn" },
+  urgent: { ink: "text-accent-error", dot: "bg-accent-error", wash: "bg-accent-error/20 text-accent-error" },
+  important: { ink: "text-accent-warn", dot: "bg-accent-warn", wash: "bg-accent-warn/20 text-accent-warn" },
   info: { ink: "text-ink", dot: "bg-ink-soft", wash: "bg-secondary text-ink-soft" },
 };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button, type HotbarProps } from "@evinvest/uikit";
-import { ExternalLink, Flame, Phone, X } from "lucide-react";
+import { ExternalLink, Phone, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AlertButtons, alerts as keys, lines, phoneOf, readAlert, useNamedGmbs, useNow, useUnread } from "@/entities/alerts";
@@ -40,7 +40,6 @@ export function useTakeover(): Takeover | undefined {
     tone: "error",
     message: (
       <span className="inline-flex items-center gap-2">
-        <Flame aria-hidden className="size-4 shrink-0" />
         <Waiting key={oldest.id} at={oldest.at} />
         <span className="font-semibold text-ink">{title}</span>
         <span className="text-ink-mid">{[sub, of].filter((s) => s !== "").join(" · ")}</span>
@@ -78,11 +77,12 @@ function Actions({ alert, onFold }: { alert: Alert; onFold: () => void }) {
         <Button asChild variant="secondary" size="sm">
           <a href={`tel:${phone.replace(/[^\d+]/g, "")}`}>
             <Phone aria-hidden className="size-4" />
-            {phone}
+            <span className="max-md:sr-only">{phone}</span>
           </a>
         </Button>
       )}
-      <AlertButtons key={alert.id} alert={alert} />
+      {/* a phone has room for the one to press; the rest are in the bell */}
+      <AlertButtons key={alert.id} alert={alert} className="flex-nowrap max-md:[&>:not(:first-child)]:hidden" />
       {alert.buttons.length === 0 && (
         <Button type="button" size="sm" onClick={open}>
           <ExternalLink aria-hidden className="size-4" />

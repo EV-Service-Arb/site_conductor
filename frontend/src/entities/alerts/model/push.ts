@@ -44,7 +44,7 @@ export async function subscribePush(user: string, key: string): Promise<Alerts |
   await navigator.serviceWorker.ready;
   const { endpoint, keys } = (await subscribed(key)).toJSON();
   if (endpoint === undefined || keys?.p256dh === undefined || keys.auth === undefined) throw new Error("a push subscription without its keys");
-  const alerts = await ok(api.POST("/alerts/push", { body: { endpoint, p256dh: keys.p256dh, auth: keys.auth, title: browserName() } })) as Alerts; // openapi-fetch reads a tuple (`hours.quiet`) as an array
+  const alerts = await ok(api.POST("/alerts/push", { body: { endpoint, p256dh: keys.p256dh, auth: keys.auth, title: browserName() } }));
   const destination = Math.max(...alerts.destinations.filter((d) => d.method === "push").map((d) => d.id));
   localStorage.setItem(KEPT, JSON.stringify({ user, destination, endpoint } satisfies Kept));
   return alerts;

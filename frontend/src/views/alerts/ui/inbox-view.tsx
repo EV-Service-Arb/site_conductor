@@ -11,7 +11,6 @@ import { api, ok } from "@/shared/api";
 import type { Alert, AlertInbox, Family, Tier } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { type Params, ViewLink, go, useAt } from "@/shared/lib/location";
-import { DESKTOP_QUERY, useMediaQuery } from "@/shared/lib/use-media-query";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 
@@ -19,34 +18,34 @@ import { AlertDetail } from "./alert-detail";
 
 type Sought = Params<"alerts"> & { unread: boolean };
 
-/** The caller's alerts: what to look among, the list by day, and the one opened. A phone shows the list, or the one opened. */
+/**
+ * The caller's alerts: what to look among, the list by day, and the one opened — three panes, two or one by the room there is
+ * (the outline and the assistant take theirs); in one, the list or the one opened.
+ */
 export function AlertsView() {
   const at = useAt();
   if (at.view !== "alerts") throw new Error("the alerts' view on another's");
   const sought = { ...at.params, unread: at.params.unread ?? false };
-  const desktop = useMediaQuery(DESKTOP_QUERY);
   const opened = sought.open;
-  if (!desktop && opened !== undefined)
-    return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <PhoneBar back={{ ...sought, open: undefined }} />
-        <AlertDetail key={opened} id={opened} />
-      </div>
-    );
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <Head />
+    <div className="@container flex min-h-0 flex-1 flex-col">
+      <Head className={cn(opened !== undefined && "@max-xl:hidden")} />
       <div className="flex min-h-0 flex-1">
-        {desktop && <Filters sought={sought} />}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col md:max-w-120 md:border-r md:border-border">
-          {!desktop && <Chips sought={sought} />}
+        <Filters sought={sought} />
+        <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col @xl:max-w-72 @xl:border-r @xl:border-border @3xl:max-w-96 @5xl:max-w-110", opened !== undefined && "@max-xl:hidden")}>
+          <Chips sought={sought} />
           <List key={`${sought.tier ?? ""} ${sought.unread}`} sought={sought} />
         </div>
-        {desktop && (
-          <div className="min-w-0 flex-1 overflow-y-auto">
-            {opened === undefined ? <Pick /> : <AlertDetail key={opened} id={opened} />}
-          </div>
-        )}
+        <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col", opened === undefined && "@max-xl:hidden")}>
+          {opened === undefined ? (
+            <Pick />
+          ) : (
+            <>
+              <Back sought={sought} />
+              <AlertDetail key={opened} id={opened} />
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -58,11 +57,11 @@ function seek(sought: Sought, change: { [K in keyof Sought]?: Sought[K] | undefi
   go({ view: "alerts", params: next }, "replace");
 }
 
-function PhoneBar({ back }: { back: { [K in keyof Sought]?: Sought[K] | undefined } }) {
+function Back({ sought }: { sought: Sought }) {
   const t = useT();
   return (
-    <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-      <Button type="button" variant="ghost" size="touch" icon aria-label={t(keys.back, "Back to the list")} onClick={() => seek(back as Sought, {})}>
+    <div className="flex items-center gap-1 border-b border-border px-2 py-1.5 @xl:hidden">
+      <Button type="button" variant="ghost" size="touch" icon aria-label={t(keys.back, "Back to the list")} onClick={() => seek(sought, {})}>
         <ArrowLeft aria-hidden className="size-5" />
       </Button>
       <p className="text-base font-semibold text-ink">{t(keys.title, "Alerts")}</p>
@@ -70,7 +69,7 @@ function PhoneBar({ back }: { back: { [K in keyof Sought]?: Sought[K] | undefine
   );
 }
 
-function Head() {
+function Head({ className }: { className?: string }) {
   const t = useT();
   const unread = useUnread();
   const [busy, setBusy] = useState(false);
@@ -87,17 +86,17 @@ function Head() {
     }
   };
   return (
-    <header className="flex items-center gap-2 border-b border-border px-4 py-2">
+    <header className={cn("flex items-center gap-2 border-b border-border px-4 py-2", className)}>
       <Bell aria-hidden className="size-4 text-ink-soft" />
       <h1 className="flex-1 text-base font-semibold text-ink">{t(keys.title, "Alerts")}</h1>
       <Button type="button" variant="ghost" size="sm" disabled={busy || newest === undefined} onClick={() => newest !== undefined && void all(newest)}>
         <CheckCheck aria-hidden className="size-4" />
-        <span className="max-md:sr-only">{t(keys.readAll, "Mark all read")}</span>
+        <span className="@max-xl:sr-only">{t(keys.readAll, "Mark all read")}</span>
       </Button>
       <Button asChild variant="outline" size="sm">
         <ViewLink to={{ view: "alert_settings", params: {} }}>
           <Settings aria-hidden className="size-4" />
-          <span className="max-md:sr-only">{t(keys.settings, "Settings")}</span>
+          <span className="@max-xl:sr-only">{t(keys.settings, "Settings")}</span>
         </ViewLink>
       </Button>
     </header>
@@ -118,7 +117,7 @@ function Filters({ sought }: { sought: Sought }) {
   const n = inbox?.unread;
   const total = n === undefined ? 0 : n.urgent + n.important + n.info;
   return (
-    <nav aria-label={t(keys.filters, "Filters")} className="flex w-62 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border p-3">
+    <nav aria-label={t(keys.filters, "Filters")} className="hidden w-62 shrink-0 flex-col gap-1 overflow-y-auto border-r border-border p-3 @5xl:flex">
       <button type="button" aria-pressed={sought.tier === undefined} className={ITEM} onClick={() => seek(sought, { tier: undefined })}>
         <Inbox aria-hidden className="size-4 text-ink-soft" />
         <span className="flex-1">{t(keys.filter.all, "All")}</span>
@@ -169,7 +168,7 @@ function Chips({ sought }: { sought: Sought }) {
   const [more, setMore] = useState(sought.family !== undefined);
   const n = inbox?.unread;
   return (
-    <div className="flex flex-col gap-2 border-b border-border px-3 py-2.5">
+    <div className="flex flex-col gap-2 border-b border-border px-3 py-2.5 @5xl:hidden">
       <div className="flex gap-2 overflow-x-auto">
         <button type="button" aria-pressed={sought.tier === undefined} className={CHIP} onClick={() => seek(sought, { tier: undefined })}>
           {t(keys.filter.all, "All")}

@@ -14,9 +14,9 @@ import { useControlSize } from "@/shared/ui/touch";
 
 import type { Act } from "./settings-view";
 
-const ROW = "grid grid-cols-(--grid-alert-place) items-center gap-x-3 gap-y-3 px-4 py-3 md:grid-cols-(--grid-alert-matrix)";
+const ROW = "grid grid-cols-(--grid-alert-place) items-center gap-x-3 gap-y-3 px-4 py-3 @3xl:grid-cols-(--grid-alert-matrix)";
 /** The three cells: a phone's own line under the name. */
-const CELLS = "col-span-3 grid grid-cols-3 gap-2 md:contents";
+const CELLS = "col-span-3 grid grid-cols-3 gap-2 @3xl:contents";
 
 /** Rows are places, columns tiers, a cell how soon that place is told of that tier. */
 export function Matrix({ alerts, busy, act }: { alerts: Alerts; busy: boolean; act: Act }) {
@@ -25,7 +25,7 @@ export function Matrix({ alerts, busy, act }: { alerts: Alerts; busy: boolean; a
   return (
     <div className="divide-y divide-border rounded-lg border border-border bg-card">
       <div className={ROW}>
-        <span className="col-span-3 max-md:hidden" />
+        <span className="col-span-3 @max-3xl:hidden" />
         <div className={CELLS}>
           {TIERS.map((tier) => (
             <div key={tier} className="min-w-0">
@@ -39,9 +39,9 @@ export function Matrix({ alerts, busy, act }: { alerts: Alerts; busy: boolean; a
         </div>
       </div>
       <div className={ROW}>
-        <span className="max-md:hidden" />
+        <span />
         <Icon of={Bell} />
-        <Name title={t(keys.panel, "This panel")} what={t(keys.panel.what, "the bell and the inbox")} className="max-md:col-span-2" />
+        <Name title={t(keys.panel, "This panel")} what={t(keys.panel.what, "the bell and the inbox")} />
         <div className={cn(CELLS, "text-sm text-ink-soft")}>
           <span>{t(keys.panel.urgent, "Takes the hotbar")}</span>
           <span>{t(keys.panel.important, "Toast")}</span>
@@ -86,7 +86,7 @@ const FACETS = ["gmails", "trades", "brands", "gmbs"] as const satisfies readonl
 function summary(d: Destination, t: T): string {
   const filtered = FACETS.some((f) => d.filter[f].length > 0);
   const rules = Object.keys(d.rules).length;
-  return [reads(d, t), filtered ? t(keys.filtered, "some GBPs only") : null, rules > 0 ? t(keys.differs, "{n} alerts differ", { n: rules }) : null].filter((s) => s !== null).join(" · ");
+  return [reads(d, t), filtered ? t(keys.filtered, "some GBPs only") : null, rules > 0 ? t(keys.differs, "{n} set apart", { n: rules }) : null].filter((s) => s !== null).join(" · ");
 }
 
 function Place({ destination: d, alerts, daily, busy, act }: { destination: Destination; alerts: Alerts; daily: string; busy: boolean; act: Act }) {
@@ -129,10 +129,10 @@ function Place({ destination: d, alerts, daily, busy, act }: { destination: Dest
         </div>
       </div>
       {open && (
-        <div id={body} className="grid gap-6 bg-background/60 px-4 py-4 md:grid-cols-2 md:pl-18">
+        <div id={body} className="grid gap-6 bg-background/60 px-4 py-4 @2xl:grid-cols-2 @3xl:pl-18">
           <OnlyFor destination={d} busy={busy} change={change} />
           <Different destination={d} alerts={alerts} daily={daily} busy={busy} change={change} />
-          <div className="flex items-center gap-3 md:col-span-2">
+          <div className="flex items-center gap-3 @2xl:col-span-2">
             <Button type="button" variant="outline" size="sm" disabled={busy} onClick={test}>
               <Send aria-hidden className="size-4" />
               {t(keys.test.send, "Send a test")}
@@ -183,7 +183,7 @@ function CadenceSelect({ value, daily, label, disabled, onChange }: { value: Cad
   const size = useControlSize();
   return (
     <Select value={value} onValueChange={(v) => onChange(v as Cadence)}>
-      <SelectTrigger size={size} className={cn("w-full min-w-0", value === "off" && "text-ink-soft")} disabled={disabled} aria-label={label}>
+      <SelectTrigger size={size} className={cn("w-full min-w-0 @max-3xl:px-2.5 @max-3xl:text-sm", value === "off" && "text-ink-soft")} disabled={disabled} aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

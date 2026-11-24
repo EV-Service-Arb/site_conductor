@@ -2711,10 +2711,7 @@ export interface components {
              * @description When the daily message goes out.
              */
             daily: number;
-            quiet: [
-                number,
-                number
-            ] | null;
+            quiet: number[] | null;
             /** Format: date-time */
             snoozed_until: string | null;
             /** @description An IANA time zone. */
@@ -4832,10 +4829,7 @@ export interface components {
              * @description From and to, the same; past midnight when they end before they begin. Nothing but urgent goes
              *     out in them, the rest as one message after.
              */
-            quiet?: [
-                number,
-                number
-            ] | null;
+            quiet?: number[] | null;
             /**
              * Format: date-time
              * @description Nothing but urgent goes out before this.

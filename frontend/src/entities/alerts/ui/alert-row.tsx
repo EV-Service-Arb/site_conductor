@@ -7,7 +7,7 @@ import { useState } from "react";
 import type { Alert } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { ViewLink } from "@/shared/lib/location";
-import { ago } from "@/shared/lib/time";
+import { age } from "@/shared/lib/time";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -40,13 +40,13 @@ export function When({ at }: { at: string }) {
   const today = then.toDateString() === now.toDateString();
   return (
     <time dateTime={at} title={then.toLocaleString(locale)} className="shrink-0 font-mono text-xs text-ink-soft tabular-nums">
-      {minutes < 10 ? ago(at, locale) : today ? then.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : then.toLocaleDateString(locale, { month: "short", day: "numeric" })}
+      {minutes < 60 ? age(at, locale) : today ? then.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" }) : then.toLocaleDateString(locale, { month: "short", day: "numeric" })}
     </time>
   );
 }
 
 /** What an alert asks to be done, as its message's buttons: the first is the one to press. */
-export function AlertButtons({ alert, full = false, onPressed }: { alert: Alert; full?: boolean; onPressed?: () => void }) {
+export function AlertButtons({ alert, className, onPressed }: { alert: Alert; className?: string; onPressed?: () => void }) {
   const t = useT();
   const size = useButtonSize();
   const unread = useUnread();
@@ -66,7 +66,7 @@ export function AlertButtons({ alert, full = false, onPressed }: { alert: Alert;
     }
   };
   return (
-    <div className={cn("flex flex-wrap gap-2", full && "max-md:[&>*]:flex-1")}>
+    <div className={cn("flex flex-wrap gap-2", className)}>
       {alert.buttons.map((b, i) => (
         <Button key={b.id} type="button" size={size("sm")} variant={i === 0 ? (alert.tier === "urgent" ? "destructive" : "primary") : "outline"} disabled={busy} onClick={() => void press(b.id)}>
           {i === 0 && alert.family === "leads" && <Phone aria-hidden className="size-4" />}

@@ -467,6 +467,7 @@ pub(crate) struct HoursBody {
 	daily: u16,
 	/// From and to, the same; past midnight when they end before they begin. Nothing but urgent goes
 	/// out in them, the rest as one message after.
+	#[schemars(with = "Option<[u16; 2]>")] // a tuple's schema is one ajv refuses
 	quiet: Option<(u16, u16)>,
 	/// Nothing but urgent goes out before this.
 	snoozed_until: Option<Timestamp>,

@@ -2,9 +2,9 @@
 
 import { Button, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Skeleton, Switch, cn, toast } from "@evinvest/uikit";
 import { ArrowLeft, BellOff, CalendarClock, Globe, Inbox, Info, Moon, Undo2 } from "lucide-react";
-import { type ReactNode, useEffect, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
-import { FAMILIES, FAMILY_ICON, FAMILY_NAME, RULE_HINT, RULE_NAME, TIERS, TIER_LOOK, TIER_NAME, VARIES, alerts as keys, clock, late, nextAt, setHours, unreached, useAlerts, useNow } from "@/entities/alerts";
+import { FAMILIES, FAMILY_ICON, FAMILY_NAME, RULE_HINT, RULE_NAME, TIERS, TIER_LOOK, TIER_NAME, VARIES, alerts as keys, clock, late, nextAt, quietOf, setHours, unreached, useAlerts, useNow } from "@/entities/alerts";
 import { ConnectTelegram, PushHere } from "@/features/add-destination";
 import { api, ok } from "@/shared/api";
 import type { AlertHours, AlertRule, Alerts, Tier } from "@/shared/api/schema";
@@ -52,7 +52,7 @@ export function AlertSettingsView() {
         </Button>
       </header>
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto flex w-full max-w-300 flex-col gap-6 px-4 py-6 md:px-8">
+        <div className="@container mx-auto flex w-full max-w-300 flex-col gap-6 px-4 py-6 md:px-8">
           {alerts.status === "loading" ? (
             <Skeleton className="h-60 w-full" />
           ) : alerts.status === "error" ? (
@@ -82,8 +82,11 @@ function useConfirm(reload: () => void) {
   const t = useT();
   const at = useAt();
   const token = at.view === "alert_settings" ? at.params.confirm : undefined;
+  // a token is good once: an effect run again must not spend it again
+  const spent = useRef<string | null>(null);
   useEffect(() => {
-    if (token === undefined) return;
+    if (token === undefined || spent.current === token) return;
+    spent.current = token;
     go({ view: "alert_settings", params: {} }, "replace");
     ok(api.POST("/alerts/email/confirm", { body: { token } })).then(
       () => {
@@ -133,7 +136,7 @@ function TimeSelect({ value, label, disabled, onChange }: { value: number; label
   const at = HALF_HOURS.includes(value) ? HALF_HOURS : [...HALF_HOURS, value].sort((a, b) => a - b);
   return (
     <Select value={String(value)} onValueChange={(v) => onChange(Number(v))}>
-      <SelectTrigger size={size} className="w-26 font-mono tabular-nums" disabled={disabled} aria-label={label}>
+      <SelectTrigger size={size} className="w-30 font-mono tabular-nums" disabled={disabled} aria-label={label}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -174,6 +177,7 @@ function HoursBar({ hours: set, busy, act }: { hours: AlertHours | null; busy: b
   // until this page's first visit sets them: what goes out by then
   const hours = set ?? { tz: "UTC", daily: 9 * 60, quiet: null, snoozed_until: null };
   const change = (c: Partial<AlertHours>) => void act(() => setHours(set, c));
+  const quiet = quietOf(hours);
   const here = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const zones = [...new Set([hours.tz, here, ...Intl.supportedValuesOf("timeZone")])];
   const until = hours.snoozed_until === null || new Date(hours.snoozed_until) <= now ? null : new Date(hours.snoozed_until);
@@ -182,11 +186,10 @@ function HoursBar({ hours: set, busy, act }: { hours: AlertHours | null; busy: b
     { id: "off", label: t(keys.snooze.off, "Off"), at: null },
     { id: "hour", label: t(keys.snooze.oneHour, "1 h"), at: new Date(now.getTime() + 3_600_000) },
     { id: "evening", label: t(keys.snooze.evening, "Until this evening"), at: nextAt(hours.tz, EVENING, now) },
-    { id: "tomorrow", label: t(keys.snooze.tomorrow, "Until tomorrow"), at: nextAt(hours.tz, hours.quiet?.[1] ?? MORNING, now) },
+    { id: "tomorrow", label: t(keys.snooze.tomorrow, "Until tomorrow"), at: nextAt(hours.tz, quiet?.[1] ?? MORNING, now) },
   ];
-  const quiet = hours.quiet;
   return (
-    <section aria-label={t(keys.hours, "Your hours")} className="grid divide-border rounded-lg border border-border bg-card max-md:divide-y md:grid-cols-2 lg:grid-cols-4 lg:divide-x">
+    <section aria-label={t(keys.hours, "Your hours")} className="grid divide-border rounded-lg border border-border bg-card @max-4xl:divide-y @2xl:grid-cols-2 @4xl:grid-cols-4 @4xl:divide-x">
       <Hour
         icon={Moon}
         title={t(keys.quiet, "Quiet hours")}
@@ -253,7 +256,7 @@ function Rules({ rules, busy, act }: { rules: readonly AlertRule[]; busy: boolea
   if (rules.length === 0) return <p className="text-sm text-ink-soft">{t(keys.rules.none, "Your access has nothing to alert you of.")}</p>;
   return (
     <>
-      <div className="gap-4 md:columns-2">
+      <div className="gap-4 @3xl:columns-2">
         {FAMILIES.map((family) => {
           const of = rules.filter((r) => r.family === family);
           if (of.length === 0) return null;
