@@ -1,3 +1,3 @@
 import { scope } from "@evinvest/i18n";
 
-export const claude = scope("claude");
+export const own = scope("own");

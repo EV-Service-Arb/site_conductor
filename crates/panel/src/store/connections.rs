@@ -204,19 +204,26 @@ pub(crate) async fn set_imap(conn: &mut SqliteConnection, gmail_id: i64, inbox: 
 
 /// Checked when set: a refused one is never stored.
 pub(crate) async fn set_maps_key(conn: &mut SqliteConnection, gmail_id: i64, last4: &str, key: &Sealed, now: Timestamp) -> eyre::Result<()> {
-	sqlx::query(
-		"INSERT INTO gmail_maps_keys (gmail_id, key_sealed, data_key_fp, last4, set_at, checked_at, check_error) VALUES ($1, $2, $3, $4, $5, $5, NULL) \
-		 ON CONFLICT (gmail_id) DO UPDATE SET key_sealed = excluded.key_sealed, data_key_fp = excluded.data_key_fp, last4 = excluded.last4, \
-		 set_at = excluded.set_at, checked_at = excluded.checked_at, check_error = NULL",
-	)
-	.bind(gmail_id)
+	set_key(conn, ("gmail_maps_keys", "gmail_id"), gmail_id, last4, key, now).await
+}
+
+/// `owner`'s key in `table`, whose owner is its `whose`: one shown by its last four.
+pub(super) async fn set_key<O>(conn: &mut SqliteConnection, (table, whose): (&'static str, &'static str), owner: O, last4: &str, key: &Sealed, now: Timestamp) -> eyre::Result<()>
+where
+	O: for<'q> sqlx::Encode<'q, sqlx::Sqlite> + sqlx::Type<sqlx::Sqlite> + Send + 'static, {
+	sqlx::query(sqlx::AssertSqlSafe(format!(
+		"INSERT INTO {table} ({whose}, key_sealed, data_key_fp, last4, set_at, checked_at, check_error) VALUES ($1, $2, $3, $4, $5, $5, NULL) \
+		 ON CONFLICT ({whose}) DO UPDATE SET key_sealed = excluded.key_sealed, data_key_fp = excluded.data_key_fp, last4 = excluded.last4, \
+		 set_at = excluded.set_at, checked_at = excluded.checked_at, check_error = NULL"
+	)))
+	.bind(owner)
 	.bind(&key.blob)
 	.bind(&key.data_key_fp)
 	.bind(last4)
 	.bind(to_db(now))
 	.execute(&mut *conn)
 	.await
-	.wrap_err("setting a gmail's Maps key")?;
+	.wrap_err_with(|| format!("setting a key in {table}"))?;
 	Ok(())
 }
 

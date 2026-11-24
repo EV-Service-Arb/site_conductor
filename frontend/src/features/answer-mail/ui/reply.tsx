@@ -92,7 +92,7 @@ function Write({ detail, onChanged, over = false, onDone }: { detail: MailCaseDe
       onDone?.();
     });
   const verb = over ? t(mail.write.again, "Rewrite") : t(mail.write, "Write a reply");
-  const cost = runs === null ? null : runs.own ? t(mail.write.own, "on your Claude") : runs.cost === undefined ? null : t(mail.write.cost, "≈ {n} tokens", { n: runs.cost });
+  const cost = runs === null ? null : runs.own ? t(mail.write.own, "on your own model") : runs.cost === undefined ? null : t(mail.write.cost, "≈ {n} tokens", { n: runs.cost });
   const form = (
     <form
       className="flex flex-wrap items-center gap-2"

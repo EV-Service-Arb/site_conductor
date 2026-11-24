@@ -1,10 +1,13 @@
-//! The in-page assistant's loop: Claude asked with the caller's question, given the operations as
+//! The in-page assistant's loop: a model asked with the caller's question, given the operations as
 //! `search`, `call`, `execute` and `poll` (`crate::tools`, through the `/api/v1` gate on the caller's own
 //! session) and the page as `open` (a view) and `run` (a binding of its keymap). What the asker's
 //! approval level holds is proposed: they confirm it from the answer's actions, and a cell waiting on
 //! it goes on. The turns are written through the chats' versioned store as the loop goes, each write
 //! told to the caller's screens.
 
+use std::time::Duration;
+
+use ask_llm::{Conversation, Role, Stop, ThinkingLevel, Tool};
 use axum::{
 	Json,
 	extract::State,
@@ -17,7 +20,7 @@ use sa_core::{
 	prices::{ModelTokens, Spender, Spends},
 	usage::Bill,
 };
-use sa_panel::assistant::Chat;
+use sa_panel::{assistant::Chat, usage::Tab};
 use sa_sandbox::{Call, Until};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -26,9 +29,9 @@ use uuid::Uuid;
 use crate::{
 	api::{ApiResult, Code, Id},
 	assistant::{Action, ActionState, AnswerState, Attachment, ChatDto, Cost, Mention, Step, Target, Turn, Used},
-	claude::{MODEL, SUBSCRIPTION},
 	execute::{CellState, Key, Told},
 	http::ApiState,
+	model::{Chain, billed, counts, tried},
 	signin::Caller,
 	tools::{self, Gate, Search},
 };
@@ -38,6 +41,9 @@ const AWAY: SignedDuration = SignedDuration::from_mins(1);
 
 /// Model turns one question may take before the loop stops and says so.
 const ROUNDS: usize = 24;
+
+/// Less than its route's bound, past which it would be dropped with nothing said.
+const LONGEST: Duration = Duration::from_secs(570);
 
 /// What the model is told, at the level the person picked.
 fn system(approval: Approval) -> String {
@@ -54,23 +60,6 @@ says what is open and the bindings bound now.\n\
 Answer briefly, in the person's language. Formatting: **bold**, `- ` items, `@[label](location:<gbp id>)` to name a GBP.",
 		tools::held(approval)
 	)
-}
-
-/// The model that answered: a fallback's, when it stood in.
-pub(crate) fn answered_by(reply: &Value) -> eyre::Result<&str> {
-	reply["model"].as_str().ok_or_else(|| eyre::eyre!("the model answered without its name"))
-}
-
-/// What an answer read and wrote, as its `usage` says.
-pub(crate) fn tokens(reply: &Value) -> eyre::Result<[(ModelTokens, i64); 4]> {
-	let usage = &reply["usage"];
-	let n = |field: &str| usage[field].as_i64().ok_or_else(|| eyre::eyre!("the model's usage has no {field}: {usage}"));
-	Ok([
-		(ModelTokens::Input, n("input_tokens")?),
-		(ModelTokens::CacheWrite, n("cache_creation_input_tokens")?),
-		(ModelTokens::CacheRead, n("cache_read_input_tokens")?),
-		(ModelTokens::Output, n("output_tokens")?),
-	])
 }
 
 /// A binding of the page's keymap, as the page has it bound now.
@@ -99,11 +88,9 @@ pub(crate) struct Question {
 }
 
 /// Asks the assistant in a chat: the question and the answer join its turns, the answer written as
-/// it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if
-/// they connected one, else on the panel's, each round charged to them at its prices. A call a cell
-/// of the chat's session waits on is declined: the person moved on.
-///
-/// 503 without either Claude, or when the model does not answer.
+/// it grows; answered with the chat once the answer is done, or `stopped` saying why. It runs on the
+/// asker's own models if they connected any, else on the panel's, each round charged to them at its
+/// prices. A call a cell of the chat's session waits on is declined: the person moved on.
 pub(crate) async fn ask(
 	State(state): State<ApiState>,
 	Spends(caller, by): Spends<ModelTokens, Caller>,
@@ -126,8 +113,8 @@ pub(crate) async fn ask(
 	state.tools.sandbox().decide(&a.key(), None, false);
 	let mut turns = read.turns;
 	turns.truncate(q.from);
-	let mut history = conversation(&turns);
-	history.push(json!({ "role": "user", "content": question(&q) }));
+	let mut history = conversation(q.approval, &turns);
+	history.add(Role::User, question(&q));
 	turns.push(Turn::User {
 		id: Uuid::now_v7().to_string(),
 		at: Timestamp::now().as_millisecond(),
@@ -174,7 +161,7 @@ pub(crate) async fn act(
 	let (ActionState::Proposed, Target::Call(call)) = (&action.state, &action.target) else {
 		return Err(Refusal::new(Code::Conflict, "only a proposed operation is done here: a view or a binding is the page's"));
 	};
-	let call = call.clone();
+	let call = Call::clone(call);
 	let key = key(&caller, chat);
 	let resumed = state.tools.sandbox().decide(&key, Some(&a.action), true);
 	if resumed.is_none() {
@@ -205,11 +192,14 @@ pub(crate) async fn act(
 		Err(e) => json!({ "error": e }),
 	};
 	let turns = done.turns;
-	let mut history = conversation(&turns);
-	history.push(json!({
-		"role": "user",
-		"content": format!("<resumed>The person agreed to {}, which cell {cell} waited on; the code went on:\n{told}</resumed>", call.operation),
-	}));
+	let mut history = conversation(approval, &turns);
+	history.add(
+		Role::User,
+		format!(
+			"<resumed>The person agreed to {}, which cell {cell} waited on; the code went on:\n{told}</resumed>",
+			call.operation
+		),
+	);
 	let a = Asking {
 		state: &state,
 		caller: &caller,
@@ -252,15 +242,11 @@ impl Asking<'_> {
 	}
 
 	/// The answer after `turns[..from]`, `history` the model's read of what came before it, written into
-	/// the chat as it grows from `base`.
-	async fn answer(&self, by: Spender<ModelTokens>, turns: Vec<Turn>, from: usize, base: i64, mut history: Vec<Value>) -> ApiResult<ChatDto> {
+	/// the chat as it grows from `base`, and at its end, however it ends.
+	async fn answer(&self, by: Spender<ModelTokens>, turns: Vec<Turn>, from: usize, base: i64, history: Conversation) -> ApiResult<ChatDto> {
 		let state = self.state;
-		let model = state.model.clone().ok_or_else(|| Refusal::new(Code::Unavailable, "the assistant is not connected"))?;
-		let (token, bill) = match (state.sign_in.panel.claude_token(self.caller.user_id).await?, model.owner()) {
-			(Some(own), _) => (own, Bill::Theirs),
-			(None, Some(owner)) => (owner.clone(), Bill::Ours),
-			(None, None) => return Err(Refusal::new(Code::Unavailable, "the assistant runs on your own Claude here: connect it")),
-		};
+		let model = state.model.as_ref().ok_or_else(|| Refusal::new(Code::Unavailable, "the assistant is not connected"))?;
+		let chain = model.chain(&state.sign_in.panel, self.caller.user_id).await?;
 		let started = Timestamp::now();
 		let mut answer = Answer {
 			id: Uuid::now_v7().to_string(),
@@ -269,15 +255,13 @@ impl Asking<'_> {
 			text: String::new(),
 			actions: Vec::new(),
 			cost: Cost {
-				bill,
-				tokens: Used {
-					input: 0,
-					cache_write: 0,
-					cache_read: 0,
-					output: 0,
-				},
+				bill: chain.bill,
+				model: None,
+				tokens: Used::default(),
+				usd_micros: Some(0),
 				charged: 0,
 			},
+			connect: false,
 		};
 		let mut written = Written {
 			state,
@@ -286,90 +270,35 @@ impl Asking<'_> {
 			base,
 			from,
 		};
-		let mut tab = match bill {
+		if chain.is_empty() {
+			answer.stop("The panel has no model to answer on: connect your own Claude or OpenAI.");
+			answer.connect = true;
+			return written.write(&turns, &answer, AnswerState::Stopped, Some(started)).await;
+		}
+		let mut tab = match chain.bill {
 			Bill::Ours => match state.sign_in.panel.model_tab(by, &answer.id, "The assistant's answer", started).await? {
 				Ok(tab) => Some(tab),
 				Err(why) => {
-					answer.text = format!("I can't answer on the panel's Claude: {why}.");
+					answer.text = format!("I can't answer on the panel's models: {why}.");
+					answer.connect = true;
 					return written.write(&turns, &answer, AnswerState::Stopped, Some(started)).await;
 				}
 			},
 			Bill::Theirs => None,
 		};
 		written.write(&turns, &answer, AnswerState::Working, None).await?;
-		let tools: Vec<Value> = state
-			.tools
-			.definitions(|p| self.may(p), true, self.approval)
-			.into_iter()
-			.map(|t| json!({ "name": t.name, "description": t.description, "input_schema": t.input }))
-			.collect();
-		let tools = Value::Array(tools);
-		let end = 'rounds: {
-			for _ in 0..ROUNDS {
-				let asked = json!({
-					"model": MODEL,
-					"max_tokens": 16000,
-					"fallbacks": "default",
-					"output_config": { "effort": "medium" },
-					"system": [{ "type": "text", "text": SUBSCRIPTION }, { "type": "text", "text": system(self.approval) }],
-					"tools": tools,
-					"messages": history,
-				});
-				let reply = match model.answer(&token, &asked).await? {
-					Ok(reply) => reply,
-					Err(said) if bill == Bill::Theirs => {
-						state.sign_in.panel.claude_refused(self.caller.user_id, said, Timestamp::now()).await?;
-						answer
-							.text
-							.push_str("\n\nYour Claude connection was refused: reconnect it, or disconnect it to ask on the panel's.");
-						break 'rounds AnswerState::Stopped;
-					}
-					Err(said) => return Err(Refusal::new(Code::Unavailable, format!("the panel's Claude refused its token: {said}"))),
-				};
-				let used = tokens(&reply)?;
-				answer.cost.tokens.add(&used);
-				let spent = state.sign_in.panel.model_used(by, answered_by(&reply)?, &used, tab.as_mut(), Timestamp::now()).await?;
-				answer.cost.charged = tab.as_ref().map_or(0, |t| t.charged);
-				let content = reply["content"].as_array().cloned().ok_or_else(|| eyre::eyre!("the model answered no content: {reply}"))?;
-				let mut results = Vec::new();
-				for block in &content {
-					match block["type"].as_str() {
-						Some("text") => answer.text = block["text"].as_str().ok_or_else(|| eyre::eyre!("a text block without text: {block}"))?.to_owned(),
-						Some("tool_use") => {
-							let (result, step) = self.use_tool(&mut answer, &block["name"], &block["input"]).await;
-							answer.steps.push(Step { label: step, done: true });
-							// a text answer is the model's as it came; anything else, its JSON
-							let content = match result {
-								Value::String(text) => text,
-								other => other.to_string(),
-							};
-							results.push(json!({ "type": "tool_result", "tool_use_id": block["id"], "content": content }));
-						}
-						_ => {}
-					}
-				}
-				history.push(json!({ "role": "assistant", "content": content }));
-				match reply["stop_reason"].as_str() {
-					Some("tool_use") => match spent {
-						Some(why) => {
-							answer.text.push_str(&format!("\n\nI stopped here: {why}."));
-							break 'rounds AnswerState::Stopped;
-						}
-						None => {
-							history.push(json!({ "role": "user", "content": results }));
-							written.write(&turns, &answer, AnswerState::Working, None).await?;
-						}
-					},
-					Some("refusal") => {
-						answer.text = "I can't help with that.".to_owned();
-						break 'rounds AnswerState::Done;
-					}
-					Some("end_turn" | "max_tokens" | "pause_turn" | "stop_sequence") => break 'rounds AnswerState::Done,
-					other => return Err(eyre::eyre!("the model stopped for {other:?}").into()),
-				}
+		let rounds = self.rounds(by, &chain, &history, &turns, &mut answer, &mut tab, &mut written);
+		let end = match tokio::time::timeout(LONGEST, rounds).await {
+			Ok(Ok(end)) => end,
+			Ok(Err(e)) => {
+				answer.stop("Something failed on our side, and we have been told.");
+				written.write(&turns, &answer, AnswerState::Stopped, Some(started)).await?;
+				return Err(e);
 			}
-			answer.text.push_str("\n\nI stopped here: this took more steps than one answer may.");
-			AnswerState::Stopped
+			Err(_) => {
+				answer.stop("This took longer than one answer may.");
+				AnswerState::Stopped
+			}
 		};
 		let done = written.write(&turns, &answer, end, Some(started)).await?;
 		// what is proposed at once is read where it was asked
@@ -386,36 +315,118 @@ impl Asking<'_> {
 		Ok(done)
 	}
 
+	/// The model's rounds: the first on whoever of `chain` gives it, the rest on them alone.
+	#[expect(clippy::too_many_arguments, reason = "what one answer holds, lent by its one caller, which writes it whatever ends this")]
+	async fn rounds(
+		&self,
+		by: Spender<ModelTokens>,
+		chain: &Chain<'_>,
+		history: &Conversation,
+		asked: &[Turn],
+		answer: &mut Answer,
+		tab: &mut Option<Tab>,
+		written: &mut Written<'_>,
+	) -> ApiResult<AnswerState> {
+		let tools: Vec<Tool> = self
+			.state
+			.tools
+			.definitions(|p| self.may(p), true, self.approval)
+			.into_iter()
+			.map(|t| Tool {
+				name: t.name,
+				description: t.description,
+				input_schema: t.input,
+			})
+			.collect();
+		let mut next = chain.client().max_tokens(16_000).thinking(ThinkingLevel::Medium).step(history, &tools).await;
+		let mut provider = None;
+		for round in 1..=ROUNDS {
+			let step = match next {
+				Ok(step) => step,
+				Err(e) => {
+					let fell = tried(e)?;
+					let failed = chain.failed(by, &fell, tab.as_mut()).await?;
+					answer.fell(&fell, tab.as_ref());
+					answer.stop(&failed.said);
+					answer.connect = failed.connect;
+					return Ok(AnswerState::Stopped);
+				}
+			};
+			if !step.failed.is_empty() {
+				chain.failed(by, &step.failed, tab.as_mut()).await?;
+				answer.fell(&step.failed, tab.as_ref());
+			}
+			let provider = *provider.get_or_insert_with(|| chain.provider(&step));
+			let spent = chain.used(by, provider, &step, tab.as_mut()).await?;
+			answer.ran(&step, tab.as_ref());
+			if !step.text.is_empty() {
+				answer.text = step.text.clone();
+			}
+			match &step.stop {
+				Stop::Tools(calls) => {
+					let mut results = Vec::new();
+					for call in calls {
+						let (result, did) = self.use_tool(answer, &call.name, &call.input).await;
+						answer.steps.push(Step { label: did, done: true });
+						// a text answer is the model's as it came; anything else, its JSON
+						results.push(match result {
+							Value::String(text) => text,
+							other => other.to_string(),
+						});
+					}
+					if let Some(why) = spent {
+						answer.stop(&format!("On the panel's models, {why}."));
+						answer.connect = true;
+						return Ok(AnswerState::Stopped);
+					}
+					if round == ROUNDS {
+						break;
+					}
+					written.write(asked, answer, AnswerState::Working, None).await?;
+					next = step.resume(results).await;
+				}
+				Stop::Refused => {
+					answer.text = "I can't help with that.".to_owned();
+					return Ok(AnswerState::Done);
+				}
+				Stop::End | Stop::MaxTokens => return Ok(AnswerState::Done),
+				other => return Err(eyre::eyre!("the model stopped for {other:?}").into()),
+			}
+		}
+		answer.stop("This took more steps than one answer may.");
+		Ok(AnswerState::Stopped)
+	}
+
 	/// Runs one tool the model asked for: what it answers the model, and the step the person sees.
-	async fn use_tool(&self, answer: &mut Answer, name: &Value, input: &Value) -> (Value, String) {
+	async fn use_tool(&self, answer: &mut Answer, name: &str, input: &Value) -> (Value, String) {
 		let state = self.state;
-		match name.as_str() {
-			Some("search") => match serde_json::from_value::<Search>(input.clone()) {
+		match name {
+			"search" => match serde_json::from_value::<Search>(input.clone()) {
 				Ok(s) => {
 					let found = state.tools.search(&s.query, |p| self.may(p));
 					(found, format!("Searched: {}", s.query))
 				}
 				Err(e) => (json!({ "error": e.to_string() }), "Searched".to_owned()),
 			},
-			Some("call") => match serde_json::from_value::<Call>(input.clone()) {
+			"call" => match serde_json::from_value::<Call>(input.clone()) {
 				Ok(c) => self.call(c, answer).await,
 				Err(e) => (json!({ "error": e.to_string() }), "Called".to_owned()),
 			},
-			Some("execute") => match serde_json::from_value::<tools::Execute>(input.clone()) {
+			"execute" => match serde_json::from_value::<tools::Execute>(input.clone()) {
 				Ok(e) => {
 					let told = state.tools.execute(self.key(), self.headers, e.code, self.approval, true).await;
 					self.told(told, answer, "Ran code".to_owned())
 				}
 				Err(e) => (json!({ "error": e.to_string() }), "Ran code".to_owned()),
 			},
-			Some("poll") => match serde_json::from_value::<tools::PollCell>(input.clone()) {
+			"poll" => match serde_json::from_value::<tools::PollCell>(input.clone()) {
 				Ok(p) => {
 					let told = state.tools.poll(self.key(), self.headers, p.cell, Until::More).await;
 					self.told(told, answer, format!("Followed cell {}", p.cell))
 				}
 				Err(e) => (json!({ "error": e.to_string() }), "Followed code".to_owned()),
 			},
-			Some("open") => match serde_json::from_value::<tools::Open>(input.clone()) {
+			"open" => match serde_json::from_value::<tools::Open>(input.clone()) {
 				Ok(o) => match state.tools.open(&o, |p| self.may(p)) {
 					Ok(href) => {
 						let step = format!("Linked {href}");
@@ -426,7 +437,7 @@ impl Asking<'_> {
 				},
 				Err(e) => (json!({ "error": e.to_string() }), "Linked".to_owned()),
 			},
-			Some("run") => match serde_json::from_value::<tools::Run>(input.clone()) {
+			"run" => match serde_json::from_value::<tools::Run>(input.clone()) {
 				Ok(r) if self.bindings.iter().any(|b| b.id == r.binding) => {
 					let step = format!("Offered {}", r.binding);
 					answer.actions.push(action(&r.label, Target::Binding(r.binding), ActionState::Proposed));
@@ -435,12 +446,11 @@ impl Asking<'_> {
 				Ok(r) => (json!({ "error": format!("no binding {:?} is bound now", r.binding) }), "Offered a key".to_owned()),
 				Err(e) => (json!({ "error": e.to_string() }), "Offered a key".to_owned()),
 			},
-			Some(name) => match (state.tools.own(|p| self.may(p)).into_iter().find(|t| t.name == name), input) {
+			name => match (state.tools.own(|p| self.may(p)).into_iter().find(|t| t.name == name), input) {
 				(Some(t), Value::Object(input)) => self.call(t.call(input.clone()), answer).await,
 				(Some(_), _) => (json!({ "error": "its input is an object" }), format!("Called {name}")),
 				(None, _) => (json!({ "error": format!("no tool {name:?}") }), "Asked for an unknown tool".to_owned()),
 			},
-			None => (json!({ "error": "a tool use without a name" }), "Asked for an unknown tool".to_owned()),
 		}
 	}
 
@@ -453,11 +463,11 @@ impl Asking<'_> {
 		};
 		let label = c.operation.replace('_', " ");
 		if matches!(gate, Gate::Held) {
-			answer.actions.push(action(&label, Target::Call(c), ActionState::Proposed));
+			answer.actions.push(action(&label, Target::Call(c.into()), ActionState::Proposed));
 			return (json!({ "proposed": "the person confirms it from the answer; say what it will do" }), format!("Proposed {label}"));
 		}
 		if matches!(gate, Gate::OnItsOwn) {
-			answer.actions.push(action(&label, Target::Call(c.clone()), ActionState::Done));
+			answer.actions.push(action(&label, Target::Call(Box::new(c.clone())), ActionState::Done));
 		}
 		let step = format!("Called {}", c.operation);
 		match self.state.tools.call(self.headers, c).await {
@@ -475,7 +485,7 @@ impl Asking<'_> {
 			Err(e) => return (json!({ "error": e }), step),
 		};
 		for c in &t.ran_on_its_own {
-			answer.actions.push(action(&c.operation.replace('_', " "), Target::Call(c.clone()), ActionState::Done));
+			answer.actions.push(action(&c.operation.replace('_', " "), Target::Call(Box::new(c.clone())), ActionState::Done));
 		}
 		let mut result = self.state.tools.told(&t);
 		let CellState::Paused(c) = &t.state else {
@@ -509,6 +519,35 @@ struct Answer {
 	text: String,
 	actions: Vec<Action>,
 	cost: Cost,
+	/// Connecting their own model, or again, is what helps.
+	connect: bool,
+}
+impl Answer {
+	/// Cut short, for the reason the person reads.
+	fn stop(&mut self, why: &str) {
+		match self.text.is_empty() && self.steps.is_empty() {
+			true => self.text = format!("I can't answer now. {why}"),
+			false => self.text.push_str(&format!("\n\nI stopped here. {why}")),
+		}
+	}
+
+	/// A round ran.
+	fn ran(&mut self, round: &ask_llm::Response, tab: Option<&Tab>) {
+		self.cost.model = Some(round.model.clone());
+		self.cost.tokens.add(counts(round.usage));
+		let listed = round.cents.map(|c| (f64::from(c) * 10_000.).round() as i64);
+		self.cost.usd_micros = self.cost.usd_micros.zip(listed).map(|(sum, listed)| sum + listed);
+		self.cost.charged = tab.map_or(0, |t| t.charged);
+	}
+
+	/// Those asked before, or in vain.
+	fn fell(&mut self, fell: &[ask_llm::Attempt], tab: Option<&Tab>) {
+		for usage in fell.iter().filter_map(|a| billed(&a.failure)) {
+			self.cost.tokens.add(counts(usage));
+			self.cost.usd_micros = None; // a failure tells what it was billed, not what that lists for
+		}
+		self.cost.charged = tab.map_or(0, |t| t.charged);
+	}
 }
 
 /// Where the loop's writes go: the chat at the version last written.
@@ -535,6 +574,7 @@ impl Written<'_> {
 			state,
 			feedback: None,
 			cost: Some(answer.cost.clone()),
+			connect: answer.connect,
 		};
 		let turns: Vec<Turn> = asked[self.from..].iter().cloned().chain([turn]).collect();
 		let chat = self
@@ -549,15 +589,16 @@ impl Written<'_> {
 }
 
 /// The chat so far, as the model reads it: what was asked and what was answered.
-fn conversation(turns: &[Turn]) -> Vec<Value> {
-	turns
-		.iter()
-		.filter_map(|t| match t {
-			Turn::User { text, .. } => Some(json!({ "role": "user", "content": text })),
-			Turn::Assistant { text, .. } if !text.is_empty() => Some(json!({ "role": "assistant", "content": text })),
-			Turn::Assistant { .. } => None,
-		})
-		.collect()
+fn conversation(approval: Approval, turns: &[Turn]) -> Conversation {
+	let mut history = Conversation::new_with_system(system(approval));
+	for turn in turns {
+		match turn {
+			Turn::User { text, .. } => history.add(Role::User, text.as_str()),
+			Turn::Assistant { text, .. } if !text.is_empty() => history.add(Role::Assistant, text.as_str()),
+			Turn::Assistant { .. } => {}
+		}
+	}
+	history
 }
 
 fn question(q: &Question) -> String {

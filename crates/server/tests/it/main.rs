@@ -23,6 +23,7 @@ mod live;
 mod mail;
 mod mcp;
 mod meters;
+mod model;
 mod operations;
 mod paths;
 mod placement;

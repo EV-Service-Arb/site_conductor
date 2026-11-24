@@ -332,7 +332,7 @@ async fn serve(
 	grafana: Option<settings::GrafanaSettings>,
 	files: Option<Files>,
 	browsers: Option<sa_server::browser::Connected>,
-	model: sa_server::claude::Model,
+	model: sa_server::model::Model,
 	placement: Option<sa_server::placement::Placement>,
 	readers: Vec<sa_panel::meters::google::Google>,
 	production: bool,
@@ -443,8 +443,8 @@ async fn serve(
 	if placement.is_none() {
 		tracing::warn!("PANEL_PLACEMENT_DIR unset: no placement, its routes answer 503");
 	}
-	if model.owner().is_none() {
-		tracing::warn!("CLAUDE_CODE_OAUTH_TOKEN unset: the assistant answers only on a person's own Claude");
+	if !model.has_ours() {
+		tracing::warn!("CLAUDE_CODE_OAUTH_TOKEN and PANEL_OPENAI_KEY unset: the assistant answers only on a person's own models");
 	}
 	let catalog = forward.as_ref().map(|f| f.catalog().clone());
 	let browsers_followed = browsers.clone();

@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { assistant } from "@/entities/assistant";
 import { useMe } from "@/entities/session";
-import { ConnectClaudeDialog, useClaude } from "@/features/connect-claude";
+import { ConnectModelDialog, useOwnModels } from "@/features/connect-model";
 import { api, ok } from "@/shared/api";
 import type { ChatSummary, Mention, Source, Turn } from "@/shared/api/schema";
 import { useT } from "@/shared/i18n";
@@ -154,10 +154,10 @@ export function Header({
         <DropdownMenuContent align="end" className="w-52">
           {chat !== null && <ChatActions chat={chat} onRename={() => setRenaming(true)} pinOutside={full} />}
           {chat !== null && <DropdownMenuSeparator />}
-          {api.mayCall("get", "/me/claude", me.permissions) && <ClaudeItem onSelect={() => setConnecting(true)} />}
+          {api.mayCall("get", "/me/claude", me.permissions) && <OwnModelsItem onSelect={() => setConnecting(true)} />}
         </DropdownMenuContent>
       </DropdownMenu>
-      <ConnectClaudeDialog open={connecting} onOpenChange={setConnecting} />
+      <ConnectModelDialog open={connecting} onOpenChange={setConnecting} />
       {onHide !== null && (
         <IconButton
           size="sm"
@@ -181,14 +181,14 @@ export function Header({
 }
 
 /** The locations named in a chat and what its answers read. */
-function ClaudeItem({ onSelect }: { onSelect: () => void }) {
+function OwnModelsItem({ onSelect }: { onSelect: () => void }) {
   const t = useT();
-  const mine = useClaude();
+  const mine = useOwnModels();
   return (
     <DropdownMenuItem onSelect={onSelect}>
       <KeyRound />
-      <span className="flex-1">{t(assistant.claude, "Your Claude")}</span>
-      <span className="text-caption text-ink-soft">{mine.status === "ok" ? (mine.data === null ? t(assistant.claude.none, "not connected") : mine.data.checked.error === null ? t(assistant.claude.on, "connected") : t(assistant.claude.refused, "refused")) : null}</span>
+      <span className="flex-1">{t(assistant.own, "Your own models")}</span>
+      <span className="text-caption text-ink-soft">{mine === null ? null : mine.none ? t(assistant.own.none, "not connected") : mine.refused ? t(assistant.own.refused, "refused") : t(assistant.own.on, "connected")}</span>
     </DropdownMenuItem>
   );
 }

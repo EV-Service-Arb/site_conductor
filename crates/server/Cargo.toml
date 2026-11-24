@@ -21,6 +21,7 @@ path = "src/main.rs"
 testing = ["sa_panel/testing", "tower/util"]
 
 [dependencies]
+ask_llm.workspace = true
 axum = { workspace = true, features = ["ws"] }
 base64.workspace = true
 clap.workspace = true
@@ -50,7 +51,7 @@ sa_sandbox.workspace = true
 sa_trace.workspace = true
 schemars.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] } # a schema's properties are written in their order (mail.rs); ask_llm turns it on too
 sha2.workspace = true
 social_networks_adapters.workspace = true
 strum.workspace = true

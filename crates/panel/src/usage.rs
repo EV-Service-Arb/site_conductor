@@ -16,10 +16,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
-	prices::{Item, MapLoad, ModelTokens, Rate, Scope, Spender},
+	prices::{Item, MapLoad, ModelTokens, Rate, Scope, Spender, Tool},
 	usage::{Bill, UsagePage},
 };
-use strum::VariantArray;
 
 pub use crate::store::usage::{Cost, Day};
 use crate::{
@@ -31,17 +30,14 @@ use crate::{
 	tokens::is_open,
 };
 
-/// The ledger's name for what the panel's Claude charges.
-const CLAUDE: &str = "claude";
-
-/// What an answer on our Claude has run up for its asker.
+/// What an answer on our models has run up for its asker.
 #[derive(Debug)]
 pub struct Tab {
 	/// The answer's id: its charges' key.
 	answer: String,
 	/// What its charges are called.
 	label: &'static str,
-	rates: BTreeMap<ModelTokens, Rate>,
+	rates: BTreeMap<Item, Rate>,
 	/// Tokens × price, in [`Item::per`]ths of a token.
 	owed: i64,
 	/// What the rounds since its last charge cost us, in millionths of a dollar: on its next charge.
@@ -52,7 +48,7 @@ pub struct Tab {
 }
 
 fn spent(balance: i64) -> String {
-	format!("you hold {balance} tokens: connect your own Claude and answers cost nothing here, or ask for tokens")
+	format!("you hold {balance} tokens: connect your own Claude or OpenAI and answers cost nothing here, or ask for tokens")
 }
 
 impl Panel {
@@ -109,7 +105,7 @@ impl Panel {
 		Ok(Ok(balance - price))
 	}
 
-	/// The tab `by`'s answer `answer`, a `label`, runs up on our Claude, at the prices in effect now; refused
+	/// The tab `by`'s answer `answer`, a `label`, runs up on our models, at the prices in effect now; refused
 	/// while one of its items is unpriced or their balance is spent.
 	pub async fn model_tab(&self, by: Spender<ModelTokens>, answer: &str, label: &'static str, now: Timestamp) -> eyre::Result<Result<Tab, String>> {
 		let mut tx = self.store.begin_write().await?;
@@ -117,8 +113,8 @@ impl Panel {
 			return Ok(Err(Refused::Closed.to_string()));
 		}
 		let mut rates = BTreeMap::new();
-		for &tokens in ModelTokens::VARIANTS {
-			rates.insert(tokens, ledger::rate(&mut tx, tokens.into()).await?);
+		for item in ModelTokens::items() {
+			rates.insert(item, ledger::rate(&mut tx, item).await?);
 		}
 		let balance = ledger::renewed(&mut tx, by.user(), now, &self.renewal).await?;
 		tx.commit().await.wrap_err("committing a renewal")?;
@@ -136,14 +132,14 @@ impl Panel {
 		}))
 	}
 
-	/// `model` answered `by`, reading and writing `used`: on our Claude (`tab`),
+	/// `model` answered `by`, reading and writing `used`: on our credentials (`tab`),
 	/// charged in the same write. Why no further round runs on ours, once their balance is spent.
-	pub async fn model_used(&self, by: Spender<ModelTokens>, model: &str, used: &[(ModelTokens, i64)], tab: Option<&mut Tab>, now: Timestamp) -> eyre::Result<Option<String>> {
+	pub async fn model_used(&self, by: Spender<ModelTokens>, model: &str, used: [(Item, i64); 4], tab: Option<&mut Tab>, now: Timestamp) -> eyre::Result<Option<String>> {
 		let mut tx = self.store.begin_write().await?;
-		for &(tokens, units) in used.iter().filter(|(_, n)| *n > 0) {
+		for (item, units) in used.into_iter().filter(|(_, n)| *n > 0) {
 			let used = Use {
 				at: now,
-				item: tokens.into(),
+				item,
 				units,
 				bill: if tab.is_some() { Bill::Ours } else { Bill::Theirs },
 				account: None,
@@ -157,9 +153,10 @@ impl Panel {
 			tx.commit().await.wrap_err("committing a model's tokens")?;
 			return Ok(None);
 		};
-		tab.owed += used.iter().map(|(tokens, units)| tab.rates[tokens].price() * units).sum::<i64>();
-		tab.cost += used.iter().map(|&(tokens, units)| tab.rates[&tokens].cost_of(tokens.into(), units)).sum::<i64>();
-		let per = Item::from(ModelTokens::Input).per();
+		tab.owed += used.iter().map(|(item, units)| tab.rates[item].price() * units).sum::<i64>();
+		tab.cost += used.iter().map(|&(item, units)| tab.rates[&item].cost_of(item, units)).sum::<i64>();
+		let (of, _) = used[0];
+		let per = of.per();
 		let due = (tab.owed + per - 1).div_euclid(per) - tab.billed;
 		let balance = ledger::renewed(&mut tx, by.user(), now, &self.renewal).await?;
 		// a round's cost is known only once it is done: what it costs past the balance is let go
@@ -170,7 +167,7 @@ impl Panel {
 				delta: -charge,
 				kind: Kind::Charge,
 				charged: Some(Charged {
-					service: CLAUDE.to_owned(),
+					service: of.tool().to_owned(),
 					key: tab.answer.clone(),
 					label: Some(tab.label.to_owned()),
 				}),

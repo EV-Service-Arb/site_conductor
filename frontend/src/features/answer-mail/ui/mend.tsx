@@ -6,7 +6,7 @@ import { useState } from "react";
 
 import { mail } from "@/entities/mail";
 import { useTokens } from "@/entities/tokens";
-import { ConnectClaudeDialog, useClaude } from "@/features/connect-claude";
+import { ConnectModelDialog, useOwnModels } from "@/features/connect-model";
 import { useT } from "@/shared/i18n";
 import { ViewLink } from "@/shared/lib/location";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -15,17 +15,17 @@ import { useButtonSize } from "@/shared/ui/touch";
 export function Mend() {
   const t = useT();
   const button = useButtonSize();
-  const mine = useClaude();
+  const mine = useOwnModels();
   const held = useTokens();
   const [connecting, setConnecting] = useState(false);
-  if (mine.status !== "ok") return null;
+  if (mine === null) return null;
   return (
     <div className="flex flex-wrap gap-2">
       <Button variant="outline" size={button("sm")} onClick={() => setConnecting(true)}>
         <Sparkles aria-hidden />
-        {mine.data === null ? t(mail.mend.connect, "Connect your Claude") : t(mail.mend.reconnect, "Reconnect your Claude")}
+        {mine.none ? t(mail.mend.connect, "Connect your own model") : t(mail.mend.reconnect, "Your own models")}
       </Button>
-      {mine.data === null && held.status === "ok" && held.data.balance <= 0 && (
+      {mine.none && held.status === "ok" && held.data.balance <= 0 && (
         <Button asChild variant="outline" size={button("sm")}>
           <ViewLink to={{ view: "tokens", params: {} }}>
             <Coins aria-hidden />
@@ -33,7 +33,7 @@ export function Mend() {
           </ViewLink>
         </Button>
       )}
-      <ConnectClaudeDialog open={connecting} onOpenChange={setConnecting} />
+      <ConnectModelDialog open={connecting} onOpenChange={setConnecting} />
     </div>
   );
 }

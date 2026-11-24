@@ -59,7 +59,7 @@ pub enum Down {
 pub enum Up {
 	Print(String),
 	/// The cell waits for its `Down::Answer`.
-	Call(Call),
+	Call(Box<Call>),
 	Done,
 	/// What the cell failed on.
 	Threw(String),
@@ -301,12 +301,12 @@ fn host(builder: &mut GlobalsBuilder) {
 				Some(other) => anyhow::bail!("{what} is a dict of names, not {other}"),
 			}
 		};
-		send(&Up::Call(Call {
+		send(&Up::Call(Box::new(Call {
 			operation: operation.to_owned(),
 			path: map("path", path)?,
 			query: map("query", query)?,
 			body: given(body)?,
-		}));
+		})));
 		let Down::Answer(a) = receive() else {
 			panic!("a call is answered before anything else is said");
 		};

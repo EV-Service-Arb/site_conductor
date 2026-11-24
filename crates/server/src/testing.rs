@@ -109,6 +109,15 @@ pub async fn upstream(routes: Router) -> (String, Log) {
 	(format!("http://{addr}"), seen)
 }
 
+/// Every provider at the stand-in `base`.
+pub fn origins(base: &str) -> crate::model::Origins {
+	crate::model::Origins {
+		claude: base.to_owned(),
+		claude_sign_in: base.to_owned(),
+		openai: base.to_owned(),
+	}
+}
+
 /// The sandbox, driven for as long as the test's runtime lives; its workers are the package's `panel`, which
 /// cargo builds beside an integration test's binary and an example's.
 pub fn sandbox() -> Sandbox {

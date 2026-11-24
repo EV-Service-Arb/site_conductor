@@ -3,9 +3,9 @@
 use axum::{body::Body, http::Method};
 use sa_panel::testing::{TestDb, operator, panel};
 use sa_server::{
-	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
 	http,
+	model::{Model, Origins},
 	signin::{SignIn, SignInConfig},
 	testing::{Browser, ORIGIN},
 };
@@ -43,10 +43,11 @@ async fn main() {
 	};
 	let model = Model::new(
 		Origins {
-			api: "https://api.anthropic.com".into(),
-			oauth: "https://platform.claude.com".into(),
+			claude: "https://api.anthropic.com".into(),
+			claude_sign_in: "https://platform.claude.com".into(),
+			openai: "https://api.openai.com".into(),
 		},
-		Some(token.into()),
+		vec![(sa_core::prices::Provider::Claude, token.into())],
 	);
 	let app = http::app(
 		SignIn::new(p, Concierge::dev(who), config),

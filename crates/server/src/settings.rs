@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use sa_auth::{Catalog, PermissionSet};
-use sa_core::{notify::Locale, tokens::Renewal};
+use sa_core::{notify::Locale, prices::Provider, tokens::Renewal};
 use social_networks_adapters::notify::email::Smtp;
 use sa_panel::seal::DataKey;
 
@@ -101,6 +101,11 @@ ev_lib::settings! {
 		claude_code_oauth_token: Option<String>,
 		/// Where the Claude API is.
 		anthropic_base_url: String = "https://api.anthropic.com",
+		/// The panel's OpenAI key, asked when its Claude does not answer. Unset: never.
+		#[secret]
+		panel_openai_key: Option<String>,
+		/// Where the OpenAI API is.
+		panel_openai_base_url: String = "https://api.openai.com",
 		/// Where a person's Claude sign-in code is exchanged for its token.
 		claude_oauth_base: String = "https://platform.claude.com",
 		/// GoLogin's API token (app.gologin.com → Settings → API; a paid plan): its browsers'
@@ -162,15 +167,22 @@ impl Settings {
 		.validate()?)
 	}
 
-	/// The assistant's Claude.
-	pub fn model(&self) -> sa_server::claude::Model {
-		let owner = self.claude_code_oauth_token.as_deref().map(str::trim).filter(|s| !s.is_empty());
-		sa_server::claude::Model::new(
-			sa_server::claude::Origins {
-				api: self.anthropic_base_url.clone(),
-				oauth: self.claude_oauth_base.clone(),
+	/// The assistant's models.
+	pub fn model(&self) -> sa_server::model::Model {
+		let ours = [(Provider::Claude, &self.claude_code_oauth_token), (Provider::OpenAi, &self.panel_openai_key)]
+			.into_iter()
+			.filter_map(|(provider, secret)| {
+				let secret = secret.as_deref().map(str::trim).filter(|s| !s.is_empty())?;
+				Some((provider, zeroize::Zeroizing::new(secret.to_owned())))
+			})
+			.collect();
+		sa_server::model::Model::new(
+			sa_server::model::Origins {
+				claude: self.anthropic_base_url.clone(),
+				claude_sign_in: self.claude_oauth_base.clone(),
+				openai: self.panel_openai_base_url.clone(),
 			},
-			owner.map(|t| zeroize::Zeroizing::new(t.to_owned())),
+			ours,
 		)
 	}
 
@@ -528,6 +540,8 @@ mod tests {
 				"TOKENS_START_CAP_MULTIPLE",
 				"CLAUDE_CODE_OAUTH_TOKEN",
 				"ANTHROPIC_BASE_URL",
+				"PANEL_OPENAI_KEY",
+				"PANEL_OPENAI_BASE_URL",
 				"CLAUDE_OAUTH_BASE",
 				"GOLOGIN_TOKEN",
 				"MULTILOGIN_TOKEN",

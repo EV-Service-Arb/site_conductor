@@ -638,6 +638,7 @@ impl<'p, B: Buy<'p>> Google<B> {
 		if !types.is_empty() {
 			body["includedPrimaryTypes"] = serde_json::json!(types);
 		}
+		body.sort_all_objects(); // the cache's key, which no build's `serde_json/preserve_order` moves
 		let (url, body) = (format!("{}:autocomplete", self.base), body.to_string());
 		let req = Request {
 			method: "POST",
@@ -674,6 +675,7 @@ impl<'p, B: Buy<'p>> Google<B> {
 		if let Some((lat, lng)) = near {
 			body["locationBias"] = serde_json::json!({ "circle": { "center": { "latitude": lat, "longitude": lng }, "radius": 500.0 } });
 		}
+		body.sort_all_objects(); // as above
 		let (url, body) = (format!("{}:searchText", self.base), body.to_string());
 		let req = Request {
 			method: "POST",

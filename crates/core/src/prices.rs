@@ -23,6 +23,9 @@ pub type Prices = BTreeMap<Item, i64>;
 #[cfg(feature = "api")]
 pub use spends::{Payer, Spends};
 
+/// Whatever model answers.
+pub type ModelTokens = (ClaudeTokens, OpenAiTokens);
+
 /// What one operation may buy: a tool's items, or several tools'.
 pub trait Tool {
 	fn items() -> Vec<Item>;
@@ -173,22 +176,62 @@ pub enum DataForSeoTask {
 	SearchVolume,
 }
 
-/// What the assistant's model reads and writes, by how Anthropic bills it.
-#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
-#[strum(serialize_all = "snake_case")]
-pub enum ModelTokens {
-	/// The prompt's tokens not read from its cache.
-	#[strum(message = "Input")]
-	Input,
-	/// The prompt's tokens written to its cache.
-	#[strum(message = "Cache write")]
-	CacheWrite,
-	/// The prompt's tokens read from its cache.
-	#[strum(message = "Cache read")]
-	CacheRead,
-	/// What the model wrote, its thinking with it.
-	#[strum(message = "Output")]
-	Output,
+macro_rules! model_tokens {
+	($($(#[$doc:meta])+ $ty:ident;)+) => {
+		$($(#[$doc])+
+		#[derive(Clone, Copy, Debug, EnumMessage, EnumProperty, Eq, Hash, Ord, PartialEq, PartialOrd, VariantArray, strum::IntoStaticStr)]
+		#[strum(serialize_all = "snake_case")]
+		pub enum $ty {
+			/// The prompt's tokens not read from its cache.
+			#[strum(message = "Input")]
+			Input,
+			/// The prompt's tokens written to its cache.
+			#[strum(message = "Cache write")]
+			CacheWrite,
+			/// The prompt's tokens read from its cache.
+			#[strum(message = "Cache read")]
+			CacheRead,
+			/// What the model wrote, its thinking with it.
+			#[strum(message = "Output")]
+			Output,
+		})+
+	};
+}
+
+model_tokens! {
+	/// What Claude reads and writes, by how Anthropic bills it.
+	ClaudeTokens;
+	/// What OpenAI's model reads and writes, by how OpenAI bills it.
+	// shortcut: a prompt past 272k tokens lists at twice these, to be its own items once a prompt gets there
+	OpenAiTokens;
+}
+
+/// Who an answer is asked of, each for the one model its tool is priced as: nothing unpriced is asked.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, VariantArray, strum::Display)]
+pub enum Provider {
+	Claude,
+	#[strum(to_string = "OpenAI")]
+	OpenAi,
+}
+
+impl Provider {
+	/// What an answer of its read and wrote: input, cache write, cache read, output.
+	pub fn used(self, [input, cache_write, cache_read, output]: [i64; 4]) -> [(Item, i64); 4] {
+		match self {
+			Self::Claude => [
+				(ClaudeTokens::Input.into(), input),
+				(ClaudeTokens::CacheWrite.into(), cache_write),
+				(ClaudeTokens::CacheRead.into(), cache_read),
+				(ClaudeTokens::Output.into(), output),
+			],
+			Self::OpenAi => [
+				(OpenAiTokens::Input.into(), input),
+				(OpenAiTokens::CacheWrite.into(), cache_write),
+				(OpenAiTokens::CacheRead.into(), cache_read),
+				(OpenAiTokens::Output.into(), output),
+			],
+		}
+	}
 }
 
 /// What a walk down a place's reviews does in its browser, each time it does it.
@@ -299,7 +342,8 @@ priced! {
 	Ads(AdsRequest) = "ads", Placement, 1 "request", "Google Ads API";
 	DataForSeo(DataForSeoTask) = "dataforseo", Placement, 1 "task", "DataForSEO";
 	Browser(BrowserStart) = "browser", Browsers, 1 "start", "Antidetect browsers";
-	Claude(ModelTokens) = "claude", Conductor, 1_000_000 "token", "Claude, the assistant's model";
+	Claude(ClaudeTokens) = "claude", Conductor, 1_000_000 "token", "Claude Opus 5.5, the assistant's model";
+	OpenAi(OpenAiTokens) = "openai", Conductor, 1_000_000 "token", "OpenAI GPT-5.6 Terra, the assistant's model";
 }
 
 impl<A: Tool, B: Tool> Tool for (A, B) {
