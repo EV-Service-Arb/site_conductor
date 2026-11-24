@@ -29,10 +29,12 @@ pub enum Rule {
 	ReviewGone,
 	ReviewReappeared,
 	ScanFailed,
+	/// A case of Google's mail turned to a person.
+	GoogleMail,
 }
 
 impl Rule {
-	pub const ALL: [Self; 11] = [
+	pub const ALL: [Self; 12] = [
 		Self::NewLead,
 		Self::ContactOverdue,
 		Self::PaymentReceived,
@@ -44,6 +46,7 @@ impl Rule {
 		Self::ReviewGone,
 		Self::ReviewReappeared,
 		Self::ScanFailed,
+		Self::GoogleMail,
 	];
 
 	pub const fn as_str(self) -> &'static str {
@@ -59,6 +62,7 @@ impl Rule {
 			Self::ReviewGone => "review_gone",
 			Self::ReviewReappeared => "review_reappeared",
 			Self::ScanFailed => "scan_failed",
+			Self::GoogleMail => "google_mail",
 		}
 	}
 
@@ -67,19 +71,22 @@ impl Rule {
 		match self {
 			Self::NewLead | Self::ContactOverdue | Self::PaymentReceived | Self::Booked => Some(Service::Sites),
 			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => Some(Service::ReviewArchive),
-			Self::SourceSilent | Self::AccessRequested => None,
+			Self::SourceSilent | Self::AccessRequested | Self::GoogleMail => None,
 		}
 	}
 
 	pub const fn audience(self) -> Audience {
 		match self {
-			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => Audience::GmbOwners,
+			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed | Self::GoogleMail => Audience::GmbOwners,
 			_ => Audience::Permission,
 		}
 	}
 
 	pub const fn on_by_default(self) -> bool {
-		matches!(self, Self::NewLead | Self::ContactOverdue | Self::Booked | Self::AccessRequested | Self::ReviewGone)
+		matches!(
+			self,
+			Self::NewLead | Self::ContactOverdue | Self::Booked | Self::AccessRequested | Self::ReviewGone | Self::GoogleMail
+		)
 	}
 
 	pub fn open_to(self, permissions: &PermissionSet) -> bool {
@@ -87,7 +94,7 @@ impl Rule {
 			Self::NewLead | Self::ContactOverdue | Self::Booked => permissions.may(Leads::Edit),
 			Self::PaymentReceived | Self::SourceSilent => permissions.may(Sources::Manage),
 			Self::AccessRequested => SA_ADMIN.members.iter().all(|member| permissions.iter().any(|held| held == *member)),
-			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => true,
+			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed | Self::GoogleMail => true,
 		}
 	}
 }

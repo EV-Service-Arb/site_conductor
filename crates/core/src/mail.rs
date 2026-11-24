@@ -569,9 +569,10 @@ pub struct Case<'a> {
 	pub stuck: Option<&'a str>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
-#[serde(tag = "state", rename_all = "snake_case")]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema, strum::EnumDiscriminants)]
+#[serde(tag = "is", rename_all = "snake_case")]
 #[schemars(rename = "MailState")]
+#[strum_discriminants(name(Standing), derive(Deserialize, schemars::JsonSchema), serde(rename_all = "snake_case"), schemars(rename = "MailStanding"))]
 pub enum State {
 	NeedsYou {
 		why: Why,
