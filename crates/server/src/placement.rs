@@ -294,8 +294,8 @@ async fn pulled(s: &ApiState, caller: &Caller, p: &Placement, def: Definition) -
 	Ok(Payload(built))
 }
 
-/// Every search `def` lacks, bought: it is asked again after each round, since what lies behind a
-/// page (the next one, a tile's quarters) is known only once it is answered.
+/// Every search `def` lacks, bought: it is asked again after each round, since whether another page
+/// is behind one is known only once it is answered.
 async fn bought(s: &ApiState, p: &Placement, def: &Definition, held: &sa_panel::placement::Pull) -> ApiResult<()> {
 	let since = held.since(&def.id()).await?;
 	let mut asked = std::collections::HashSet::new();
