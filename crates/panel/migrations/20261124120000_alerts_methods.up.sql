@@ -63,7 +63,7 @@ CREATE TABLE alert_hours (
 CREATE TABLE alert_destinations_new (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	user_id BLOB NOT NULL CHECK (length(user_id) = 16),
-	method TEXT NOT NULL CHECK (method IN ('telegram', 'email', 'discord', 'slack', 'push', 'webhook')),
+	method TEXT NOT NULL CHECK (method IN ('telegram', 'email', 'discord', 'discord_channel', 'slack', 'push', 'webhook')),
 	-- Read by its person alone: the only ones PII and buttons go to.
 	private INTEGER NOT NULL CHECK (private IN (0, 1)),
 	-- A chat's account or title, an address, a browser: what its person knows it by.

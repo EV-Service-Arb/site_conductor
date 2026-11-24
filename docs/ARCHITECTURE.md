@@ -1589,8 +1589,8 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   a worker that cannot seal itself runs nothing, and `execute` says why. Nothing new in the image.
 - **Alerts, outbound only.** Discord's and Slack's webhooks, the push services and a person's own webhook
   are public :443; with `TELEGRAM_BOT_TOKEN`, `api.telegram.org:443` too, and no webhook is set on the bot
-  (`getUpdates` refuses to run while one is). `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`
-  (a mailbox the relay lets us send as) turn mail on.
+  (`getUpdates` refuses to run while one is). `SMTP_PASSWORD`
+  turns mail on (`SMTP_HOST`, `SMTP_USERNAME` and `MAIL_FROM` are the container's own env).
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer
   the response or strip `Upgrade` / `Connection` / `Origin`, and an idle timeout on the way must
   be longer than the 25 s ping.

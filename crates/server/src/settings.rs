@@ -79,7 +79,7 @@ ev_lib::settings! {
 		/// The language of the bot's messages: `ru` or `en`.
 		telegram_locale: String = "ru",
 		/// The relay alerts are mailed through, e.g. `smtp.gmail.com`: 465 is TLS, 587 STARTTLS, any other
-		/// in the clear and only to loopback. With the three below, or none of the four: no alerts by mail.
+		/// in the clear and only to loopback. Alerts go by mail once SMTP_PASSWORD is set; it needs all four.
 		smtp_host: Option<String>,
 		smtp_port: u16 = "587",
 		smtp_username: Option<String>,
@@ -134,17 +134,6 @@ ev_lib::settings! {
 		panel_dev_sign_in_email: Option<String>,
 		app_env: String = "development",
 	}
-}
-
-/// Every one of `vars`' values; `None` when none is set.
-fn all_or_none<const N: usize>(what: &str, vars: [(&str, &Option<String>); N]) -> eyre::Result<Option<[String; N]>> {
-	let set = vars.map(|(_, v)| v.as_deref().map(str::trim).filter(|v| !v.is_empty()));
-	let missing: Vec<&str> = vars.iter().zip(&set).filter(|(_, v)| v.is_none()).map(|((name, _), _)| *name).collect();
-	if missing.len() == N {
-		return Ok(None);
-	}
-	eyre::ensure!(missing.is_empty(), "{what} {} too", missing.join(", "));
-	Ok(Some(set.map(|v| v.expect("none is missing").to_owned())))
 }
 
 impl Settings {
@@ -205,26 +194,19 @@ impl Settings {
 		}))
 	}
 
-	/// The mail relay: `None` when none of its variables is set; some but not all is a mistake, named.
+	/// The mail relay: `None` without `SMTP_PASSWORD`, which turns it on; it then needs the rest.
 	pub fn smtp(&self) -> eyre::Result<Option<Smtp>> {
-		let Some([host, username, password, from]) = all_or_none(
-			"alerts by mail need",
-			[
-				("SMTP_HOST", &self.smtp_host),
-				("SMTP_USERNAME", &self.smtp_username),
-				("SMTP_PASSWORD", &self.smtp_password),
-				("MAIL_FROM", &self.mail_from),
-			],
-		)?
-		else {
+		let set = |v: &Option<String>| v.as_deref().map(str::trim).filter(|v| !v.is_empty()).map(str::to_owned);
+		let Some(password) = set(&self.smtp_password) else {
 			return Ok(None);
 		};
+		let need = |name: &str, v: &Option<String>| set(v).ok_or_else(|| eyre::eyre!("SMTP_PASSWORD needs {name} too"));
 		Ok(Some(Smtp {
-			host,
+			host: need("SMTP_HOST", &self.smtp_host)?,
 			port: self.smtp_port,
-			username,
+			username: need("SMTP_USERNAME", &self.smtp_username)?,
 			password: zeroize::Zeroizing::new(password),
-			from,
+			from: need("MAIL_FROM", &self.mail_from)?,
 		}))
 	}
 

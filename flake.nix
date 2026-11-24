@@ -395,6 +395,10 @@
               PANEL_DB_PATH = dbPath;
               PANEL_HISTORY_DB_PATH = historyDbPath;
               PANEL_GRAFANA_DIR = "/data/grafana";
+              # alerts by mail: the mailbox concierge mails from; devops maps its app password to SMTP_PASSWORD
+              SMTP_HOST = "smtp.gmail.com";
+              SMTP_USERNAME = "admin@evinvest.ltd";
+              MAIL_FROM = "Service-Arb <admin@evinvest.ltd>"; # Gmail refuses a From that is not the mailbox
             };
             # the epoch versions the sa catalog `serve` publishes to concierge: it must travel with
             # the build, or a tag whose catalog changed boots on the previous epoch and is refused

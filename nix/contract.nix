@@ -25,7 +25,7 @@
       "TELEGRAM_BOT_TOKEN"
       "TELEGRAM_BOT_USERNAME"
       "TELEGRAM_LOCALE"
-      # alerts by mail: the four, or none (SMTP_PORT 587 by default)
+      # alerts by mail, with SMTP_PASSWORD (SMTP_PORT 587 by default); the rest is the container's own env
       "SMTP_HOST"
       "SMTP_PORT"
       "SMTP_USERNAME"
