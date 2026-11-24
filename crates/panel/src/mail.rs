@@ -145,23 +145,20 @@ impl Case {
 		said.clone().find(|m| m.said.heard()).or_else(|| said.next())
 	}
 
-	/// What it wants of its person: what Google asks, what its reply lacks, each once.
+	/// What it wants of its person: what its reply lacks, else what Google asks.
 	pub fn wanted(&self) -> Vec<Wanted> {
-		let asks = self.google().and_then(|m| m.said.reading.as_ref()).map(|r| r.asks.as_slice());
 		let lacks = self.draft.as_ref().filter(|d| d.reply.answers == self.last().said.id).map(|d| d.reply.needs.as_slice());
-		let mut wanted: Vec<Wanted> = Vec::new();
-		for item in [asks, lacks].into_iter().flatten().flatten() {
-			if wanted.iter().any(|w| w.item == *item) {
-				continue;
-			}
+		let asks = || Some(self.google()?.said.reading.as_ref()?.asks.as_slice());
+		let items = lacks.filter(|l| !l.is_empty()).or_else(asks);
+		let wanted = |item: &String| {
 			let given = self.given.iter().find(|(i, _)| i == item);
-			wanted.push(Wanted {
+			Wanted {
 				item: item.clone(),
 				given: given.is_some(),
 				document: given.and_then(|(_, d)| *d),
-			});
-		}
-		wanted
+			}
+		};
+		items.into_iter().flatten().map(wanted).collect()
 	}
 
 	/// Ours in it since Google last gave something new.

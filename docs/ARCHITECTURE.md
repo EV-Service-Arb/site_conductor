@@ -1251,7 +1251,7 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   pressed once. What a notice says stands until a kind that supersedes it; a verification is over once its GBP is
   verified, a suspension once it is reinstated, a case once its GBP is in the trash. Of a GBP's open
   conversations on one topic the latest asks, its other cases quiet meanwhile.
-- **What it wants** of its person (what Google asks, what the draft lacks) is given or not, by a document of the GBP's
+- **What it wants** of its person (what the draft lacks, else what Google asks) is given or not, by a document of the GBP's
   (kept sealed, for the next ask and the appeal) or otherwise.
 - **A reply** goes as the gmail, to support's one address, to the last message of the case that takes one.
   `sending` is committed before SMTP; one left so is never tried again, nor is another sent to what it answers.
