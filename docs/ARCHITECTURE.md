@@ -1172,8 +1172,8 @@ push (a change, a page, 60 s)
   switch, trash, and its gmail's browser launched or stopped; written in the transaction it records,
   with the gmail it was under and who did it. A browser run for the gmail alone is the gmail's, in
   the log of each GBP while under it. Its gmail's mail with Google (`email`): `serve` reads each
-  set inbox's All Mail over IMAP every 60 s past its cursor (account, UIDVALIDITY, last UID), a batch
-  a write with the cursor; a message is logged once, on each GBP whose name (the longest first: one
+  set inbox's All Mail, and of its Spam what is proved Google's, over IMAP every 60 s, each past its cursor
+  (account, UIDVALIDITY, last UID), a batch a write with the cursor; a message is logged once, on each GBP whose name (the longest first: one
   may begin another) or place id it holds, else whose address's first line, else the gmail's; what is
   about a Business Profile is kept too (Google's mail). Its thread opens in a new tab of the gmail's own running
   browser (`POST /gmails/{id}/browser/thread`); the conductor never reads Gmail on the web. review_archive's events of the GBP (reviews appeared, gone,
@@ -1197,37 +1197,45 @@ verify a GBP, is derived from its messages' readings (`sa_core::mail`), never st
 follow (60 s) ─ kept, joined to its case ─ read ─┬─ by rule: the sender, a notice's fixed subject
                                                  ├─ by the model (≤ 90 days old), 3 tries
                                                  └─ by a person, over either
-case's state: needs_you (why) │ reply_due │ reply_ready │ sending │ waiting │ done │ quiet
+case's state: needs_you (why) │ reply_due │ reply_ready │ sending │ waiting │ done (by) │ quiet
 reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ SMTP ─▶ sent | failed
                      └─▶ held (≥ 15 min; its topic switched on, to be pressed) ─┘
                          either ─ another message in its case ─▶ superseded
 ```
 
-- **Whose a message is.** Authentic: its one From is @google.com exactly and Gmail's own first
-  `Authentication-Results` passes DMARC for it; a look-alike is an impersonation, in a case of its own.
-  Ours: what Gmail says the account sent, whatever its From. Google's other mail is in the log alone.
+- **Whose a message is.** Authentic: its one From is of google.com or a subdomain and Gmail's own first
+  `Authentication-Results` passes DMARC for that domain; a look-alike is an impersonation, in a case of its
+  own. Ours: what Gmail says the account sent, whatever its From. Google's other mail is in the log alone,
+  unless it answers a case's.
 - **Joining.** A reply joins what it answers (Message-IDs), else its Gmail thread's conversation, else
-  its case number's; a notice only its number's: Gmail threads the notices of every profile together.
-- **The GBP** of a message: by hand, else the one it names, else the one its profile link is known by
-  (the latest mail that named a GBP beside it), else what its reader saw. A profile has a link for its
-  verification and another for its page.
+  its case number's; a notice only its number's: Gmail threads the notices of every profile together. A
+  person may make two cases of a gmail one (`mail_cases.joined`).
+- **The GBP** of a message: by hand, else the one it names, of its gmail's, else of its owner's others; else
+  the one its profile link is known by (the latest mail that named a GBP beside it), else what its reader
+  saw. A profile has a link for its verification and another for its page. A failed call's follow-up names
+  none: it is of the gmail's one GBP whose call stands offered.
 - **The model** runs on the gmail's owner's own Claude, else the panel's, charged to them; without
   either or a balance, mail waits and its case says so. The writer's facts are the case, Google's other
   readings of the GBP, the GBP, and, of a case about reviews, those review_archive sees gone (a full page
   of them is no count); what it lacks is a need, and a draft with one never goes by itself. Where the
-  archive does not track the GBP the list is a need; while it does not answer, the reply waits.
+  archive does not track the GBP the list is a need; while it does not answer, the reply waits. Once Google
+  refused, found no data, sees them live or brought back part, the list is the reply, its screenshots a
+  need until some were sent, and an empty list settles the case. A draft lacking something goes with no file
+  only once its person says so.
 - **Whose turn.** A deflection, a refusal, a call that failed, or silence past Google's term (48 h where it
   gave none, a week for a video or an appeal; only an inbox read past it is silent) is pressed. What Google
   asks for is its operator's, the reply ready around it. A specialist of Google's is waited for, told of, and
-  pressed once. A survey counts for nothing in a conversation, whose topic is its first specific kind's. What a
-  notice says stands until a kind that supersedes it; a verification is over once its GBP is verified, a
-  suspension once it is reinstated, a case once its GBP is in the trash.
+  pressed once. A closure with nothing given is the operator's. A survey counts for nothing in a conversation,
+  whose topic is its first specific kind's. What a notice says stands until a kind that supersedes it; a
+  verification is over once its GBP is verified, a suspension once it is reinstated, a case once its GBP is in
+  the trash. Of a GBP's open conversations on one topic the latest asks; its older ones and its notices are
+  quiet meanwhile.
 - **A reply** goes as the gmail, to support's one address, to the last message of the case that takes one.
   `sending` is committed before SMTP; one left so is never tried again, nor is another sent to what it answers.
   One goes by itself only while its topic's switch (`verification`, `reviews`; off unless its owner's) is on
   and its case may be pressed, asked as it is written, held and sent (`sa_core::mail::press`): by Google's last
   word alone, nothing asked or lacking, its GBP known and live, mailed to the gmail's own account or written to by
-  it, 12 h after ours, fewer than `MAX_ASKS` of ours unanswered; once its inbox was read past its moment, and
+  it, 12 h after ours, fewer than `MAX_ASKS` of ours since Google gave or asked something new; once its inbox was read past its moment, and
   at most an hour late. A correction holds it back; another account on the gmail, or the same on two, and
   nothing goes. A person may send past all that. Only production's goes by itself: a copy of its database
   would answer Google too.
@@ -1381,8 +1389,8 @@ feed (2 s)        GET <service>/api/conductor/notifications?after=<cursor>&limit
                   `next`; a note that fails fails the page, the cursor stays (loud, never skipped); 404:
                   a service not cut over, said once, asked again every 60 s
 own               told in the write that made it so, or found due every 2 s (`own_alerts`); Google's mail
-                  every 60 s: a case turned to a person or to a specialist of Google's, once per message
-                  and turn, for 6 days
+                  every 60 s: a case turned to a person or to a specialist of Google's, or settled in it, once
+                  per message and turn, for 6 days; the oldest an hour unread
 told              once per (rule, event): kept 30 days, sealed; in the inbox of each person of its
                   audience; queued for each destination of theirs reached, its filter passed, their access
                   confirmed within the hour
