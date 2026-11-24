@@ -25,11 +25,12 @@ pub const MAX_NAME: usize = 80;
 /// At most one message a second to a private chat (Telegram's limit for one).
 pub const PER_CHAT_GAP: SignedDuration = SignedDuration::from_secs(1);
 
-/// At most twenty a minute to a channel or a group (Telegram's limit for one).
+/// At most twenty a minute to a Telegram channel or group, its limit for one; every other address
+/// the same.
 pub const PER_GROUP_GAP: SignedDuration = SignedDuration::from_secs(3);
 
-/// At most this many messages in any second, across every chat and every replica (under the
-/// Bot API's 30).
+/// At most this many messages of one method in any second, across every address and every replica
+/// (under the Bot API's 30).
 pub const GLOBAL_PER_SECOND: i64 = 25;
 
 /// Tries before a message is given up on: with [`backoff`], about an hour — past that a lead
@@ -114,12 +115,6 @@ pub enum Note {
 		kind: String,
 		last: Option<Timestamp>,
 	},
-	/// Too many of one rule's messages queued for one destination to send each: how many, and
-	/// nothing about them.
-	Backlog {
-		rule: Rule,
-		count: u64,
-	},
 	/// A signed-in user asked for `need`, a permission or an alias of the `sa` catalog.
 	AccessRequested {
 		email: String,
@@ -136,13 +131,11 @@ pub enum Note {
 		gmb: Option<String>,
 		summary: Option<String>,
 		deadline: Option<Timestamp>,
-		case: i64,
 	},
 }
 impl Note {
 	pub fn rule(&self) -> Rule {
 		match self {
-			Self::Backlog { rule, .. } => *rule,
 			Self::SourceSilent { .. } => Rule::SourceSilent,
 			Self::AccessRequested { .. } => Rule::AccessRequested,
 			Self::GoogleMail { .. } => Rule::GoogleMail,
@@ -150,26 +143,16 @@ impl Note {
 	}
 
 	/// A link under it, `(label, url)`: for an access request, the admin console's grant form
-	/// for the `sa` scope at `origin` (concierge's), prefilled with the email and the need; for
-	/// Google's mail, its case at `origin` (the panel's).
-	pub fn link(&self, locale: Locale, origin: &url::Url) -> Option<(&'static str, String)> {
-		let mut url = origin.clone();
-		let (label_ru, label_en) = match self {
-			Self::AccessRequested { email, need, .. } => {
-				url.set_path("/admin/scopes/sa");
-				url.query_pairs_mut().clear().append_pair("email", email).append_pair("target", need);
-				("Выдать доступ", "Grant access")
-			}
-			Self::GoogleMail { case, .. } => {
-				url.set_path("/email");
-				url.query_pairs_mut().clear().append_pair("case", &case.to_string());
-				("Открыть", "Open")
-			}
-			Self::SourceSilent { .. } | Self::Backlog { .. } => return None,
-		};
+	/// for the `sa` scope at `cabinet` (concierge's origin), prefilled with the email and the
+	/// need.
+	pub fn link(&self, locale: Locale, cabinet: &url::Url) -> Option<(&'static str, String)> {
+		let Self::AccessRequested { email, need, .. } = self else { return None };
+		let mut url = cabinet.clone();
+		url.set_path("/admin/scopes/sa");
+		url.query_pairs_mut().clear().append_pair("email", email).append_pair("target", need);
 		let label = match locale {
-			Locale::Ru => label_ru,
-			Locale::En => label_en,
+			Locale::Ru => "Выдать доступ",
+			Locale::En => "Grant access",
 		};
 		Some((label, url.into()))
 	}
@@ -216,7 +199,6 @@ impl Note {
 				gmb,
 				summary,
 				deadline,
-				case: _,
 			} => {
 				out.push(&match (state, ru) {
 					(State::ReplyReady, true) => "✉️ Google: ответ готов, отправьте его".to_owned(),
@@ -240,19 +222,6 @@ impl Note {
 					out.push(&if ru { format!("\nДо {}", minute(*at)) } else { format!("\nBy {}", minute(*at)) });
 				}
 			}
-			Self::Backlog {
-				rule: Rule::NewLead | Rule::ContactOverdue,
-				count,
-			} => out.push(&if ru {
-				format!("{count} новых заявок ждут звонка. Откройте панель.")
-			} else {
-				format!("{count} new leads are waiting for a call. Open the panel.")
-			}),
-			Self::Backlog { rule, count } => out.push(&if ru {
-				format!("Ещё {count} уведомлений «{}» не отправлены. Откройте панель.", rule_name(*rule, locale))
-			} else {
-				format!("{count} more \"{}\" alerts were not sent. Open the panel.", rule_name(*rule, locale))
-			}),
 		}
 		out
 	}
@@ -268,7 +237,7 @@ pub fn test_text(locale: Locale) -> &'static str {
 
 /// A message: its text and its Telegram `MessageEntity` objects (offsets in UTF-16 code units,
 /// as the Bot API counts), sent with no parse mode.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct Rendered {
 	pub text: String,
 	pub entities: Vec<Value>,
@@ -286,6 +255,70 @@ impl Rendered {
 		}
 		self.text.push_str(s);
 	}
+
+	pub fn append(&mut self, other: &Self) {
+		let by = self.text.encode_utf16().count();
+		self.text.push_str(&other.text);
+		self.entities.extend(other.entities.iter().map(|e| at_offset(e, offset(e) + by)));
+	}
+
+	/// Its first `max` characters, "…" the last when cut, an entity cut with it.
+	pub fn cut(&self, max: usize) -> Self {
+		let Some((end, _)) = self.text.char_indices().nth(max.saturating_sub(1)).filter(|_| self.text.chars().count() > max) else {
+			return self.clone();
+		};
+		let mut kept = self.before(end);
+		kept.push("…");
+		kept
+	}
+
+	/// Its first line, and the rest.
+	pub fn split_line(&self) -> (Self, Self) {
+		let Some(end) = self.text.find('\n') else {
+			return (self.clone(), Self::default());
+		};
+		let from = self.text[..=end].encode_utf16().count();
+		let rest = Self {
+			text: self.text[end + 1..].to_owned(),
+			entities: self
+				.entities
+				.iter()
+				.filter(|e| offset(e) >= from)
+				.map(|e| at_offset(e, offset(e) - from))
+				.collect(),
+		};
+		(self.before(end), rest)
+	}
+
+	/// Its first `end` bytes, with what entities reach into them.
+	fn before(&self, end: usize) -> Self {
+		let text = &self.text[..end];
+		let units = text.encode_utf16().count();
+		let entities = self.entities.iter().filter(|e| offset(e) < units).map(|e| {
+			let mut e = e.clone();
+			e["length"] = json!(length(&e).min(units - offset(&e)));
+			e
+		});
+		Self {
+			text: text.to_owned(),
+			entities: entities.collect(),
+		}
+	}
+}
+
+/// `sa_alerts::Note::check` holds every entity to an offset and a length.
+fn offset(entity: &Value) -> usize {
+	usize::try_from(entity["offset"].as_u64().expect("checked when the note was taken")).expect("within a message")
+}
+
+fn length(entity: &Value) -> usize {
+	usize::try_from(entity["length"].as_u64().expect("checked when the note was taken")).expect("within a message")
+}
+
+fn at_offset(entity: &Value, offset: usize) -> Value {
+	let mut moved = entity.clone();
+	moved["offset"] = json!(offset);
+	moved
 }
 
 /// A user's text on one line: the characters `hidden` names made spaces, runs of spaces one, at
@@ -367,13 +400,13 @@ impl Reply {
 /// How a try to send ended.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Failure {
-	/// 429: Telegram says when to try again.
+	/// 429: when to try again.
 	RetryAfter(SignedDuration),
 	/// 5xx, a timeout, no connection: tried again later.
 	Transient(String),
-	/// 403: the user blocked the bot, or it is no longer in the channel or group. The chat is dead
-	/// until a send there succeeds again.
-	Blocked,
+	/// Nothing reaches the address (the bot is blocked there, the webhook deleted, the mailbox gone):
+	/// its destination is dead until a send there succeeds again.
+	Gone(String),
 	/// Any other refusal (400: chat not found, text too long): trying again changes nothing.
 	Refused(String),
 }
@@ -386,8 +419,8 @@ pub enum Next {
 	},
 	/// Given up on: the tries ran out, or no try can succeed.
 	Dead,
-	/// Given up on, and the chat with it.
-	ChatDead,
+	/// Given up on, and the address with it.
+	AddressDead,
 }
 
 /// The wait after the `n`th failed try (1-based): 10 s, doubling, at most 15 minutes.
@@ -402,7 +435,7 @@ pub fn backoff(n: i32) -> SignedDuration {
 /// The fate of a message whose `attempts`th try (this one included) failed with `failure`.
 pub fn after_failure(attempts: i32, failure: &Failure, now: Timestamp) -> Next {
 	match failure {
-		Failure::Blocked => Next::ChatDead,
+		Failure::Gone(_) => Next::AddressDead,
 		Failure::Refused(_) => Next::Dead,
 		Failure::RetryAfter(_) | Failure::Transient(_) if attempts >= MAX_ATTEMPTS => Next::Dead,
 		Failure::RetryAfter(wait) => Next::Retry {
@@ -425,36 +458,6 @@ fn callback_mac(key: &[u8; 32], chat_id: ChatId, message: OutboxId, button: &str
 	let mut out = [0u8; CALLBACK_MAC_LEN];
 	out.copy_from_slice(&full[..CALLBACK_MAC_LEN]);
 	out
-}
-
-fn rule_name(rule: Rule, locale: Locale) -> &'static str {
-	let ru = locale == Locale::Ru;
-	match rule {
-		Rule::NewLead if ru => "новая заявка",
-		Rule::NewLead => "new lead",
-		Rule::ContactOverdue if ru => "заявка ждёт звонка",
-		Rule::ContactOverdue => "contact overdue",
-		Rule::PaymentReceived if ru => "оплата получена",
-		Rule::PaymentReceived => "payment received",
-		Rule::SourceSilent if ru => "источник молчит",
-		Rule::SourceSilent => "source silent",
-		Rule::Booked if ru => "запись",
-		Rule::Booked => "booking",
-		Rule::AccessRequested if ru => "запрос доступа",
-		Rule::AccessRequested => "access request",
-		Rule::ReviewNew if ru => "новый отзыв",
-		Rule::ReviewNew => "new review",
-		Rule::ReviewChanged if ru => "отзыв изменён",
-		Rule::ReviewChanged => "review changed",
-		Rule::ReviewGone if ru => "отзыв пропал",
-		Rule::ReviewGone => "review gone",
-		Rule::ReviewReappeared if ru => "отзыв вернулся",
-		Rule::ReviewReappeared => "review reappeared",
-		Rule::ScanFailed if ru => "проверка не удалась",
-		Rule::ScanFailed => "scan failed",
-		Rule::GoogleMail if ru => "письмо Google",
-		Rule::GoogleMail => "Google's mail",
-	}
 }
 
 fn kind_name(kind: Kind, locale: Locale) -> &'static str {
@@ -538,7 +541,6 @@ mod tests {
 		let (label, url) = note.link(Locale::En, &origin).unwrap();
 		assert_eq!(label, "Grant access");
 		assert_eq!(url, "https://evinvest.ltd/admin/scopes/sa?email=a%2Bb%40x.io&target=sa%3Aoperator");
-		assert_eq!(Note::Backlog { rule: Rule::NewLead, count: 1 }.link(Locale::En, &origin), None);
 	}
 
 	#[test]
@@ -603,14 +605,11 @@ mod tests {
 			gmb: Some("Plomberie Dupont".into()),
 			summary: Some("Asks for a photo\nof the signage".into()),
 			deadline: Some("2026-10-10T00:00:00Z".parse().unwrap()),
-			case: 7,
 		};
 		assert_eq!(
 			mail.text(Locale::En),
 			"✉️ Google: a reply goes by itself 2026-10-06 10:15 UTC\nGoogle asks · Plomberie Dupont\nAsks for a photo of the signage\nBy 2026-10-10 00:00 UTC"
 		);
-		let origin: url::Url = "https://sa.evinvest.ltd/".parse().unwrap();
-		assert_eq!(mail.link(Locale::En, &origin).unwrap().1, "https://sa.evinvest.ltd/email?case=7");
 		assert_eq!(one_line("  a \u{2066}b\u{2069}  c ", 80), "a b c");
 		assert_eq!(one_line("abcdef", 4), "abc…");
 	}
@@ -629,7 +628,7 @@ mod tests {
 		assert_eq!(after_failure(3, &Failure::Transient("502".into()), now), Next::Retry { at: now + s(40) });
 		assert_eq!(after_failure(MAX_ATTEMPTS, &Failure::Transient("502".into()), now), Next::Dead);
 		assert_eq!(after_failure(MAX_ATTEMPTS, &Failure::RetryAfter(s(1)), now), Next::Dead);
-		assert_eq!(after_failure(1, &Failure::Blocked, now), Next::ChatDead);
+		assert_eq!(after_failure(1, &Failure::Gone("blocked".into()), now), Next::AddressDead);
 		assert_eq!(after_failure(1, &Failure::Refused("chat not found".into()), now), Next::Dead);
 		assert_eq!(backoff(100), SignedDuration::from_mins(15));
 		let total: i64 = (1..MAX_ATTEMPTS).map(|n| backoff(n).as_secs()).sum();

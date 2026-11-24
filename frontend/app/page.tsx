@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { AccessView } from "@/views/access";
 import { AccountView } from "@/views/account";
 import { AdminTokensView } from "@/views/admin-tokens";
-import { AlertsView } from "@/views/alerts";
+import { AlertSettingsView, AlertsView } from "@/views/alerts";
 import { AssistantView } from "@/views/assistant";
 import { EmailView } from "@/views/email";
 import { Home } from "@/views/home";
@@ -62,6 +62,8 @@ function framed(at: Exclude<At, { view: "access" | "kit_qr" }>): ReactNode {
       return <MembersView />;
     case "alerts":
       return <AlertsView />;
+    case "alert_settings":
+      return <AlertSettingsView />;
     case "email":
       return <EmailView />;
     case "gbp":

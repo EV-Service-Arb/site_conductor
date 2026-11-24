@@ -20,30 +20,32 @@ use axum::{
 };
 use hmac::{Hmac, KeyInit, Mac};
 use jiff::{SignedDuration, Timestamp};
-use sa_alerts::Rule;
+use sa_alerts::{Rule, Tier};
 use sa_auth::{PermissionSet, Principal, Service};
 use sa_core::{
+	alerts::{Cadence, Cadences},
 	gbp::{Country, OnGoogle},
-	notify::{Locale, Rendered},
+	notify::Locale,
 	prices::Spender,
 };
 use sa_panel::{
 	Panel, Refused,
 	access::Asker,
-	alerts::{Access, Directory, DirectoryError, Hub, Identity},
+	alerts::{Access, Address, Alert, Destination, Directory, DirectoryError, Hours, Hub, Identity, Pressed, Settings, Sought},
 	gmbs::Existing,
 	import::Export,
 	seal::DataKey,
 	session::{RefreshError, Refresher, Tokens},
-	telegram::{Account, CallbackId, Chat, Update},
+	telegram::{Account, CallbackId, Chat, Kind, Update},
 	testing::{self as aliases, TestDb, settled, told, topics},
 	tokens::User,
 };
 use sa_server::{
 	forward::{Forward, Services, Upstreams},
-	telegram::BotApi,
+	outlets::Networks,
 	testing::{Browser, Log, SEED, upstream},
 };
+use social_networks_adapters::notify::{Entity, Rich, telegram, webhook};
 use serde_json::{Value, json};
 use uuid::Uuid;
 use zeroize::Zeroizing;
@@ -289,7 +291,7 @@ struct Setup {
 	seen: Log,
 	/// What review_archive was sent.
 	archive_seen: Log,
-	n: Hub<BotApi, FakeConcierge, Forward>,
+	n: Hub<Networks, FakeConcierge, Forward>,
 }
 impl Setup {
 	/// A user linked to `chat` at `now`, as the Alerts page and `/start` do it.
@@ -378,7 +380,7 @@ impl Setup {
 	}
 
 	/// One pass of the hub over the conductor's own rules and both feeds: how many were queued.
-	async fn fan_out(&self, n: &Hub<BotApi, FakeConcierge, Forward>, now: Timestamp) -> eyre::Result<usize> {
+	async fn fan_out(&self, n: &Hub<Networks, FakeConcierge, Forward>, now: Timestamp) -> eyre::Result<usize> {
 		let own = n.fan_out_own(now).await?;
 		let sites = n.take_feed(Service::Sites, now).await?.unwrap();
 		let archive = n.take_feed(Service::ReviewArchive, now).await?.unwrap_or(0);
@@ -386,31 +388,52 @@ impl Setup {
 	}
 
 	async fn outbox(&self) -> Vec<(i64, String, String, i32)> {
-		sqlx::query_as("SELECT chat_id, rule, state, attempts FROM telegram_outbox ORDER BY id")
+		sqlx::query_as("SELECT t.chat_id, o.rule, o.state, o.attempts FROM alert_outbox o JOIN telegram_destinations t ON t.destination_id = o.destination_id ORDER BY o.id")
 			.fetch_all(&self.db)
 			.await
 			.unwrap()
 	}
 
 	/// The user's private destination, if linked.
-	async fn private_of(&self, user: Uuid) -> Option<sa_panel::alerts::Destination> {
+	async fn private_of(&self, user: Uuid) -> Option<Destination> {
 		self.panel
 			.alerts(user, &aliases::admin())
 			.await
 			.unwrap()
 			.destinations
 			.into_iter()
-			.find(|d| d.kind == sa_panel::telegram::Kind::Private)
+			.find(|d| d.chat.is_some_and(|c| c.kind == Kind::Private))
+	}
+
+	async fn chat_of(&self, user: Uuid) -> i64 {
+		self.private_of(user).await.unwrap().chat.unwrap().id
 	}
 
 	async fn linked(&self, user: Uuid) -> bool {
 		self.private_of(user).await.is_some()
 	}
 
-	/// Turns rules on or off at the user's private chat.
-	async fn set_rules(&self, user: Uuid, permissions: &PermissionSet, rules: &[(Rule, bool)]) -> Result<(), Refused> {
-		let destination = self.private_of(user).await.unwrap().id;
-		self.panel.alerts_set_rules(user, permissions, destination, rules).await.unwrap()
+	/// Gives rules a cadence of their own at the user's private chat, beside those that have one.
+	async fn set_rules(&self, user: Uuid, permissions: &PermissionSet, rules: &[(Rule, Cadence)]) -> Result<(), Refused> {
+		let d = self.private_of(user).await.unwrap();
+		self.set(&d, permissions, |s| s.rules.extend(rules.iter().copied())).await
+	}
+
+	/// Changes a destination as the page does: the whole of what it shows, sent back.
+	async fn set(&self, d: &Destination, permissions: &PermissionSet, change: impl FnOnce(&mut Settings)) -> Result<(), Refused> {
+		let mut settings = Settings {
+			title: None,
+			cadences: d.cadences,
+			filter: d.filter.clone(),
+			rules: d.rules.iter().copied().collect(),
+		};
+		change(&mut settings);
+		self.panel.alerts_set(d.user_id, permissions, d.id, &settings, t0()).await.unwrap()
+	}
+
+	/// The user's inbox, newest first.
+	async fn inbox(&self, user: Uuid, permissions: &PermissionSet) -> Vec<Alert> {
+		self.panel.alerts_inbox(user, permissions, &Sought::default()).await.unwrap()
 	}
 
 	async fn unlink(&self, user: Uuid) -> bool {
@@ -478,11 +501,15 @@ async fn setup() -> Setup {
 	forward.catalog().follow(services, tokio::sync::watch::channel(true).1).await;
 	let n = Hub {
 		panel: panel.clone(),
-		bot: BotApi::try_new(&base, TOKEN.to_owned().into()).unwrap(),
+		outlets: Networks {
+			telegram: Some(telegram::Bot::try_new(&base, TOKEN.to_owned().into()).unwrap()),
+			..Networks::default()
+		},
 		concierge: concierge.clone(),
 		feeds: forward,
 		locale: Locale::Ru,
 		cabinet: cabinet(),
+		origin: "https://panel.test".parse().unwrap(),
 	};
 	panel
 		.import_review_archive(Export {
@@ -570,7 +597,7 @@ async fn a_link_token_is_single_use_private_and_expires() {
 	s.mock.clear();
 	s.n.handle(start(8, &token), t0() + SignedDuration::from_mins(9)).await.unwrap();
 	assert!(texts(&s.mock.calls("sendMessage"))[0].starts_with("Ссылка недействительна"));
-	assert_eq!(s.private_of(alice).await.unwrap().chat_id, 7);
+	assert_eq!(s.chat_of(alice).await, 7);
 
 	// Expired: past ten minutes it opens nothing.
 	let late = s.panel.telegram_link_token(bob, &aliases::operator(), "Bob", t0()).await.unwrap();
@@ -622,15 +649,15 @@ async fn linking_names_both_accounts_and_never_takes_a_chat_over() {
 	s.n.handle(start(1, &bobs, "alice_tg"), t0()).await.unwrap();
 	assert!(texts(&s.mock.calls("sendMessage")).last().unwrap().starts_with("Этот чат привязан к другому аккаунту"));
 	assert!(!s.linked(bob).await);
-	assert_eq!(s.private_of(alice).await.unwrap().chat_id, 1, "Alice keeps her chat");
+	assert_eq!(s.chat_of(alice).await, 1, "Alice keeps her chat");
 	s.n.handle(start(2, &bobs, "bob_tg"), t0()).await.unwrap();
 	assert!(s.linked(bob).await, "the token still links Bob's own chat");
 
 	// Alice linking another chat keeps her rules there.
-	s.set_rules(alice, &aliases::operator(), &[(Rule::NewLead, false)]).await.unwrap();
+	s.set_rules(alice, &aliases::operator(), &[(Rule::NewLead, Cadence::Off)]).await.unwrap();
 	s.link(alice, aliases::operator(), 3, t0()).await;
 	let moved = s.private_of(alice).await.unwrap();
-	assert_eq!((moved.chat_id, moved.chosen), (3, vec![(Rule::NewLead, false)]));
+	assert_eq!((moved.chat.unwrap().id, moved.rules), (3, vec![(Rule::NewLead, Cadence::Off)]));
 }
 
 // ── sites' notes ─────────────────────────────────────────────────────────────────────────
@@ -649,14 +676,14 @@ async fn a_note_goes_to_linked_users_with_access_only_its_pii_to_who_sees_it() {
 	s.link(revoked, aliases::operator(), 3, t0()).await;
 	s.link(stale, aliases::operator(), 4, t0() - SignedDuration::from_mins(61)).await;
 	s.link(no_pii, worker, 5, t0()).await;
-	s.set_rules(muted, &aliases::admin(), &[(Rule::NewLead, false)]).await.unwrap();
+	s.set_rules(muted, &aliases::admin(), &[(Rule::NewLead, Cadence::Off)]).await.unwrap();
 	s.panel.alerts_access_seen(revoked, &PermissionSet::from_iter(Vec::<String>::new()), "Rex", t0()).await.unwrap();
 	assert!(
-		matches!(s.set_rules(operator, &aliases::operator(), &[(Rule::PaymentReceived, true)]).await, Err(Refused::Invalid(_))),
+		matches!(s.set_rules(operator, &aliases::operator(), &[(Rule::PaymentReceived, Cadence::Now)]).await, Err(Refused::Invalid(_))),
 		"payments are the admins'"
 	);
 	assert!(
-		matches!(s.set_rules(operator, &aliases::operator(), &[(Rule::ReviewGone, true)]).await, Err(Refused::Invalid(_))),
+		matches!(s.set_rules(operator, &aliases::operator(), &[(Rule::ReviewGone, Cadence::Now)]).await, Err(Refused::Invalid(_))),
 		"reviews are their GMBs' owners'"
 	);
 	s.mock.clear();
@@ -668,8 +695,8 @@ async fn a_note_goes_to_linked_users_with_access_only_its_pii_to_who_sees_it() {
 		s.outbox().await,
 		[(1, "new_lead".to_owned(), "pending".to_owned(), 0), (5, "new_lead".to_owned(), "pending".to_owned(), 0)]
 	);
-	let sealed: Vec<Vec<u8>> = sqlx::query_scalar("SELECT text_sealed FROM telegram_outbox").fetch_all(&s.db).await.unwrap();
-	assert!(sealed.iter().all(|t| !String::from_utf8_lossy(t).contains("+33")), "the phone is sealed in the outbox");
+	let sealed: Vec<Vec<u8>> = sqlx::query_scalar("SELECT body_sealed FROM alert_notes").fetch_all(&s.db).await.unwrap();
+	assert!(sealed.iter().all(|t| !String::from_utf8_lossy(t).contains("+33")), "the phone is sealed in the note");
 
 	assert_eq!(s.n.deliver(t0()).await.unwrap().sent, 2);
 	let sent = s.mock.calls("sendMessage");
@@ -686,12 +713,10 @@ async fn a_note_goes_to_linked_users_with_access_only_its_pii_to_who_sees_it() {
 		.map(|row| row[0]["text"].as_str().unwrap())
 		.collect();
 	assert_eq!(labels, ["Взял", "Не дозвонился"]);
-	let sealed: Vec<Option<Vec<u8>>> = sqlx::query_scalar("SELECT text_sealed FROM telegram_outbox").fetch_all(&s.db).await.unwrap();
-	assert!(sealed.iter().all(Option::is_none), "the text is dropped once sent");
 
 	// A payment goes to the admins who asked for it.
 	s.panel.alerts_access_seen(muted, &aliases::admin(), "Mia", t0()).await.unwrap();
-	s.set_rules(muted, &aliases::admin(), &[(Rule::PaymentReceived, true)]).await.unwrap();
+	s.set_rules(muted, &aliases::admin(), &[(Rule::PaymentReceived, Cadence::Now)]).await.unwrap();
 	s.note("payment_received", t0(), text("Оплата получена\naquafix · L-1"), Value::Null, None, json!([]));
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 1);
 	s.n.deliver(at(2_000)).await.unwrap();
@@ -808,7 +833,7 @@ async fn a_silent_source_is_told_to_admins_once_a_day() {
 	// vifnet's site sent an event an hour ago, as sites says.
 	s.sites.with(|sites| sites.received.insert("vifnet-site".into(), t0() - SignedDuration::from_hours(1)));
 	s.link(admin, aliases::admin(), 5, t0()).await;
-	s.set_rules(admin, &aliases::admin(), &[(Rule::SourceSilent, true)]).await.unwrap();
+	s.set_rules(admin, &aliases::admin(), &[(Rule::SourceSilent, Cadence::Now)]).await.unwrap();
 	s.mock.clear();
 	let n = Hub { locale: Locale::En, ..s.n.clone() };
 	assert_eq!(s.fan_out(&n, t0()).await.unwrap(), 1, "aquafix's, not vifnet's");
@@ -845,15 +870,15 @@ async fn a_review_goes_to_its_gmbs_owners_only() {
 	s.panel.switch_gmbs(switched_off, &[off], false).await.unwrap().unwrap();
 	// Scoped to a gmail that is not the GMB's: told nothing of it.
 	let other_gmail = s.panel.add_gmail(scoped, "e@gmail.com", t0()).await.unwrap().unwrap();
-	let scoped_dest = s.private_of(scoped).await.unwrap().id;
-	s.panel.alerts_set_gmail(scoped, scoped_dest, Some(other_gmail.id)).await.unwrap().unwrap();
-	assert!(
-		matches!(s.panel.alerts_set_gmail(owner, scoped_dest, None).await.unwrap(), Err(Refused::NotFound)),
-		"another's destination"
-	);
+	let scoped_dest = s.private_of(scoped).await.unwrap();
+	s.set(&scoped_dest, &nobody, |set| set.filter.gmails = [other_gmail.id].into()).await.unwrap();
+	let mut anothers = scoped_dest.clone();
+	anothers.user_id = owner;
+	assert!(matches!(s.set(&anothers, &nobody, |_| ()).await, Err(Refused::NotFound)), "another's destination");
 	let alerts = s.panel.alerts(owner, &nobody).await.unwrap();
-	assert!(alerts.rules.contains(&Rule::ReviewGone), "{:?}", alerts.rules);
-	assert!(!alerts.rules.contains(&Rule::NewLead), "{:?}", alerts.rules);
+	let open = |rule| alerts.rules.iter().any(|(r, _)| *r == rule);
+	assert!(open(Rule::ReviewGone), "{:?}", alerts.rules);
+	assert!(!open(Rule::NewLead), "{:?}", alerts.rules);
 	s.mock.clear();
 
 	s.review("review_new", t0(), &[royat, scoped_gmb, chamalieres, off], None);
@@ -865,12 +890,11 @@ async fn a_review_goes_to_its_gmbs_owners_only() {
 	assert!(matches!(asked.assertion(Service::ReviewArchive, None).principal, Principal::Conductor));
 
 	// Back to every gmail, the other owner's switch on: both told now.
-	s.panel.alerts_set_gmail(scoped, scoped_dest, None).await.unwrap().unwrap();
-	s.set_rules(other, &nobody, &[(Rule::ReviewNew, true)]).await.unwrap();
+	s.set(&scoped_dest, &nobody, |set| set.filter.gmails.clear()).await.unwrap();
+	s.set_rules(other, &nobody, &[(Rule::ReviewNew, Cadence::Now)]).await.unwrap();
 	s.review("review_new", t0(), &[chamalieres], None);
 	s.review("review_gone", t0(), &[scoped_gmb], None);
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 2);
-	assert_eq!(s.private_of(scoped).await.unwrap().gmail_id, None);
 
 	// A gmail removed takes its GMBs out of every audience.
 	s.panel.remove_gmail(owner, s.panel.gmails(owner).await.unwrap().0[0].id, t0()).await.unwrap().unwrap();
@@ -927,7 +951,7 @@ async fn a_channel_is_added_by_its_admin_and_gets_no_pii() {
 	let s = setup().await;
 	let user = Uuid::now_v7();
 	let operator = aliases::operator();
-	let add = |chat: &'static str| s.n.add_chat(user, &operator, "Olga", chat.parse().unwrap(), None, t0());
+	let add = |chat: &'static str| s.n.add_chat(user, &operator, "Olga", chat.parse().unwrap(), t0());
 
 	assert!(matches!(add("@leads").await.unwrap(), Err(Refused::Invalid(m)) if m.contains("link your own Telegram first")));
 	s.link(user, operator.clone(), 77, t0()).await;
@@ -977,7 +1001,7 @@ async fn a_channel_is_added_by_its_admin_and_gets_no_pii() {
 	assert_eq!(s.n.deliver(at(3_000)).await.unwrap().sent, 2);
 	let dests = s.panel.alerts(user, &operator).await.unwrap().destinations;
 	assert!(dests.iter().any(|d| d.id == channel));
-	assert!(dests.iter().any(|d| d.id == topic && d.topic_id == Some(5)));
+	assert!(dests.iter().any(|d| d.id == topic && d.chat.unwrap().topic_id == Some(5)));
 }
 
 /// A chat the bot was removed from goes dead; a test that arrives brings it back.
@@ -987,8 +1011,8 @@ async fn a_test_revives_a_dead_chat() {
 	let user = Uuid::now_v7();
 	s.link(user, aliases::operator(), 77, t0()).await;
 	s.mock.chat("@leads", -1001, "channel", false, 77);
-	let channel = s.n.add_chat(user, &aliases::operator(), "Olga", "@leads".parse().unwrap(), None, t0()).await.unwrap().unwrap();
-	s.set_rules(user, &aliases::operator(), &[(Rule::NewLead, false)]).await.unwrap();
+	let channel = s.n.add_chat(user, &aliases::operator(), "Olga", "@leads".parse().unwrap(), t0()).await.unwrap().unwrap();
+	s.set_rules(user, &aliases::operator(), &[(Rule::NewLead, Cadence::Off)]).await.unwrap();
 	s.lead("L-1", t0());
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 1, "the channel only");
 	s.mock
@@ -1024,7 +1048,7 @@ async fn a_test_revives_a_dead_chat() {
 		.into_iter()
 		.find(|d| d.id == channel)
 		.unwrap();
-	assert_eq!((now.kind, now.title.as_deref()), (sa_panel::telegram::Kind::Group, Some("chat -1001")));
+	assert_eq!((now.chat.unwrap().kind, now.title.as_deref()), (Kind::Group, Some("chat -1001")));
 }
 
 // ── the outbox ───────────────────────────────────────────────────────────────────────────
@@ -1100,7 +1124,7 @@ async fn a_blocked_bot_marks_the_chat_dead() {
 		.script(403, json!({"ok": false, "error_code": 403, "description": "Forbidden: bot was blocked by the user"}));
 	assert_eq!(s.n.deliver(at(0)).await.unwrap().dead, 1);
 	let states: Vec<String> = s.outbox().await.into_iter().map(|(_, _, state, _)| state).collect();
-	assert_eq!(states, ["dead", "dead"], "and what it was still owed is given up too");
+	assert_eq!(states, ["dead", "dropped"], "and what it was still owed is given up too");
 	assert!(s.private_of(user).await.unwrap().dead.is_some());
 
 	s.lead("L-3", at(5_000));
@@ -1154,14 +1178,14 @@ async fn the_bot_does_not_chatter_and_a_429_pauses_everything() {
 	s.fan_out(&s.n, at(1_000)).await.unwrap();
 	assert_eq!(s.n.deliver(at(4_999)).await.unwrap(), Default::default(), "the whole outbox waits, not only the chat");
 	assert_eq!(s.n.deliver(at(5_000)).await.unwrap().sent, 2);
-	let attempts: Vec<i32> = sqlx::query_scalar("SELECT attempts FROM telegram_outbox ORDER BY id").fetch_all(&s.db).await.unwrap();
+	let attempts: Vec<i32> = sqlx::query_scalar("SELECT attempts FROM alert_outbox ORDER BY id").fetch_all(&s.db).await.unwrap();
 	assert!(attempts.iter().all(|&a| a <= 1), "the 429 cost no try: {attempts:?}");
 }
 
 /// A lead message is news for an hour from when sites noted it: past that it is given up, and
-/// a destination with a flood of one rule waiting gets one summary instead — any rule.
+/// a flood of one rule waiting for one destination goes out as one message — any rule.
 #[tokio::test]
-async fn stale_lead_messages_are_dropped_and_a_flood_is_summarized() {
+async fn stale_lead_messages_are_dropped_and_a_flood_is_one_message() {
 	let s = setup().await;
 	let user = Uuid::now_v7();
 	s.link(user, aliases::operator(), 1, t0()).await;
@@ -1171,20 +1195,17 @@ async fn stale_lead_messages_are_dropped_and_a_flood_is_summarized() {
 	s.lead("L-0", t0());
 	s.fan_out(&s.n, late).await.unwrap();
 	assert_eq!(s.n.deliver(late).await.unwrap(), Default::default(), "noted an hour ago, taken only now");
-	assert_eq!(outbox_errors(&s).await, [("dead".to_owned(), Some("stale".to_owned()))]);
+	assert_eq!(outbox_errors(&s).await, [("dropped".to_owned(), Some("stale".to_owned()))]);
 
 	for i in 0..25 {
 		s.lead(&format!("L-{}", i + 1), late + SignedDuration::from_secs(i));
 	}
 	assert_eq!(s.fan_out(&s.n, late + SignedDuration::from_secs(30)).await.unwrap(), 25);
-	assert_eq!(s.n.deliver(late + SignedDuration::from_secs(30)).await.unwrap().sent, 1);
+	assert_eq!(s.n.deliver(late + SignedDuration::from_secs(30)).await.unwrap().sent, 25);
 	let sent = texts(&s.mock.calls("sendMessage"));
-	assert_eq!(sent, ["25 новых заявок ждут звонка. Откройте панель."], "one summary, without PII");
-	let summarized: i64 = sqlx::query_scalar("SELECT count(*) FROM telegram_outbox WHERE last_error = 'summarized'")
-		.fetch_one(&s.db)
-		.await
-		.unwrap();
-	assert_eq!(summarized, 25);
+	assert_eq!(sent.len(), 1, "one message");
+	assert!(sent[0].starts_with("Оповещений: 25\n\n🔴 Новая заявка"), "{sent:?}");
+	assert!(sent[0].ends_with("И ещё 5 в панели"), "{sent:?}");
 
 	// Reviews flood the same way.
 	let (_, royat) = s.owner(user, "a@gmail.com", ROYAT).await;
@@ -1193,12 +1214,14 @@ async fn stale_lead_messages_are_dropped_and_a_flood_is_summarized() {
 	}
 	s.mock.clear();
 	assert_eq!(s.fan_out(&s.n, late + SignedDuration::from_secs(40)).await.unwrap(), 21);
-	assert_eq!(s.n.deliver(late + SignedDuration::from_secs(40)).await.unwrap().sent, 1);
-	assert_eq!(texts(&s.mock.calls("sendMessage")), ["Ещё 21 уведомлений «отзыв пропал» не отправлены. Откройте панель."]);
+	assert_eq!(s.n.deliver(late + SignedDuration::from_secs(40)).await.unwrap().sent, 21);
+	let sent = texts(&s.mock.calls("sendMessage"));
+	assert_eq!(sent.len(), 1);
+	assert!(sent[0].starts_with("Оповещений: 21\n\n🟠 review_gone"), "{sent:?}");
 }
 
 async fn outbox_errors(s: &Setup) -> Vec<(String, Option<String>)> {
-	sqlx::query_as("SELECT state, last_error FROM telegram_outbox ORDER BY id").fetch_all(&s.db).await.unwrap()
+	sqlx::query_as("SELECT state, last_error FROM alert_outbox ORDER BY id").fetch_all(&s.db).await.unwrap()
 }
 
 #[tokio::test]
@@ -1257,17 +1280,17 @@ async fn a_destination_changing_is_told_by_its_tables() {
 	s.mock
 		.script(403, json!({"ok": false, "error_code": 403, "description": "Forbidden: bot was blocked by the user"}));
 	assert_eq!(s.n.deliver(at(0)).await.unwrap().dead, 1);
-	assert_eq!(told(&s.panel, &mut rx).await, topics(&["telegram_destinations", "telegram_outbox"]), "blocked");
+	assert_eq!(told(&s.panel, &mut rx).await, topics(&["alert_destinations", "alert_outbox"]), "blocked");
 }
 
 // ── the buttons ──────────────────────────────────────────────────────────────────────────
 
 /// Delivers the one due message; its `(message_id, [take data, no-answer data], message)`.
-async fn delivered(s: &Setup, now: Timestamp) -> (i64, Vec<String>, Rendered) {
+async fn delivered(s: &Setup, now: Timestamp) -> (i64, Vec<String>, Rich) {
 	let before = s.mock.calls("sendMessage").len();
 	assert_eq!(s.n.deliver(now).await.unwrap().sent, 1);
 	let sent = s.mock.calls("sendMessage")[before].clone();
-	let mid: i64 = sqlx::query_scalar("SELECT tg_message_id FROM telegram_outbox WHERE state = 'sent' ORDER BY sent_at DESC, id DESC LIMIT 1")
+	let mid: String = sqlx::query_scalar("SELECT remote_id FROM alert_outbox WHERE state = 'sent' ORDER BY sent_at DESC, id DESC LIMIT 1")
 		.fetch_one(&s.db)
 		.await
 		.unwrap();
@@ -1277,18 +1300,22 @@ async fn delivered(s: &Setup, now: Timestamp) -> (i64, Vec<String>, Rendered) {
 		.iter()
 		.map(|row| row[0]["callback_data"].as_str().unwrap().to_owned())
 		.collect();
-	(mid, data, as_sent(&sent))
+	(mid.parse().unwrap(), data, as_sent(&sent))
+}
+
+fn entity(e: &Value) -> Entity {
+	serde_json::from_value(e.clone()).unwrap()
 }
 
 /// A sent message as the Bot API echoes it back.
-fn as_sent(sent: &Value) -> Rendered {
-	Rendered {
+fn as_sent(sent: &Value) -> Rich {
+	Rich {
 		text: sent["text"].as_str().unwrap().to_owned(),
-		entities: sent["entities"].as_array().cloned().unwrap_or_default(),
+		entities: sent["entities"].as_array().map(|e| e.iter().map(entity).collect()).unwrap_or_default(),
 	}
 }
 
-fn press(id: &str, chat: i64, message_id: i64, data: &str, message: &Rendered) -> Update {
+fn press(id: &str, chat: i64, message_id: i64, data: &str, message: &Rich) -> Update {
 	Update::Callback {
 		id: CallbackId { v: id.into() },
 		chat_id: chat,
@@ -1317,7 +1344,7 @@ async fn a_button_calls_sites_as_its_user_and_is_one_action_however_often_presse
 	s.fan_out(&s.n, t0()).await.unwrap();
 	let (mid, data, text) = delivered(&s, t0()).await;
 	let (take, no_answer) = (&data[0], &data[1]);
-	let outbox = outbox_of(take);
+	let note = s.inbox(user, &aliases::admin()).await[0].id;
 
 	// "No answer": recorded by sites, then a redelivered update is answered as replayed.
 	s.n.handle(press("cb-1", 1, mid, no_answer, &text), at(1_000)).await.unwrap();
@@ -1327,7 +1354,7 @@ async fn a_button_calls_sites_as_its_user_and_is_one_action_however_often_presse
 	assert_eq!(presses.len(), 2);
 	for p in &presses {
 		assert_eq!((p.method.as_str(), p.path_and_query.as_str()), ("POST", "/api/v1/leads/aquafix/L-1/no_answer"));
-		assert_eq!(p.headers["idempotency-key"], format!("tg/{outbox}/no_answer"), "the key the event ids derive from");
+		assert_eq!(p.headers["idempotency-key"], format!("alert/{note}/{user}/no_answer"), "the key the event ids derive from");
 		assert!(p.body.is_empty(), "a null body is no body");
 		let sa_auth::Principal::User(who) = p.assertion(Service::Sites, None).principal else {
 			panic!("a press is its user's")
@@ -1349,7 +1376,7 @@ async fn a_button_calls_sites_as_its_user_and_is_one_action_however_often_presse
 	s.n.handle(press("cb-2", 1, mid, take, &text), at(2_000)).await.unwrap();
 	let p = s.presses().pop().unwrap();
 	assert_eq!(p.path_and_query, "/api/v1/leads/aquafix/L-1/stage");
-	assert_eq!(p.headers["idempotency-key"], format!("tg/{outbox}/take"));
+	assert_eq!(p.headers["idempotency-key"], format!("alert/{note}/{user}/take"));
 	assert_eq!(serde_json::from_slice::<Value>(&p.body).unwrap(), json!({"stage": "contacted"}));
 	assert_eq!(p.headers["content-type"], "application/json");
 	let edits = s.mock.calls("editMessageText");
@@ -1372,7 +1399,7 @@ async fn a_button_calls_sites_as_its_user_and_is_one_action_however_often_presse
 }
 
 /// A message sent before the buttons came from sites named its buttons by one letter: pressed
-/// now, it still calls sites, under the key the press had then.
+/// now, it still calls sites.
 #[tokio::test]
 async fn a_button_sent_before_the_cut_over_still_works() {
 	let s = setup().await;
@@ -1396,7 +1423,8 @@ async fn a_button_sent_before_the_cut_over_still_works() {
 	assert_eq!(answers(&s), ["Записано."]);
 	let p = s.presses().pop().unwrap();
 	assert_eq!(p.path_and_query, "/api/v1/leads/aquafix/L-1/stage");
-	assert_eq!(p.headers["idempotency-key"], format!("tg/{outbox}/take"));
+	let note = s.inbox(user, &aliases::operator()).await[0].id;
+	assert_eq!(p.headers["idempotency-key"], format!("alert/{note}/{user}/take"));
 }
 
 #[tokio::test]
@@ -1490,7 +1518,7 @@ async fn a_session_concierge_will_not_rotate_ends_access_and_one_refusal_does_no
 		.await
 		.unwrap();
 	assert_eq!(permissions, None);
-	let pending: i64 = sqlx::query_scalar("SELECT count(*) FROM telegram_outbox WHERE user_id = $1 AND state = 'pending'")
+	let pending: i64 = sqlx::query_scalar("SELECT count(*) FROM alert_outbox WHERE user_id = $1 AND state = 'pending'")
 		.bind(other)
 		.fetch_one(&s.db)
 		.await
@@ -1541,13 +1569,451 @@ async fn entities_go_as_given_and_an_edit_makes_no_link() {
 
 	// The callback carries the message as Telegram holds it, a link of its own drawn in.
 	let mut held = message.clone();
-	held.entities.push(json!({"type": "url", "offset": 28, "length": 21}));
+	held.entities.push(entity(&json!({"type": "url", "offset": 28, "length": 21})));
 	let raw = json!({"update_id": 1, "callback_query": {"id": "cb-1", "data": data[0], "message": {"message_id": mid, "chat": {"id": 1, "type": "private"}, "text": held.text, "entities": held.entities}}});
-	s.n.handle(sa_server::telegram::parse_update(&raw).unwrap(), at(1_000)).await.unwrap();
+	s.n.handle(telegram::parse_update(&raw).unwrap(), at(1_000)).await.unwrap();
 	let edit = s.mock.calls("editMessageText").pop().unwrap();
 	assert_eq!(edit["text"], format!("{body}\n\nВзял: Olga"));
 	assert_eq!(edit["entities"], json!([bold, code]), "the formatting kept, no link");
 	assert_eq!(edit["link_preview_options"]["is_disabled"], true);
+}
+
+// ── the inbox, tiers, cadences ───────────────────────────────────────────────────────────
+
+fn nobody() -> PermissionSet {
+	std::iter::empty::<&str>().collect()
+}
+
+impl Setup {
+	/// A user whose access concierge confirms at `now`, with no destination.
+	async fn seen(&self, user: Uuid, permissions: &PermissionSet, now: Timestamp) {
+		self.panel.alerts_access_seen(user, permissions, "Olga", now).await.unwrap();
+	}
+
+	/// A user with a private chat, an admin confirmed at `now`, whose hours are `hours`.
+	async fn reached(&self, chat: i64, hours: Hours) -> Uuid {
+		let user = Uuid::now_v7();
+		self.link(user, aliases::admin(), chat, t0()).await;
+		self.panel.alerts_set_hours(user, &hours, t0()).await.unwrap().unwrap();
+		self.mock.clear();
+		user
+	}
+
+	/// A booking noted at `now`: how many messages it queued.
+	async fn book(&self, what: &str, now: Timestamp) -> usize {
+		self.note("booked", now, text(what), Value::Null, None, json!([]));
+		self.fan_out(&self.n, now).await.unwrap()
+	}
+}
+
+fn utc(quiet: Option<(u16, u16)>, snoozed_until: Option<Timestamp>) -> Hours {
+	Hours {
+		tz: "UTC".into(),
+		daily: 9 * 60,
+		quiet,
+		snoozed_until,
+	}
+}
+
+fn hours(n: i64) -> Timestamp {
+	t0() + SignedDuration::from_hours(n)
+}
+
+/// A note is in the inbox of everyone it is for, reached or not, and of no one else; who reads the
+/// PII in it is judged as they read it.
+#[tokio::test]
+async fn a_note_is_in_the_inbox_of_its_audience_as_each_may_read_it_now() {
+	let s = setup().await;
+	let (operator, worker, outsider, typist) = (Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7());
+	let no_pii: PermissionSet = ["sa:sites:work:read", "sa:sites:work:leads:edit"].into_iter().collect();
+	s.seen(operator, &aliases::operator(), t0() - SignedDuration::from_hours(5)).await;
+	s.seen(worker, &no_pii, t0()).await;
+	s.seen(outsider, &nobody(), t0()).await;
+	s.seen(typist, &aliases::operator(), t0()).await;
+	let (_, royat) = s.owner(outsider, "a@gmail.com", ROYAT).await;
+
+	s.lead("L-1", t0());
+	s.sites.with(|sites| {
+		sites.notes[0]["skip_user"] = json!(typist);
+		sites.notes[0]["link"] = json!("/sites/leads?lead=L-1");
+	});
+	s.review("review_new", t0(), &[royat], None);
+	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 0, "no one is reached outside the panel");
+
+	let lead = s.inbox(operator, &aliases::operator()).await;
+	assert_eq!(lead.len(), 1, "confirmed hours ago: still theirs to read");
+	assert!(lead[0].text.text.contains("+33"));
+	assert_eq!((lead[0].tier, lead[0].link.as_deref()), (Tier::Urgent, Some("/sites/leads?lead=L-1")));
+	assert_eq!(lead[0].buttons.len(), 2);
+	assert!(!s.inbox(operator, &no_pii).await[0].text.text.contains("+33"), "a permission lost since is lost here");
+	assert!(s.inbox(operator, &nobody()).await.is_empty(), "and so is the rule");
+	assert!(!s.inbox(worker, &no_pii).await[0].text.text.contains("+33"));
+	assert!(s.inbox(typist, &aliases::operator()).await.is_empty(), "who did it is not told");
+	let review = s.inbox(outsider, &aliases::admin()).await;
+	assert_eq!(review.iter().map(|a| (a.rule, a.gmbs.clone())).collect::<Vec<_>>(), [(Rule::ReviewNew, vec![royat])], "the owner's alone");
+
+	let unread = |user| {
+		let panel = &s.panel;
+		async move { panel.alerts_unread(user, &aliases::admin()).await.unwrap() }
+	};
+	assert_eq!(unread(operator).await[&Tier::Urgent], 1);
+	s.lead("L-2", at(1_000));
+	s.fan_out(&s.n, at(1_000)).await.unwrap();
+	s.panel.alerts_read(operator, None, lead[0].id, at(2_000)).await.unwrap();
+	assert_eq!(unread(operator).await[&Tier::Urgent], 1, "what came since was not on the screen");
+	assert_eq!(unread(worker).await[&Tier::Urgent], 2, "each reads their own");
+	let only_unread = Sought {
+		unread: true,
+		..Sought::default()
+	};
+	let left = s.panel.alerts_inbox(operator, &aliases::operator(), &only_unread).await.unwrap();
+	assert_eq!(left.len(), 1);
+	assert!(left[0].id > lead[0].id);
+	let older = Sought {
+		before: Some(left[0].id),
+		..Sought::default()
+	};
+	assert_eq!(s.panel.alerts_inbox(operator, &aliases::operator(), &older).await.unwrap()[0].id, lead[0].id);
+}
+
+/// A note's tier: the person's for its rule, else its own, else its rule's.
+#[tokio::test]
+async fn a_persons_tier_beats_the_notes_and_it_the_rules() {
+	let s = setup().await;
+	let (plain, set) = (Uuid::now_v7(), Uuid::now_v7());
+	for user in [plain, set] {
+		s.seen(user, &aliases::operator(), t0()).await;
+	}
+	let operator = aliases::operator();
+	let own = |rule, tier| s.panel.alerts_set_tier(set, &operator, rule, tier);
+	own(Rule::NewLead, Some(Tier::Important)).await.unwrap().unwrap();
+	assert!(matches!(own(Rule::MeterHeld, Some(Tier::Info)).await.unwrap(), Err(Refused::Invalid(_))), "not a rule of theirs");
+	s.lead("L-1", t0());
+	s.lead("L-2", t0());
+	s.sites.with(|sites| sites.notes[1]["tier"] = json!("info"));
+	s.fan_out(&s.n, t0()).await.unwrap();
+	let tiers = |user| {
+		let s = &s;
+		async move { s.inbox(user, &aliases::operator()).await.iter().rev().map(|a| a.tier).collect::<Vec<_>>() }
+	};
+	assert_eq!(tiers(plain).await, [Tier::Urgent, Tier::Info]);
+	assert_eq!(tiers(set).await, [Tier::Important, Tier::Important]);
+	own(Rule::NewLead, None).await.unwrap().unwrap();
+	assert_eq!(s.panel.alerts(set, &aliases::operator()).await.unwrap().rules.iter().find(|(r, _)| *r == Rule::NewLead).unwrap().1, None);
+}
+
+/// A destination is told of a tier at that tier's cadence, of a rule at the rule's own.
+#[tokio::test]
+async fn a_rules_cadence_beats_its_tiers() {
+	let s = setup().await;
+	let user = s.reached(1, utc(None, None)).await;
+	let d = s.private_of(user).await.unwrap();
+	s.set(&d, &aliases::admin(), |set| {
+		set.cadences = Cadences {
+			urgent: Cadence::Off,
+			important: Cadence::Now,
+			info: Cadence::Now,
+		};
+		set.rules = [(Rule::ContactOverdue, Cadence::Now), (Rule::PaymentReceived, Cadence::Off)].into();
+	})
+	.await
+	.unwrap();
+	for rule in ["new_lead", "contact_overdue", "booked", "payment_received"] {
+		s.note(rule, t0(), text(rule), Value::Null, None, json!([]));
+	}
+	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 2);
+	assert_eq!(s.outbox().await.into_iter().map(|o| o.1).collect::<Vec<_>>(), ["contact_overdue", "booked"]);
+	assert_eq!(s.inbox(user, &aliases::admin()).await.len(), 4, "off: still in the panel");
+}
+
+/// `unread` waits ten minutes for the note to be read — in the panel, or by a button pressed
+/// anywhere — and is given up once it is.
+#[tokio::test]
+async fn what_waits_for_a_note_to_be_read_goes_when_it_is_not() {
+	let s = setup().await;
+	let user = s.reached(77, utc(None, None)).await;
+	s.session(user, aliases::admin(), "Olga").await;
+	s.mock.chat("@leads", -1001, "channel", false, 77);
+	let channel = s.n.add_chat(user, &aliases::admin(), "Olga", "@leads".parse().unwrap(), t0()).await.unwrap().unwrap();
+	let channel = s.panel.alerts(user, &aliases::admin()).await.unwrap().destinations.into_iter().find(|d| d.id == channel).unwrap();
+	s.set(&channel, &aliases::admin(), |set| set.cadences.urgent = Cadence::Unread).await.unwrap();
+	for lead in ["L-1", "L-2", "L-3"] {
+		s.lead(lead, t0());
+	}
+	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 6);
+	let (mid, data, message) = delivered(&s, t0()).await;
+	let ids: Vec<i64> = s.inbox(user, &aliases::admin()).await.iter().rev().map(|a| a.id).collect();
+
+	s.n.handle(press("cb-1", 77, mid, &data[0], &message), at(1_000)).await.unwrap();
+	s.panel.alerts_read(user, Some(&ids[1..2]), ids[2], at(2_000)).await.unwrap();
+	let waiting: Vec<(i64, String)> = sqlx::query_as("SELECT note_id, state FROM alert_outbox WHERE destination_id = $1 ORDER BY id")
+		.bind(channel.id)
+		.fetch_all(&s.db)
+		.await
+		.unwrap();
+	let state = |note: usize, state: &str| (ids[note], state.to_owned());
+	assert_eq!(waiting, [state(0, "dropped"), state(1, "dropped"), state(2, "pending")]);
+	assert!(s.panel.alerts_told(user, ids[0]).await.unwrap().iter().any(|t| t.error.as_deref() == Some("read")));
+
+	let ten = SignedDuration::from_mins(10);
+	s.n.deliver(at(2_000)).await.unwrap();
+	s.n.deliver(at(4_000)).await.unwrap();
+	s.mock.clear();
+	assert_eq!(s.n.deliver(t0() + ten - SignedDuration::from_secs(1)).await.unwrap().sent, 0);
+	assert_eq!(s.n.deliver(t0() + ten).await.unwrap().sent, 1);
+	assert_eq!(s.mock.calls("sendMessage")[0]["chat_id"], -1001);
+}
+
+/// What an hour, a day, the quiet hours or a snooze held goes out as one message, without what was
+/// read meanwhile; an urgent one waits for none of them.
+#[tokio::test]
+async fn what_is_held_goes_out_as_one_and_urgent_is_not_held() {
+	let s = setup().await;
+	let (night, noon) = (Some((22 * 60, 7 * 60)), utc(None, None));
+	let user = s.reached(1, noon.clone()).await;
+	let d = s.private_of(user).await.unwrap();
+	s.set(&d, &aliases::admin(), |set| {
+		set.cadences = Cadences {
+			urgent: Cadence::Now,
+			important: Cadence::Hourly,
+			info: Cadence::Daily,
+		}
+	})
+	.await
+	.unwrap();
+	let sent = |now: Timestamp| {
+		let s = &s;
+		async move {
+			s.mock.clear();
+			s.seen(user, &aliases::admin(), now).await;
+			s.n.deliver(now).await.unwrap();
+			texts(&s.mock.calls("sendMessage"))
+		}
+	};
+
+	s.book("First", at(1_000)).await;
+	s.book("Second", at(60_000)).await;
+	s.note("payment_received", at(60_000), text("Paid"), Value::Null, None, json!([]));
+	s.lead("L-1", at(61_000));
+	s.fan_out(&s.n, at(61_000)).await.unwrap();
+	assert!(matches!(sent(at(61_000)).await.as_slice(), [one] if one.contains("+33")), "the lead at once");
+	assert_eq!(sent(hours(1)).await, ["Оповещений: 2\n\n🟠 First\n\n🟠 Second"]);
+	assert_eq!(sent(hours(14)).await, [] as [&str; 0]);
+	assert_eq!(sent(hours(15)).await, ["Paid"], "one alone is itself");
+
+	// Quiet from 22:00 to 7:00; it is 23:00.
+	s.set(&d, &aliases::admin(), |set| set.cadences = Cadences { urgent: Cadence::Now, important: Cadence::Now, info: Cadence::Off }).await.unwrap();
+	s.panel.alerts_set_hours(user, &utc(night, None), hours(16)).await.unwrap().unwrap();
+	s.seen(user, &aliases::admin(), hours(29)).await;
+	for booking in ["Third", "Fourth", "Read meanwhile"] {
+		assert_eq!(s.book(booking, hours(29)).await, 1);
+	}
+	let read = s.inbox(user, &aliases::admin()).await[0].id;
+	s.panel.alerts_read(user, Some(&[read]), read, hours(29)).await.unwrap();
+	s.lead("L-2", hours(29));
+	s.fan_out(&s.n, hours(29)).await.unwrap();
+	assert!(matches!(sent(hours(29)).await.as_slice(), [one] if one.contains("+33")), "pierces the night");
+	assert_eq!(sent(hours(37) - SignedDuration::from_secs(1)).await, [] as [&str; 0]);
+	assert_eq!(sent(hours(37)).await, ["Оповещений: 2\n\n🟠 Third\n\n🟠 Fourth"]);
+
+	// Snoozed, then not: what it held goes at once.
+	s.panel.alerts_set_hours(user, &utc(None, Some(hours(50))), hours(40)).await.unwrap().unwrap();
+	s.seen(user, &aliases::admin(), hours(40)).await;
+	s.book("Fifth", hours(40)).await;
+	assert_eq!(sent(hours(41)).await, [] as [&str; 0]);
+	s.panel.alerts_set_hours(user, &noon, hours(41)).await.unwrap().unwrap();
+	assert_eq!(sent(hours(41)).await, ["Fifth"]);
+
+	// A cadence turned off gives up what waited for it.
+	s.set(&d, &aliases::admin(), |set| set.cadences.important = Cadence::Daily).await.unwrap();
+	s.book("Sixth", hours(41)).await;
+	s.set(&d, &aliases::admin(), |set| set.cadences.important = Cadence::Off).await.unwrap();
+	assert_eq!(outbox_errors(&s).await.pop().unwrap(), ("dropped".to_owned(), Some("turned off".to_owned())));
+}
+
+/// A filter takes a note by one GBP of it in every facet set; a note about none it always takes.
+#[tokio::test]
+async fn a_filter_is_of_a_notes_gbps() {
+	let s = setup().await;
+	let user = s.reached(1, utc(None, None)).await;
+	let (_, royat) = s.owner(user, "a@gmail.com", ROYAT).await;
+	let (_, other) = s.owner(user, "b@gmail.com", CHAMALIERES).await;
+	let d = s.private_of(user).await.unwrap();
+	let review = |gmb| {
+		let s = &s;
+		async move {
+			s.review("review_gone", t0(), &[gmb], None);
+			s.fan_out(&s.n, t0()).await.unwrap()
+		}
+	};
+	s.set(&d, &aliases::admin(), |set| set.filter.gmbs = [royat].into()).await.unwrap();
+	assert_eq!((review(royat).await, review(other).await), (1, 0));
+	s.set(&d, &aliases::admin(), |set| set.filter.trades = ["gcid:locksmith".to_owned()].into()).await.unwrap();
+	assert_eq!(review(royat).await, 0, "in one facet set, not the other");
+	s.set(&d, &aliases::admin(), |set| {
+		set.filter.gmbs.clear();
+		set.filter.trades = ["gcid:plumber".to_owned()].into();
+	})
+	.await
+	.unwrap();
+	assert_eq!(review(other).await, 1);
+	s.set(&d, &aliases::admin(), |set| set.filter.gmbs = [royat].into()).await.unwrap();
+	s.lead("L-1", t0());
+	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 1, "about no GBP");
+	s.lead("L-2", t0());
+	s.sites.with(|sites| sites.notes.last_mut().unwrap()["gmbs"] = json!([other]));
+	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 0, "a lead of another GBP's");
+	assert_eq!(s.inbox(user, &aliases::admin()).await.len(), 6, "a filter is a destination's: the panel has them all");
+}
+
+#[tokio::test]
+async fn what_is_urgent_leaves_the_outbox_first() {
+	let s = setup().await;
+	s.reached(1, utc(None, None)).await;
+	s.book("Booked", t0()).await;
+	s.note("contact_overdue", t0(), text("Overdue"), Value::Null, None, json!([]));
+	s.fan_out(&s.n, t0()).await.unwrap();
+	s.n.deliver(t0()).await.unwrap();
+	s.n.deliver(at(1_000)).await.unwrap();
+	assert_eq!(texts(&s.mock.calls("sendMessage")), ["Overdue", "Booked"]);
+}
+
+/// A button pressed in the panel and the same one under the note's message are one action: one key,
+/// and the buttons it leaves are left in both.
+#[tokio::test]
+async fn a_press_in_the_panel_is_the_press_in_telegram() {
+	let s = setup().await;
+	let user = s.reached(1, utc(None, None)).await;
+	s.session(user, aliases::admin(), "Olga").await;
+	s.lead("L-1", t0());
+	s.fan_out(&s.n, t0()).await.unwrap();
+	let (mid, data, message) = delivered(&s, t0()).await;
+	let note = s.inbox(user, &aliases::admin()).await[0].id;
+	let Access::Granted(who) = s.n.confirm_access(user, t0()).await.unwrap() else {
+		panic!("a live session")
+	};
+
+	assert!(matches!(s.n.press(&who, note, "no_answer", at(1_000)).await.unwrap(), Pressed::Done { left, .. } if left.len() == 1));
+	let alert = s.inbox(user, &aliases::admin()).await.remove(0);
+	assert_eq!(alert.buttons.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(), ["take"]);
+	assert!(alert.read_at.is_some(), "pressed is read");
+	s.sites.with(|sites| sites.presses.push_back(200));
+	s.n.handle(press("cb-1", 1, mid, &data[1], &message), at(2_000)).await.unwrap();
+	assert_eq!(answers(&s), ["Уже записано."]);
+	let keys: HashSet<String> = s.presses().iter().map(|p| p.headers["idempotency-key"].to_str().unwrap().to_owned()).collect();
+	assert_eq!(keys, [format!("alert/{note}/{user}/no_answer")].into());
+
+	let stranger = Identity {
+		user_id: Uuid::now_v7(),
+		..who.clone()
+	};
+	assert!(matches!(s.n.press(&stranger, note, "take", at(3_000)).await.unwrap(), Pressed::Unknown), "not a note of theirs");
+	assert!(matches!(s.n.press(&who, note, "nope", at(3_000)).await.unwrap(), Pressed::Unknown));
+	assert_eq!(s.presses().len(), 2, "neither reached sites");
+}
+
+// ── the webhooks, and what is refused ────────────────────────────────────────────────────
+
+/// A webhook's every delivery is signed with its secret: a test's, and an alert's, which says what a
+/// channel may read.
+#[tokio::test]
+async fn a_webhooks_deliveries_are_signed() {
+	let s = setup().await;
+	let (base, seen) = upstream(Router::new().route("/hook", post(|| async { "ok" }))).await;
+	let n = Hub {
+		outlets: Networks {
+			webhooks: Some(webhook::Webhooks::try_new(|_| true).unwrap()),
+			..Networks::default()
+		},
+		..s.n.clone()
+	};
+	let user = Uuid::now_v7();
+	let hook = Address::Webhook {
+		url: format!("{base}/hook"),
+		secret: "whsec_1".into(),
+	};
+	n.add(user, &aliases::operator(), "Olga", &hook, "hook", t0()).await.unwrap().unwrap();
+	s.lead("L-1", t0());
+	s.sites.with(|sites| sites.notes[0]["link"] = json!("/sites/leads?lead=L-1"));
+	assert_eq!(s.fan_out(&n, t0()).await.unwrap(), 1);
+	assert_eq!(n.deliver(t0()).await.unwrap().sent, 1);
+
+	let seen = seen.lock().unwrap();
+	assert_eq!(seen.len(), 2);
+	for delivery in seen.iter() {
+		let signature = delivery.headers["x-signature"].to_str().unwrap();
+		let (at, v1) = signature.strip_prefix("t=").unwrap().split_once(",v1=").unwrap();
+		let mut mac = <Hmac<sha2::Sha256> as KeyInit>::new_from_slice(b"whsec_1").unwrap();
+		mac.update(format!("{at}.").as_bytes());
+		mac.update(&delivery.body);
+		assert_eq!(v1, hex::encode(mac.finalize().into_bytes()));
+	}
+	let said: Value = serde_json::from_slice(&seen[1].body).unwrap();
+	let note = said["alerts"][0].as_i64().unwrap();
+	assert_eq!((&said["rule"], &said["tier"]), (&json!("new_lead"), &json!("urgent")));
+	assert_eq!(said["url"], format!("https://panel.test/user/alerts?open={note}"));
+	assert!(said["title"].as_str().unwrap().contains("Новая заявка"));
+	assert!(!said.to_string().contains("+33"), "who reads it there is not known");
+}
+
+/// What is no network's address is refused before anything goes out or is stored, and so is a webhook
+/// that is not on the internet.
+#[tokio::test]
+async fn what_is_no_address_is_not_added() {
+	let s = setup().await;
+	let base = "http://127.0.0.1:9".parse().unwrap();
+	let (sign_in, forward) = sa_server::testing::conductor(s.panel.clone(), aliases::operator(), "dev@localhost", &base);
+	let origin: url::Url = "https://panel.test".parse().unwrap();
+	let alerting = sa_server::alerts::Alerting {
+		hub: Hub {
+			panel: s.panel.clone(),
+			outlets: Networks::try_new(&s.panel.alerts_push_seed(), &origin).unwrap(),
+			concierge: sign_in.concierge.clone(),
+			feeds: forward,
+			locale: Locale::En,
+			cabinet: cabinet(),
+			origin,
+		},
+		bot: Default::default(),
+	};
+	let app = sa_server::http::app(
+		sign_in,
+		None,
+		None,
+		Default::default(),
+		Some(alerting),
+		None,
+		None,
+		sa_server::testing::sandbox(),
+		None,
+	);
+	let mut b = Browser::default();
+	b.sign_in(&app).await;
+	let push = |endpoint: &str| json!({"endpoint": endpoint, "p256dh": "x", "auth": "y", "title": "Firefox"});
+	for (path, body) in [
+		("slack", json!({"url": "https://evil.example/services/T/B/x"})),
+		("slack", json!({"url": "http://hooks.slack.com/services/T/B/x"})),
+		("discord/channels", json!({"url": "https://discord.com.evil.example/api/webhooks/1/x", "ping": true})),
+		("discord/channels", json!({"url": "https://discord.com/api/users/@me", "ping": false})),
+		("push", push("https://evil.example/push")),
+		("push", push("https://fcm.googleapis.com/fcm/send/x")),
+		("webhooks", json!({"url": "not a url"})),
+		("webhooks", json!({"url": "http://example.com/hook"})),
+		("webhooks", json!({"url": "https://127.0.0.1/hook"})),
+		("webhooks", json!({"url": "http://127.0.0.1:9/hook"})),
+		("webhooks", json!({"url": "https://[::1]/hook"})),
+		("webhooks", json!({"url": "https://169.254.169.254/latest"})),
+		("email", json!({"address": "a@x.io"})),
+		("email/confirm", json!({"token": "x"})),
+		("telegram/chats", json!({"chat": "-1001"})),
+	] {
+		let uri = format!("/api/v1/alerts/{path}");
+		let sent = axum::body::Body::from(body.to_string());
+		let (status, _, answer) = b.send_body(&app, axum::http::Method::POST, &uri, &[("content-type", "application/json")], true, sent).await;
+		assert_eq!(status, StatusCode::BAD_REQUEST, "{path} {body}: {}", String::from_utf8_lossy(&answer));
+	}
+	let stored: i64 = sqlx::query_scalar("SELECT count(*) FROM alert_destinations").fetch_one(&s.db).await.unwrap();
+	assert_eq!(stored, 0);
 }
 
 // ── access requests ──────────────────────────────────────────────────────────────────────
@@ -1592,7 +2058,7 @@ async fn an_access_request_reaches_the_admins_with_the_grant_link() {
 	s.link(Uuid::now_v7(), aliases::operator(), 2, now).await;
 	// The admin's channel: told of the request too, but not who asked.
 	s.mock.chat("@admins", -1009, "channel", false, 1);
-	s.n.add_chat(admin, &aliases::admin(), "Ann", "@admins".parse().unwrap(), None, now).await.unwrap().unwrap();
+	s.n.add_chat(admin, &aliases::admin(), "Ann", "@admins".parse().unwrap(), now).await.unwrap().unwrap();
 	s.mock.clear();
 	let (app, mut b) = requester(&s.panel, "ann@example.com", &["sa:sites:work:read"]).await;
 	let n = Hub { locale: Locale::En, ..s.n.clone() };
@@ -1654,7 +2120,7 @@ async fn an_access_request_is_told_again_after_a_day_and_dropped_once_held() {
 	};
 	let day = SignedDuration::from_hours(24);
 
-	assert_eq!(ask(t0()).await.unwrap(), (s.panel.pending_access(bob, |_| false).await.unwrap()[0].clone(), true));
+	assert_eq!(ask(t0()).await.unwrap(), (s.panel.pending_access(bob, &std::iter::empty::<&str>().collect()).await.unwrap()[0].clone(), true));
 	assert_eq!(s.fan_out(&s.n, t0()).await.unwrap(), 1);
 	s.n.deliver(t0()).await.unwrap();
 	let within = t0() + day - SignedDuration::from_secs(1);
@@ -1666,8 +2132,9 @@ async fn an_access_request_is_told_again_after_a_day_and_dropped_once_held() {
 	s.n.deliver(next).await.unwrap();
 	assert_eq!(texts(&s.mock.calls("sendMessage")), ["🔑 Запрос доступа\nbob@example.com просит sa:operator.\nИмя: Bob"; 2]);
 
-	let pending = |held: &'static [&'static str]| s.panel.pending_access(bob, move |need| held.contains(&need));
-	assert_eq!(pending(&[]).await.unwrap().len(), 1);
-	assert_eq!(pending(&["sa:operator"]).await.unwrap(), [], "held: dropped");
-	assert_eq!(pending(&[]).await.unwrap(), [], "for good");
+	let nothing: PermissionSet = std::iter::empty::<&str>().collect();
+	let operator = aliases::operator();
+	assert_eq!(s.panel.pending_access(bob, &nothing).await.unwrap().len(), 1);
+	assert_eq!(s.panel.pending_access(bob, &operator).await.unwrap(), [], "held: dropped");
+	assert_eq!(s.panel.pending_access(bob, &nothing).await.unwrap(), [], "for good");
 }

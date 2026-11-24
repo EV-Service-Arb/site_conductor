@@ -25,11 +25,12 @@ use sa_panel::{
 	testing::{TestDb, admin, operator, panel, settled, told, topics},
 };
 use sa_server::{
-	alerts::Telegram,
+	alerts::Alerting,
 	concierge::{CLIENT_ID, Concierge},
 	http,
 	signin::{SignIn, SignInConfig},
-	telegram::{BotApi, BotName},
+	outlets::Networks,
+	telegram::BotName,
 };
 use serde_json::{Value, json};
 use tonic::{Code, Request as GrpcRequest, Response as GrpcResponse, Status, transport::server::TcpIncoming};
@@ -756,7 +757,7 @@ async fn a_getme_timeout_is_asked_once_more() {
 // ── the Alerts page ──────────────────────────────────────────────────────────────────────
 
 #[tokio::test]
-async fn the_alerts_page_links_telegram_and_chooses_rules() {
+async fn the_alerts_page_links_telegram_and_sets_what_is_told() {
 	let db = TestDb::create().await;
 	let fake = FakeConcierge::default();
 	let addr = serve_fake(fake.clone()).await;
@@ -770,23 +771,27 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 			concierge_origin: "http://concierge.test".to_owned(),
 		},
 	);
-	let telegram = Telegram {
+	let alerting = Alerting {
 		hub: Hub {
 			panel: panel.clone(),
-			bot: BotApi::try_new("http://127.0.0.1:9", "1:unused".to_owned().into()).unwrap(),
+			outlets: Networks {
+				telegram: Some(social_networks_adapters::notify::telegram::Bot::try_new("http://127.0.0.1:9", "1:unused".to_owned().into()).unwrap()),
+				..Networks::default()
+			},
 			concierge,
 			feeds: sa_server::forward::Forward::new(sign_in.clone(), sa_server::testing::services(&"http://127.0.0.1:9".parse().unwrap())),
 			locale: Locale::Ru,
 			cabinet: "http://concierge.test".parse().unwrap(),
+			origin: PANEL.parse().unwrap(),
 		},
-		name: BotName::new(Some("@evinvest_sa_bot".into())),
+		bot: BotName::new(Some("@evinvest_sa_bot".into())),
 	};
 	let app = http::app(
 		sign_in.clone(),
 		None,
 		None,
 		http::Limits::default(),
-		Some(telegram),
+		Some(alerting),
 		None,
 		None,
 		sa_server::testing::sandbox(),
@@ -804,7 +809,10 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 		.execute(&pool)
 		.await
 		.unwrap();
-	let destination: i64 = sqlx::query_scalar("INSERT INTO alert_destinations (user_id, method, created_at) VALUES ($1, 'telegram', 0) RETURNING id")
+	let destination: i64 = sqlx::query_scalar(
+		"INSERT INTO alert_destinations (user_id, method, private, urgent, important, info, filter, created_at) \
+		 VALUES ($1, 'telegram', 1, 'now', 'now', 'off', '{\"gmails\":[],\"trades\":[],\"brands\":[],\"gmbs\":[]}', 0) RETURNING id",
+	)
 		.bind(operator_id)
 		.fetch_one(&pool)
 		.await
@@ -820,12 +828,22 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 
 	let got = b.get(&app, "/api/v1/alerts").await;
 	assert_eq!(got.status, StatusCode::OK, "{}", got.body);
-	let defaults = json!({"new_lead": true, "contact_overdue": true, "booked": true});
+	let rules: Vec<&str> = got.body["rules"].as_array().unwrap().iter().map(|r| r["rule"].as_str().unwrap()).collect();
+	assert!(rules.contains(&"new_lead"), "an operator's: {rules:?}");
+	assert!(!rules.contains(&"payment_received"), "payments are the admins': {rules:?}");
+	assert!(!rules.contains(&"review_gone"), "no GMB, no review rules: {rules:?}");
+	assert_eq!(got.body["rules"][0], json!({"rule": "new_lead", "family": "leads", "default": "urgent", "tier": null}));
+	let cadences = json!({"urgent": "now", "important": "now", "info": "off"});
+	let any = json!({"gmails": [], "trades": [], "brands": [], "gmbs": []});
 	assert_eq!(
-		got.body,
-		json!({"enabled": true, "bot": "@evinvest_sa_bot", "rules": ["new_lead", "contact_overdue", "booked"],
-			"destinations": [{"id": destination, "kind": "private", "title": null, "topic_id": null, "gmail_id": null, "dead": null, "rules": defaults}]}),
-		"an operator's rules, at their defaults; no GMB, no review rules"
+		(&got.body["methods"], &got.body["bot"], &got.body["hours"], &got.body["destinations"]),
+		(
+			&json!(["telegram"]),
+			&json!("@evinvest_sa_bot"),
+			&json!(null),
+			&json!([{"id": destination, "method": "telegram", "private": true, "kind": "private", "topic_id": null, "title": null, "cadences": cadences,
+				"rules": {}, "filter": any, "dead": null}]),
+		)
 	);
 	let (permissions, name): (Option<String>, String) = sqlx::query_as("SELECT permissions, display_name FROM alert_access").fetch_one(&pool).await.unwrap();
 	let permissions: PermissionSet = serde_json::from_str(&permissions.unwrap()).unwrap();
@@ -847,26 +865,46 @@ async fn the_alerts_page_links_telegram_and_chooses_rules() {
 	assert!(token.len() == 43, "{url}");
 	assert!(token.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_'), "{url}");
 
-	let rules = format!("/api/v1/alerts/destinations/{destination}/rules");
-	let muted = b.send(&app, Method::PUT, &rules, Some(json!({"rules": {"new_lead": false}})), true).await;
-	assert_eq!(muted.status, StatusCode::OK, "{}", muted.body);
-	assert_eq!(muted.body["destinations"][0]["rules"], json!({"new_lead": false, "contact_overdue": true, "booked": true}));
-	let admins = b.send(&app, Method::PUT, &rules, Some(json!({"rules": {"payment_received": true}})), true).await;
-	assert_eq!(admins.status, StatusCode::BAD_REQUEST, "payments are the admins'");
-	let unknown = b.send(&app, Method::PUT, &rules, Some(json!({"rules": {"review_low": true}})), true).await;
-	assert_eq!(unknown.status, StatusCode::BAD_REQUEST, "not a rule");
-	let gmail = b
-		.send(&app, Method::PUT, &format!("/api/v1/alerts/destinations/{destination}/gmail"), Some(json!({"gmail_id": 5})), true)
-		.await;
-	assert_eq!(gmail.status, StatusCode::NOT_FOUND, "not the caller's gmail");
-
 	let one = format!("/api/v1/alerts/destinations/{destination}");
+	let set = |rules: serde_json::Value| json!({"title": null, "cadences": {"urgent": "unread", "important": "hourly", "info": "daily"}, "rules": rules, "filter": any});
+	let muted = b.send(&app, Method::PUT, &one, Some(set(json!({"new_lead": "off"}))), true).await;
+	assert_eq!(muted.status, StatusCode::OK, "{}", muted.body);
+	assert_eq!(
+		(&muted.body["destinations"][0]["rules"], &muted.body["destinations"][0]["cadences"]["urgent"]),
+		(&json!({"new_lead": "off"}), &json!("unread"))
+	);
+	let admins = b.send(&app, Method::PUT, &one, Some(set(json!({"payment_received": "now"}))), true).await;
+	assert_eq!(admins.status, StatusCode::BAD_REQUEST, "payments are the admins'");
+	let unknown = b.send(&app, Method::PUT, &one, Some(set(json!({"review_low": "now"}))), true).await;
+	assert_eq!(unknown.status, StatusCode::BAD_REQUEST, "not a rule");
+
+	let tier = b.send(&app, Method::PUT, "/api/v1/alerts/rules/new_lead", Some(json!({"tier": "info"})), true).await;
+	assert_eq!((tier.status, &tier.body["rules"][0]["tier"]), (StatusCode::OK, &json!("info")));
+	let closed = b.send(&app, Method::PUT, "/api/v1/alerts/rules/meter_held", Some(json!({"tier": "info"})), true).await;
+	assert_eq!(closed.status, StatusCode::BAD_REQUEST, "not open to them");
+	let hours = |tz: &str, quiet: serde_json::Value| json!({"tz": tz, "daily": 480, "quiet": quiet, "snoozed_until": null});
+	let set_hours = b.send(&app, Method::PUT, "/api/v1/alerts/hours", Some(hours("Europe/Paris", json!([1320, 420]))), true).await;
+	assert_eq!((set_hours.status, &set_hours.body["hours"]["quiet"]), (StatusCode::OK, &json!([1320, 420])));
+	for wrong in [hours("Mars/Olympus", json!(null)), hours("UTC", json!([60, 60])), hours("UTC", json!([0, 1440]))] {
+		assert_eq!(b.send(&app, Method::PUT, "/api/v1/alerts/hours", Some(wrong.clone()), true).await.status, StatusCode::BAD_REQUEST, "{wrong}");
+	}
+
+	let inbox = b.get(&app, "/api/v1/alerts/inbox?tier=urgent&unread=true").await;
+	assert_eq!((inbox.status, &inbox.body), (StatusCode::OK, &json!({"alerts": [], "unread": {"urgent": 0, "important": 0, "info": 0}})));
+	assert_eq!(b.get(&app, "/api/v1/alerts/inbox/1").await.status, StatusCode::NOT_FOUND);
+	let read = b.send(&app, Method::POST, "/api/v1/alerts/inbox/read", Some(json!({"ids": null, "up_to": 1})), true).await;
+	assert_eq!(read.status, StatusCode::NO_CONTENT);
+	let pressed = b.send(&app, Method::POST, "/api/v1/alerts/inbox/1/press", Some(json!({"button": "take"})), true).await;
+	assert_eq!(pressed.status, StatusCode::NOT_FOUND);
+	// Mail's way out is open: its token is its only say.
+	assert_eq!(b.send(&app, Method::POST, "/api/alerts/unsubscribe?token=x", None, false).await.status, StatusCode::BAD_REQUEST);
+
 	assert_eq!(b.send(&app, Method::DELETE, &one, None, true).await.status, StatusCode::NO_CONTENT);
 	assert_eq!(b.send(&app, Method::DELETE, &one, None, true).await.status, StatusCode::NOT_FOUND);
 	assert_eq!(b.get(&app, "/api/v1/alerts").await.body["destinations"], json!([]));
 
-	// Without a bot the page says so, and there is nothing to link.
-	assert_eq!(b.get(&off, "/api/v1/alerts").await.body["enabled"], false);
+	// Without a hub nothing can be added, and there is nothing to link.
+	assert_eq!(b.get(&off, "/api/v1/alerts").await.body["methods"], json!([]));
 	assert_eq!(
 		b.send(&off, Method::POST, "/api/v1/alerts/telegram/link", None, true).await.status,
 		StatusCode::SERVICE_UNAVAILABLE
@@ -918,11 +956,24 @@ async fn no_permission_opens_no_section() {
 			"/me",
 			"/me/acting",
 			"/openapi.json",
+			"/gmbs/{id}/mail",
+			"/mail/auto",
+			"/mail/cases",
+			"/mail/cases/{id}",
+			"/mail/cases/{id}/draft",
+			"/mail/drafts/{id}",
+			"/mail/drafts/{id}/send",
+			"/mail/messages/{id}",
 			"/access/requests",
 			"/access/requests/mine",
 			"/alerts",
-			"/alerts/destinations/{id}/rules",
-			"/alerts/destinations/{id}/gmail",
+			"/alerts/inbox",
+			"/alerts/inbox/read",
+			"/alerts/inbox/{id}",
+			"/alerts/inbox/{id}/photo",
+			"/alerts/inbox/{id}/press",
+			"/alerts/rules/{rule}",
+			"/alerts/hours",
 			"/alerts/destinations/{id}/test",
 			"/alerts/destinations/{id}",
 			"/gmails",

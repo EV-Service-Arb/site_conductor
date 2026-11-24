@@ -263,8 +263,8 @@ pub struct Worker {
 	pub model: Model,
 	/// Replies go by themselves: production's alone, or a copy of its database would answer Google too.
 	pub by_itself: bool,
-	/// The alerts' language and the panel's origin; none without a bot.
-	pub tell: Option<(Locale, url::Url)>,
+	/// The alerts' language; none tells nothing.
+	pub tell: Option<Locale>,
 }
 impl Worker {
 	/// Everyone's unread mail read, and the replies due written. A person's failing pass is reported, and
@@ -294,8 +294,8 @@ impl Worker {
 		if self.by_itself {
 			self.panel.send_held_mail(Timestamp::now()).await?;
 		}
-		if let Some((locale, origin)) = &self.tell {
-			self.panel.tell_mail(*locale, origin, Timestamp::now()).await?;
+		if let Some(locale) = self.tell {
+			self.panel.tell_mail(locale, Timestamp::now()).await?;
 		}
 		Ok(())
 	}

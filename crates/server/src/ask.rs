@@ -11,7 +11,7 @@ use axum::{
 	http::{HeaderMap, StatusCode},
 };
 use ev_lib::api::{Body, ErrorCode, Ids, JsonSchema, Refusal};
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 use sa_core::{
 	agent::Approval,
 	prices::{ModelTokens, Spender, Spends},
@@ -32,6 +32,9 @@ use crate::{
 	signin::Caller,
 	tools::{self, Gate, Search},
 };
+
+/// An answer that took this long may end with its asker elsewhere.
+const AWAY: SignedDuration = SignedDuration::from_mins(1);
 
 /// Model turns one question may take before the loop stops and says so.
 const ROUNDS: usize = 24;
@@ -368,7 +371,19 @@ impl Asking<'_> {
 			answer.text.push_str("\n\nI stopped here: this took more steps than one answer may.");
 			AnswerState::Stopped
 		};
-		written.write(&turns, &answer, end, Some(started)).await
+		let done = written.write(&turns, &answer, end, Some(started)).await?;
+		// what is proposed at once is read where it was asked
+		let proposed = answer.actions.iter().find(|a| matches!((&a.state, &a.target), (ActionState::Proposed, Target::Call(_))));
+		if let Some(a) = proposed
+			&& Timestamp::now().duration_since(started) >= AWAY
+		{
+			state
+				.sign_in
+				.panel
+				.alerts_assistant_waits(self.caller.user_id, self.chat, &answer.id, &a.label, Timestamp::now())
+				.await?;
+		}
+		Ok(done)
 	}
 
 	/// Runs one tool the model asked for: what it answers the model, and the step the person sees.

@@ -4,7 +4,7 @@
 //! A need is a permission or an alias of the `sa` catalog; held is holding every permission it
 //! stands for. A request whose need the caller holds is dropped whenever they call either.
 
-use std::{borrow::Cow, sync::LazyLock};
+use std::borrow::Cow;
 
 use axum::{Extension, Json, extract::State, http::Method};
 use ev_lib::api::{
@@ -12,10 +12,9 @@ use ev_lib::api::{
 	schemars::{Schema, SchemaGenerator, json_schema},
 };
 use jiff::Timestamp;
-use sa_auth::{Catalog, PermissionSet};
 use sa_panel::{
 	Panel,
-	access::{AccessRequest, Asker},
+	access::{AccessRequest, Asker, CATALOG, holds},
 };
 use serde::{Deserialize, Serialize};
 
@@ -34,8 +33,6 @@ pub struct AccessRequestDto {
 	/// RFC 3339.
 	pub requested_at: String,
 }
-
-static CATALOG: LazyLock<Catalog> = LazyLock::new(|| Catalog::collect("sa", 0));
 
 /// A permission of the `sa` catalog, any service's.
 pub(crate) struct PermissionName;
@@ -83,15 +80,6 @@ impl From<AccessRequest> for AccessRequestDto {
 	}
 }
 
-/// Whether `permissions` hold everything `need` stands for; `None` for a need outside the catalog.
-fn holds(permissions: &PermissionSet, need: &str) -> Option<bool> {
-	let has = |p: &str| permissions.iter().any(|q| q == p);
-	if CATALOG.permissions.contains(need) {
-		return Some(has(need));
-	}
-	CATALOG.aliases.get(need).map(|members| members.iter().all(|m| has(m)))
-}
-
 #[derive(Deserialize, JsonSchema)]
 pub(crate) struct Ask {
 	#[schemars(with = "Need")]
@@ -110,7 +98,7 @@ pub(crate) struct AccessRequestsDto {
 /// 400 a need neither a permission nor an alias of the sa catalog; 409 one the caller holds already.
 async fn request_access(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(Ask { need }): Body<Ask>) -> ApiResult<Upserted<AccessRequestDto>> {
 	let held = holds(&caller.permissions, &need).ok_or_else(|| Refusal::new(Code::BadRequest, format!("{need:?} is no permission or alias of the sa catalog")))?;
-	panel.pending_access(caller.user_id, |n| holds(&caller.permissions, n) == Some(true)).await?;
+	panel.pending_access(caller.user_id, &caller.permissions).await?;
 	if held {
 		return Err(Refusal::new(Code::Conflict, format!("you hold {need} already")));
 	}
@@ -131,7 +119,7 @@ async fn request_access(State(panel): State<Panel>, Extension(caller): Extension
 
 /// The caller's standing access requests; those whose need they now hold are dropped.
 async fn my_access_requests(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<AccessRequestsDto>> {
-	let pending = panel.pending_access(caller.user_id, |n| holds(&caller.permissions, n) == Some(true)).await?;
+	let pending = panel.pending_access(caller.user_id, &caller.permissions).await?;
 	Ok(Json(AccessRequestsDto {
 		requests: pending.into_iter().map(AccessRequestDto::from).collect(),
 	}))

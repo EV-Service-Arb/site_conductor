@@ -9,6 +9,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Service-Arb panel",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Service-Arb" },
   // Internal, behind sign-in: nothing here is for a search engine.
   robots: { index: false, follow: false },
 };

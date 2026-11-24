@@ -2443,11 +2443,11 @@
     },
     "/alerts": {
       "get": {
-        "summary": "The caller's alert destinations, each with its rules, and the rules open to them.",
+        "summary": "How the caller's alerts are set: their destinations, each rule's tier, their hours.",
         "operationId": "alerts",
         "responses": {
           "200": {
-            "description": "The caller's alerts, and what every change answers.",
+            "description": "How the caller's alerts are set, and what every change answers.",
             "content": {
               "application/json": {
                 "schema": {
@@ -2598,6 +2598,185 @@
       }
     },
     "/alerts/destinations/{id}": {
+      "put": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Sets what a destination is told, when, and of what. 400 a rule not open to the caller.",
+        "operationId": "set_destination",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDestination"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      },
       "delete": {
         "tags": [
           "alerts"
@@ -2761,374 +2940,12 @@
         }
       }
     },
-    "/alerts/destinations/{id}/gmail": {
-      "put": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Scopes a destination's GMB rules to one of the caller's gmails. 404 not theirs.",
-        "operationId": "set_destination_gmail",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GmailBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "The caller's alerts, and what every change answers.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Alerts"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `unreleased_category`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unreleased_category": 422,
-          "unstudied": 422
-        }
-      }
-    },
-    "/alerts/destinations/{id}/rules": {
-      "put": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "Turns rules on or off at a destination. 400 a rule not open to the caller.",
-        "operationId": "set_destination_rules",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "format": "int64"
-            },
-            "style": "simple"
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RulesBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "The caller's alerts, and what every change answers.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Alerts"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `unreleased_category`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unreleased_category": 422,
-          "unstudied": 422
-        }
-      }
-    },
     "/alerts/destinations/{id}/test": {
       "post": {
         "tags": [
           "alerts"
         ],
-        "summary": "Sends a test message to a destination; one that arrives revives it. 400 with what Telegram said.",
+        "summary": "Sends a test message to a destination; one that arrives revives it. 400 with what its network said.",
         "operationId": "test_destination",
         "parameters": [
           {
@@ -3287,6 +3104,2263 @@
         }
       }
     },
+    "/alerts/discord/channels": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds a Discord channel by its webhook, once a test went out there.",
+        "description": "400 refused (nothing stored), 409 a destination already.",
+        "operationId": "add_discord_channel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDiscordChannel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/alerts/discord/link": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "A consent page that makes the bot's direct messages the caller's destination.",
+        "description": "503 without a bot.",
+        "operationId": "discord_link",
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/alerts/email": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds the caller's own verified address as a destination; any other is mailed a link that does.",
+        "operationId": "add_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddEmail"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/alerts/email/confirm": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds the address the mailed token proves. 400 another's token, or one out of date.",
+        "operationId": "confirm_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmEmail"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/alerts/hours": {
+      "put": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Sets the caller's hours.",
+        "operationId": "set_alert_hours",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAlertHours"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/alerts/inbox": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "The caller's alerts, newest first, 50 at a time.",
+        "operationId": "alert_inbox",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "before",
+            "description": "Older than this one.",
+            "schema": {
+              "description": "Older than this one.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "gmb",
+            "description": "About this GBP.",
+            "schema": {
+              "description": "About this GBP.",
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "int64"
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "tier",
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Tier"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "style": "form"
+          },
+          {
+            "in": "query",
+            "name": "unread",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of the caller's inbox, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertInbox"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/alerts/inbox/read": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Marks alerts read: what was still waiting to go out of them is given up.",
+        "operationId": "read_alerts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertsRead"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/alerts/inbox/{id}": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "One of the caller's alerts, and where it went.",
+        "operationId": "alert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One note, and where it went.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertOpened"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/alerts/inbox/{id}/photo": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "An alert's photo.",
+        "operationId": "alert_photo",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A PNG.",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/alerts/inbox/{id}/press": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Presses an alert's button, as under its message: the buttons left.",
+        "description": "409 recorded before, 404 what it acts on is gone.",
+        "operationId": "press_alert",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertPress"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alert"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/alerts/push": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds the browser's push subscription, once a test went out there; one the caller has already is left as they set it.",
+        "operationId": "add_push",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPush"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/alerts/rules/{rule}": {
+      "put": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Sets how much a rule's notes matter to the caller. 400 a rule not open to them.",
+        "operationId": "set_alert_tier",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Rule"
+            },
+            "style": "simple"
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertTier"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
+    "/alerts/slack": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds a Slack channel by its incoming webhook, once a test went out there.",
+        "description": "400 refused (nothing stored), 409 a destination already.",
+        "operationId": "add_slack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSlack"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
     "/alerts/telegram/chats": {
       "post": {
         "tags": [
@@ -3307,7 +5381,7 @@
         },
         "responses": {
           "201": {
-            "description": "The caller's alerts, and what every change answers.",
+            "description": "How the caller's alerts are set, and what every change answers.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3473,6 +5547,177 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TelegramLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/alerts/webhooks": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds a webhook, once a test went out there.",
+        "description": "400 refused (nothing stored), 409 a destination already.",
+        "operationId": "add_webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWebhook"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddedWebhook"
                 }
               }
             }
@@ -29136,19 +31381,80 @@
           "chat": {
             "description": "`@channel`, `-100<id>`, or `<group>/<topic>` for a forum topic.",
             "type": "string"
-          },
-          "gmail_id": {
-            "description": "The GMB rules only for this gmail's GMBs.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
           }
         },
         "additionalProperties": false,
         "required": [
           "chat"
+        ]
+      },
+      "AddDiscordChannel": {
+        "type": "object",
+        "properties": {
+          "ping": {
+            "description": "Urgent ones say `@here`.",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "The channel's webhook: Edit channel → Integrations → Webhooks.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "ping"
+        ]
+      },
+      "AddEmail": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "address"
+        ]
+      },
+      "AddPush": {
+        "type": "object",
+        "properties": {
+          "auth": {
+            "type": "string"
+          },
+          "endpoint": {
+            "description": "As the browser's `PushSubscription.toJSON()` gives them.",
+            "type": "string"
+          },
+          "p256dh": {
+            "type": "string"
+          },
+          "title": {
+            "description": "The browser and what it runs on.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "endpoint",
+          "p256dh",
+          "auth",
+          "title"
+        ]
+      },
+      "AddSlack": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "The channel's incoming webhook, `https://hooks.slack.com/services/…`.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "url"
         ]
       },
       "AddSource": {
@@ -29184,6 +31490,35 @@
           "key_id",
           "kind",
           "brands"
+        ]
+      },
+      "AddWebhook": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "An https URL on the internet: each alert is POSTed there as JSON.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "url"
+        ]
+      },
+      "AddedWebhook": {
+        "type": "object",
+        "properties": {
+          "alerts": {
+            "$ref": "#/components/schemas/Alerts"
+          },
+          "secret": {
+            "description": "What each delivery is signed with, shown this once:\n`x-signature: t=<unix>,v1=<hex HMAC-SHA256 of \"<t>.<body>\">`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "alerts"
         ]
       },
       "AdditionalCategory": {
@@ -29246,8 +31581,270 @@
           "state"
         ]
       },
+      "Alert": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "buttons": {
+            "description": "Those still to press.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertButton"
+            }
+          },
+          "family": {
+            "$ref": "#/components/schemas/Family"
+          },
+          "gmbs": {
+            "description": "The GBPs it is about.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "link": {
+            "description": "What opens it in the panel: a path on this origin.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "links": {
+            "description": "Elsewhere.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AlertLink"
+            }
+          },
+          "photo": {
+            "description": "`/alerts/inbox/{id}/photo` answers one.",
+            "type": "boolean"
+          },
+          "read_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/Rule"
+          },
+          "text": {
+            "description": "Its first line says it, short.",
+            "type": "string"
+          },
+          "tier": {
+            "$ref": "#/components/schemas/Tier"
+          }
+        },
+        "required": [
+          "id",
+          "rule",
+          "family",
+          "tier",
+          "at",
+          "text",
+          "link",
+          "links",
+          "gmbs",
+          "photo",
+          "buttons",
+          "read_at"
+        ]
+      },
+      "AlertButton": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label"
+        ]
+      },
+      "AlertHours": {
+        "description": "A person's hours as they set them, in minutes since midnight in `tz`.",
+        "type": "object",
+        "properties": {
+          "daily": {
+            "description": "When the daily message goes out.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "quiet": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "maxItems": 2,
+            "minItems": 2
+          },
+          "snoozed_until": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "tz": {
+            "description": "An IANA time zone.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "tz",
+          "daily",
+          "quiet",
+          "snoozed_until"
+        ]
+      },
+      "AlertInbox": {
+        "description": "A page of the caller's inbox, newest first.",
+        "type": "object",
+        "properties": {
+          "alerts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Alert"
+            }
+          },
+          "unread": {
+            "description": "How many are unread, whatever was asked for.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AlertsUnread"
+              }
+            ]
+          }
+        },
+        "required": [
+          "alerts",
+          "unread"
+        ]
+      },
+      "AlertLink": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "url"
+        ]
+      },
+      "AlertOpened": {
+        "description": "One note, and where it went.",
+        "type": "object",
+        "properties": {
+          "alert": {
+            "$ref": "#/components/schemas/Alert"
+          },
+          "told": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Told"
+            }
+          }
+        },
+        "required": [
+          "alert",
+          "told"
+        ]
+      },
+      "AlertPress": {
+        "type": "object",
+        "properties": {
+          "button": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "button"
+        ]
+      },
+      "AlertRule": {
+        "type": "object",
+        "properties": {
+          "default": {
+            "description": "Its notes' tier, where neither the note nor the caller says another.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Tier"
+              }
+            ]
+          },
+          "family": {
+            "$ref": "#/components/schemas/Family"
+          },
+          "rule": {
+            "$ref": "#/components/schemas/Rule"
+          },
+          "tier": {
+            "description": "The caller's own.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "rule",
+          "family",
+          "default",
+          "tier"
+        ]
+      },
+      "AlertTier": {
+        "type": "object",
+        "properties": {
+          "tier": {
+            "description": "`null`: the notes' own.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tier"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
       "Alerts": {
-        "description": "The caller's alerts, and what every change answers.",
+        "description": "How the caller's alerts are set, and what every change answers.",
         "type": "object",
         "properties": {
           "bot": {
@@ -29263,23 +31860,101 @@
               "$ref": "#/components/schemas/Destination"
             }
           },
-          "enabled": {
-            "description": "A bot is configured: Telegram destinations can be added.",
-            "type": "boolean"
+          "email": {
+            "description": "The caller's own address, when it is verified.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "hours": {
+            "description": "`null` until set: the daily message then goes out at 9:00 UTC.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AlertHours"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "methods": {
+            "description": "The methods a destination can be added by on this server.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Method"
+            }
+          },
+          "push_key": {
+            "description": "What a browser's push subscription is to (its `applicationServerKey`).",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "rules": {
             "description": "The rules open to the caller: their permissions', and the GMB rules once they hold a GMB.",
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Rule"
+              "$ref": "#/components/schemas/AlertRule"
             }
           }
         },
         "required": [
-          "enabled",
+          "methods",
           "bot",
+          "email",
+          "push_key",
           "rules",
-          "destinations"
+          "destinations",
+          "hours"
+        ]
+      },
+      "AlertsRead": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "`null`: all of them.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "up_to": {
+            "description": "Nothing newer than this one: what came since was not on the caller's screen.",
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "up_to"
+        ]
+      },
+      "AlertsUnread": {
+        "type": "object",
+        "properties": {
+          "important": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "info": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "urgent": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "urgent",
+          "important",
+          "info"
         ]
       },
       "Allow": {
@@ -29922,6 +32597,38 @@
           "redirect_uri"
         ]
       },
+      "Cadence": {
+        "description": "When a destination is told.\n\n- `unread`: Once it has stayed unread in the panel for 10 minutes.\n- `hourly`: One message an hour, with what came in it.\n- `daily`: One message a day, at the person's hour.",
+        "type": "string",
+        "enum": [
+          "now",
+          "off",
+          "unread",
+          "hourly",
+          "daily"
+        ]
+      },
+      "Cadences": {
+        "description": "A cadence for each tier.",
+        "type": "object",
+        "properties": {
+          "important": {
+            "$ref": "#/components/schemas/Cadence"
+          },
+          "info": {
+            "$ref": "#/components/schemas/Cadence"
+          },
+          "urgent": {
+            "$ref": "#/components/schemas/Cadence"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "urgent",
+          "important",
+          "info"
+        ]
+      },
       "CallInput": {
         "description": "One operation of the catalog, as `search` names it, the caller's to run.",
         "type": "object",
@@ -30479,6 +33186,19 @@
           "expr"
         ]
       },
+      "ConfirmEmail": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "description": "The mailed link's.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "token"
+        ]
+      },
       "ConnectedSites": {
         "type": "object",
         "properties": {
@@ -30682,6 +33402,9 @@
       "Destination": {
         "type": "object",
         "properties": {
+          "cadences": {
+            "$ref": "#/components/schemas/Cadences"
+          },
           "dead": {
             "description": "Why nothing reaches it: a test that arrives clears it.",
             "type": [
@@ -30689,30 +33412,40 @@
               "null"
             ]
           },
-          "gmail_id": {
-            "description": "The GMB rules only for this gmail's GMBs.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
+          "filter": {
+            "$ref": "#/components/schemas/Filter"
           },
           "id": {
             "type": "integer",
             "format": "int64"
           },
           "kind": {
-            "$ref": "#/components/schemas/DestinationKind"
+            "description": "A Telegram one's.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DestinationKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "method": {
+            "$ref": "#/components/schemas/Method"
+          },
+          "private": {
+            "description": "Read by the caller alone: the only ones contact details and buttons go to.",
+            "type": "boolean"
           },
           "rules": {
-            "description": "Every rule open to the caller, on or off here.",
+            "description": "The rules at a cadence of their own there.",
             "type": "object",
             "additionalProperties": {
-              "type": "boolean"
+              "$ref": "#/components/schemas/Cadence"
             }
           },
           "title": {
-            "description": "A private chat's account, a channel's or group's title.",
+            "description": "What the caller knows it by.",
             "type": [
               "string",
               "null"
@@ -30728,12 +33461,15 @@
         },
         "required": [
           "id",
+          "method",
+          "private",
           "kind",
-          "title",
           "topic_id",
-          "gmail_id",
-          "dead",
-          "rules"
+          "title",
+          "cadences",
+          "rules",
+          "filter",
+          "dead"
         ]
       },
       "DestinationKind": {
@@ -30752,6 +33488,18 @@
           "pixel_7",
           "galaxy_s23",
           "redmi_note_14"
+        ]
+      },
+      "DiscordLink": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "Discord's consent page: it installs the bot to the caller's account, which lets it message them.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
         ]
       },
       "EditBrand": {
@@ -31103,6 +33851,18 @@
           "first_seen"
         ]
       },
+      "Family": {
+        "description": "What a rule is about, as a person sorts their alerts.",
+        "type": "string",
+        "enum": [
+          "leads",
+          "reviews",
+          "profiles",
+          "money",
+          "panel",
+          "team"
+        ]
+      },
       "Feedback": {
         "type": "string",
         "enum": [
@@ -31129,6 +33889,51 @@
           "spots",
           "role",
           "owner_gmail"
+        ]
+      },
+      "Filter": {
+        "description": "Which notes a destination is for. A facet left empty takes all.",
+        "type": "object",
+        "properties": {
+          "brands": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "uniqueItems": true
+          },
+          "gmails": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "uniqueItems": true
+          },
+          "gmbs": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "uniqueItems": true
+          },
+          "trades": {
+            "description": "Google categories, `gcid:…`.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "gmails",
+          "trades",
+          "brands",
+          "gmbs"
         ]
       },
       "Flow": {
@@ -31292,20 +34097,6 @@
           "browser",
           "tabs"
         ]
-      },
-      "GmailBody": {
-        "type": "object",
-        "properties": {
-          "gmail_id": {
-            "description": "`null`: every GMB of the caller's.",
-            "type": [
-              "integer",
-              "null"
-            ],
-            "format": "int64"
-          }
-        },
-        "additionalProperties": false
       },
       "GmailForPerson": {
         "type": "object",
@@ -35022,6 +37813,19 @@
           "meters"
         ]
       },
+      "Method": {
+        "description": "A network, and what of it an address is.\n\n- `telegram`: A chat with the bot, a channel, a group or a topic of one.\n- `discord`: The bot's direct message.\n- `discord_channel`: A channel's webhook.\n- `slack`: A channel's incoming webhook.\n- `push`: One browser's Web Push.\n- `webhook`: An https URL of theirs.",
+        "type": "string",
+        "enum": [
+          "email",
+          "telegram",
+          "discord",
+          "discord_channel",
+          "slack",
+          "push",
+          "webhook"
+        ]
+      },
       "ModelUsed": {
         "description": "The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]).",
         "type": "object",
@@ -36284,37 +39088,31 @@
         ]
       },
       "Rule": {
-        "description": "- `google_mail`: A case of Google's mail turned to a person.",
+        "description": "- `google_mail`: A case of Google's mail turned to a person.\n- `connection_lost`: A gmail's inbox no longer answers.\n- `assistant_waiting`: The assistant holds a call until the person agrees to it.\n- `release_out`: A newer version of a listing a category was taken from.\n- `trash_purge`: What was removed is about to be deleted for good.\n- `feed_stalled`: A service's feed keeps failing.\n- `meter_held`: A Google account's meter reached its stop, or its guard unlinked its billing.",
         "type": "string",
         "enum": [
           "new_lead",
           "contact_overdue",
-          "payment_received",
-          "source_silent",
           "booked",
-          "access_requested",
+          "payment_received",
           "review_new",
           "review_changed",
           "review_gone",
           "review_reappeared",
           "scan_failed",
-          "google_mail"
-        ]
-      },
-      "RulesBody": {
-        "type": "object",
-        "properties": {
-          "rules": {
-            "description": "`{\"new_lead\": true, \"review_gone\": false, …}`: the rules to change.",
-            "type": "object",
-            "additionalProperties": {
-              "type": "boolean"
-            }
-          }
-        },
-        "additionalProperties": false,
-        "required": [
-          "rules"
+          "tokens_low",
+          "browser_stopped",
+          "kickback",
+          "access_granted",
+          "access_requested",
+          "source_silent",
+          "google_mail",
+          "connection_lost",
+          "assistant_waiting",
+          "release_out",
+          "trash_purge",
+          "feed_stalled",
+          "meter_held"
         ]
       },
       "Running": {
@@ -36355,6 +39153,50 @@
           "review_archive",
           "browsers",
           "placement"
+        ]
+      },
+      "SetAlertHours": {
+        "type": "object",
+        "properties": {
+          "daily": {
+            "description": "When the daily message goes out, in minutes since midnight there.",
+            "type": "integer",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0
+          },
+          "quiet": {
+            "description": "From and to, the same; past midnight when they end before they begin. Nothing but urgent goes\nout in them, the rest as one message after.",
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0
+            },
+            "maxItems": 2,
+            "minItems": 2
+          },
+          "snoozed_until": {
+            "description": "Nothing but urgent goes out before this.",
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "tz": {
+            "description": "An IANA time zone.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "tz",
+          "daily"
         ]
       },
       "SetBrands": {
@@ -36435,6 +39277,37 @@
         "additionalProperties": false,
         "required": [
           "country"
+        ]
+      },
+      "SetDestination": {
+        "type": "object",
+        "properties": {
+          "cadences": {
+            "$ref": "#/components/schemas/Cadences"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/Filter"
+          },
+          "rules": {
+            "description": "The rules at a cadence of their own there.",
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/Cadence"
+            }
+          },
+          "title": {
+            "description": "`null`: as it is.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "cadences",
+          "rules",
+          "filter"
         ]
       },
       "SetGeneral": {
@@ -37463,6 +40336,15 @@
           "url"
         ]
       },
+      "Tier": {
+        "description": "How much a note matters: what it may interrupt.\n\n- `info`: Nice to know.\n- `important`: Today, by the person told.\n- `urgent`: Minutes cost money.",
+        "type": "string",
+        "enum": [
+          "info",
+          "important",
+          "urgent"
+        ]
+      },
       "Title": {
         "type": "object",
         "properties": {
@@ -37674,6 +40556,46 @@
           "prices",
           "confirm_above",
           "token_usd"
+        ]
+      },
+      "Told": {
+        "description": "What became of a note's message to one of a person's destinations.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "description": "When it was sent, or will be.",
+            "type": "string",
+            "format": "date-time"
+          },
+          "destination_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "$ref": "#/components/schemas/ToldState"
+          }
+        },
+        "required": [
+          "destination_id",
+          "state",
+          "at",
+          "error"
+        ]
+      },
+      "ToldState": {
+        "description": "- `dead`: No try reached it.\n- `dropped`: Given up before a try: read first, or stale.",
+        "type": "string",
+        "enum": [
+          "pending",
+          "sent",
+          "dead",
+          "dropped"
         ]
       },
       "Traded": {
@@ -38919,8 +41841,30 @@
           "type": "object"
         }
       },
+      "alert_settings": {
+        "description": "Where the caller's alerts go, when, and which count as what.",
+        "params": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "path": "/user/alerts/settings",
+        "query": {
+          "properties": {
+            "confirm": {
+              "description": "A mailed link's token: the address it proves.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [],
+          "type": "object"
+        }
+      },
       "alerts": {
-        "description": "Where the caller's alerts go, and which.",
+        "description": "The caller's alerts, newest first.",
         "key": "e",
         "params": {
           "properties": {},
@@ -38929,7 +41873,49 @@
         },
         "path": "/user/alerts",
         "query": {
-          "properties": {},
+          "properties": {
+            "family": {
+              "description": "What a rule is about, as a person sorts their alerts.",
+              "enum": [
+                "leads",
+                "reviews",
+                "profiles",
+                "money",
+                "panel",
+                "team",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "open": {
+              "description": "The one opened.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "tier": {
+              "description": "How much a note matters: what it may interrupt.",
+              "enum": [
+                "info",
+                "important",
+                "urgent",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "unread": {
+              "description": "The unread alone.",
+              "type": "boolean"
+            }
+          },
           "required": [],
           "type": "object"
         }

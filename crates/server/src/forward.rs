@@ -90,7 +90,7 @@ const ROUTES: [Route; 6] = [
 ];
 
 /// The conductor's own prefixes: never a page's, nor a kit area's.
-const OWN: [Path; 14] = [
+const OWN: [Path; 15] = [
 	Path {
 		prefix: "/api",
 		rate_limited: false,
@@ -104,6 +104,12 @@ const OWN: [Path; 14] = [
 	// open to everyone: the edge's limit is its only guard
 	Path {
 		prefix: "/api/queries_cache",
+		rate_limited: true,
+		published: true,
+	},
+	// mail's one-click unsubscribe
+	Path {
+		prefix: "/api/alerts",
 		rate_limited: true,
 		published: true,
 	},

@@ -1,8 +1,10 @@
+mod alerts;
 mod gbp_lifecycle;
 mod gmbs;
 mod inbox;
 mod mail;
 mod must_haves;
+mod own_alerts;
 mod schema;
 mod sessions;
 mod trash;

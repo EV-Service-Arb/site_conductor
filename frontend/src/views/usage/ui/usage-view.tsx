@@ -35,10 +35,10 @@ export function UsageView() {
       <Access />
       <UsageCard />
       <Section title={t(account.integrations, "Integrations")}>
-        <ViewLink className="text-sm text-ink hover:underline" to={{ view: "alerts", params: {} }}>
+        <ViewLink className="text-sm text-ink hover:underline" to={{ view: "alert_settings", params: {} }}>
           {t(account.alerts, "Alerts")}
         </ViewLink>
-        <p className="text-sm text-ink-soft">{t(account.alerts.hint, "Where your alerts go: your Telegram, channels and groups.")}</p>
+        <p className="text-sm text-ink-soft">{t(account.alerts.hint, "Where your alerts go, and how soon: your Telegram, email, phone, channels.")}</p>
       </Section>
     </PageFrame>
   );

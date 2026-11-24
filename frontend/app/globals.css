@@ -16,6 +16,9 @@
   --grid-site-source-form: 1fr 12rem 1fr 1fr auto;
   --grid-account-row: 8rem 1fr;
   --grid-ledger-row: 5rem 1fr auto;
+  --grid-alert-place: 1.5rem 2.25rem minmax(0, 1fr);
+  --grid-alert-matrix: 1.5rem 2.25rem minmax(0, 1fr) repeat(3, 9rem);
+  --grid-alert-facet: 6rem minmax(0, 1fr);
 }
 
 html,

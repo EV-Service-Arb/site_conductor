@@ -53,7 +53,8 @@ function PanelBody({ bare, children }: { bare: boolean; children: ReactNode }) {
   return (
     <MeProvider me={me.data}>
       {bare ? children : <ShellFrame onForbidden={() => setAccessLost(true)}>{children}</ShellFrame>}
-      <Toaster position="bottom-right" />
+      {/* over the hotbar, whose urgent strip holds the buttons to press */}
+      <Toaster position="bottom-right" className="mb-12" />
     </MeProvider>
   );
 }

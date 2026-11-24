@@ -22,7 +22,7 @@ use tower_http::timeout::TimeoutLayer;
 
 use crate::{
 	access, admin,
-	alerts::{self, Telegram},
+	alerts::{self, Alerting},
 	api::{self, Code},
 	areas, assistant, brands, browser,
 	catalog::Catalog,
@@ -106,7 +106,7 @@ pub fn app(
 	forward: Option<Forward>,
 	grafana: Option<&Grafana>,
 	limits: Limits,
-	telegram: Option<Telegram>,
+	alerting: Option<Alerting>,
 	browsers: Option<browser::Connected>,
 	model: Option<Model>,
 	sandbox: Sandbox,
@@ -129,6 +129,7 @@ pub fn app(
 	// A call waits as long as the slowest operation it runs.
 	let agents = bounded(oauth::routes(sign_in.clone()), limits.auth_concurrent, limits.auth_timeout).merge(bounded(mcp::routes(agents), limits.api_concurrent, Duration::from_secs(600)));
 	let pages = forward.as_ref().map(|f| kit::Pages::new(f.services().clone()));
+	let opened = alerting.clone();
 	let state = ApiState {
 		catalog,
 		tools: tools.clone(),
@@ -138,7 +139,7 @@ pub fn app(
 		placement,
 		pages: pages.clone(),
 		probe: connected::probe_client(),
-		telegram,
+		alerting,
 		browsers,
 		model,
 	};
@@ -176,6 +177,7 @@ pub fn app(
 		.merge(auth)
 		.merge(agents)
 		.merge(queries_cache::routes(sign_in.panel.clone(), &limits, forward.as_ref().map(|f| f.services().vouchers())))
+		.merge(alerts::open_routes(sign_in.clone(), opened, &limits))
 		.nest("/api/v1", v1);
 	let app = match forward {
 		Some(forward) => app
@@ -247,8 +249,8 @@ pub(crate) struct ApiState {
 	pub(crate) placement: Option<placement::Placement>,
 	/// What the Connected sites page asks the landings with.
 	pub(crate) probe: reqwest::Client,
-	/// With `TELEGRAM_BOT_TOKEN`.
-	pub(crate) telegram: Option<Telegram>,
+	/// With the forward configured: the hub reads the services' feeds.
+	pub(crate) alerting: Option<Alerting>,
 	/// With GOLOGIN_TOKEN and PANEL_BROWSERS_URL.
 	pub(crate) browsers: Option<browser::Connected>,
 	/// The assistant's Claude.
@@ -287,7 +289,7 @@ impl Default for Limits {
 /// At most `concurrent` at once across `routes`, past it `503` rather than a queue; at most
 /// `timeout` each. The semaphore is shared: `Router::layer` wraps every route on its own, and
 /// a plain concurrency limit would give each route a budget of its own.
-fn bounded<S: Clone + Send + Sync + 'static>(routes: Router<S>, concurrent: usize, timeout: Duration) -> Router<S> {
+pub(crate) fn bounded<S: Clone + Send + Sync + 'static>(routes: Router<S>, concurrent: usize, timeout: Duration) -> Router<S> {
 	let permits = Arc::new(tokio::sync::Semaphore::new(concurrent));
 	routes.layer(
 		ServiceBuilder::new()

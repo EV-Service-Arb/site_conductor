@@ -1,6 +1,11 @@
 import type { Alerts } from "@/shared/api/schema";
 
-/** Whether nothing reaches the caller: the bot is there, and no own chat is linked, or a destination is dead. */
+/** Whether an urgent alert reaches the caller nowhere but in the panel. */
 export function unreached(a: Alerts): boolean {
-  return a.enabled && (!a.destinations.some((d) => d.kind === "private") || a.destinations.some((d) => d.dead !== null));
+  return a.methods.length > 0 && !a.destinations.some((d) => d.dead === null && d.cadences.urgent !== "off");
+}
+
+/** Whether none reaches them at once: the ones they have wait. */
+export function late(a: Alerts): boolean {
+  return !unreached(a) && a.methods.length > 0 && !a.destinations.some((d) => d.dead === null && d.cadences.urgent === "now");
 }

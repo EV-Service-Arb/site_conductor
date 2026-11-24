@@ -277,6 +277,11 @@ impl Panel {
 			db::append(&mut tx, r, now).await?;
 		}
 		db::put_bill(&mut tx, account, &bill, now).await?;
+		let mut gauges = Vec::with_capacity(meters.len());
+		for m in meters {
+			gauges.push(gauge(&mut tx, account, m, now).await?);
+		}
+		self.tell_meters(&mut tx, account, &gauges, bill.guard.as_deref().unwrap_or_default(), now).await?; // the guard never ticked there: it did nothing
 		tx.commit().await.wrap_err("committing the meters' readings")?;
 		Ok(readings.len())
 	}

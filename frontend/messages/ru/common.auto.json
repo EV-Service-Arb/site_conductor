@@ -107,10 +107,6 @@
     "en": "Alerts",
     "t": "Оповещения"
   },
-  "account.alerts.hint": {
-    "en": "Where your alerts go: your Telegram, channels and groups.",
-    "t": "Куда приходят оповещения: ваш Telegram, каналы и группы."
-  },
   "account.business.client": {
     "en": "Client",
     "t": "Клиент"
@@ -563,77 +559,25 @@
     "en": "Prices, spending and everyone's balance",
     "t": "Цены, расходы и балансы всех"
   },
-  "alerts.chats": {
-    "en": "Channels and groups",
-    "t": "Каналы и группы"
-  },
-  "alerts.chats.add": {
-    "en": "Channel, group or topic",
-    "t": "Канал, группа или тема"
-  },
-  "alerts.chats.addButton": {
+  "alerts.add": {
     "en": "Add",
     "t": "Добавить"
   },
-  "alerts.chats.hint": {
-    "en": "Add {bot} to it as an admin, then paste @channel, its -100… id, or <group id>/<topic id>.",
-    "t": "Добавьте туда {bot} администратором, затем вставьте @канал, его id -100… или <id группы>/<id темы>."
+  "alerts.add.telegram.chat": {
+    "en": "Channel, group or topic",
+    "t": "Канал, группа или тема"
   },
-  "alerts.chats.linkFirst": {
-    "en": "Connect your own Telegram first: the bot checks with it that you run the channel.",
-    "t": "Сначала подключите свой Telegram: по нему бот проверяет, что вы администратор канала."
-  },
-  "alerts.chats.noPii": {
-    "en": "Without contact details or buttons: whoever is in the chat reads it.",
-    "t": "Без контактов и кнопок: это читают все в чате."
+  "alerts.add.telegram.own": {
+    "en": "Your chat",
+    "t": "Ваш чат"
   },
   "alerts.connect": {
     "en": "Connect Telegram",
     "t": "Подключить Telegram"
   },
-  "alerts.connect.hint": {
-    "en": "Opens the bot: press Start there.",
-    "t": "Откроется бот: нажмите там «Старт»."
-  },
   "alerts.dead": {
     "en": "Nothing reaches it: {why}. Fix it, then Test.",
     "t": "Сюда ничего не доходит: {why}. Исправьте и нажмите «Проверить»."
-  },
-  "alerts.description": {
-    "en": "Where your alerts go, and which go where.",
-    "t": "Куда приходят оповещения и какие куда."
-  },
-  "alerts.gmail": {
-    "en": "Reviews of",
-    "t": "Отзывы"
-  },
-  "alerts.gmail.all": {
-    "en": "Every gmail",
-    "t": "Всех gmail"
-  },
-  "alerts.kind.channel": {
-    "en": "channel",
-    "t": "канал"
-  },
-  "alerts.kind.group": {
-    "en": "group",
-    "t": "группа"
-  },
-  "alerts.kind.private": {
-    "en": "Your chat",
-    "t": "Ваш чат"
-  },
-  "alerts.none": {
-    "en": "Your access has nothing to alert you of.",
-    "t": "С вашим доступом оповещать не о чем."
-  },
-  "alerts.off": {
-    "en": "Telegram is not set up on this server.",
-    "t": "Telegram на этом сервере не настроен."
-  },
-  "alerts.own": {
-    "en": "Your Telegram",
-    "t": "Ваш Telegram"
   },
   "alerts.remove": {
     "en": "Remove",

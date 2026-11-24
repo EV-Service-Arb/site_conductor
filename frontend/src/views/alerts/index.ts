@@ -1,1 +1,2 @@
-export { AlertsView } from "./ui/alerts-view";
+export { AlertsView } from "./ui/inbox-view";
+export { AlertSettingsView } from "./ui/settings-view";

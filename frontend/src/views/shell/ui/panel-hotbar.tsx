@@ -10,6 +10,7 @@ import { useAt } from "@/shared/lib/location";
 import { type T, useT, hotbar, placement } from "@/shared/i18n";
 import { live as liveKeys } from "../model/i18n";
 import { type LiveStatus, useLiveStatus } from "@evinvest/api/react";
+import { useTakeover } from "@/features/alert-live";
 import { RunningBrowsers } from "@/features/browser-session";
 import { MapPanel, MapPreview } from "@/features/placement-overlay";
 import { setBase, showPlaces, useBase, usePlacesShown } from "@/shared/map";
@@ -38,6 +39,7 @@ export function PanelHotbar() {
   const open = useOpenWindows();
   const label = useWindowLabel();
   useTrackOpen();
+  const takeover = useTakeover();
   const [kits, showKits] = useState(false);
   const satellite = useBase() === "satellite";
   const togglePlaces = () => showPlaces(!places);
@@ -84,6 +86,7 @@ export function PanelHotbar() {
   return (
     <Hotbar
       actions={actions}
+      {...(takeover !== undefined && { takeover })}
       status={
         <>
           <RunningBrowsers />

@@ -188,6 +188,7 @@ impl Panel {
 	pub async fn purge(&self, now: Timestamp, keep_by_default: bool) -> eyre::Result<()> {
 		let mut tx = self.store.begin_write().await?;
 		db::purge(&mut tx, now, keep_by_default).await?;
+		self.tell_purges(&mut tx, keep_by_default, now).await?;
 		tx.commit().await.wrap_err("committing a purge")
 	}
 }

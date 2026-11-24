@@ -240,7 +240,7 @@ async fn photos_of(panel: &Panel, caller: &Caller, brand: i64) -> ApiResult<Phot
 }
 
 /// A logo; its URL stays as it changes.
-struct Png;
+pub(crate) struct Png;
 
 impl Format for Png {
 	const CACHE: &'static str = "private, no-cache";

@@ -13,17 +13,23 @@ use clap::{Parser, Subcommand};
 use ev_lib::error_monitoring;
 use eyre::WrapErr;
 use sa_auth::Catalog;
+use sa_core::notify::Locale;
 use sa_panel::{Panel, alerts::Hub, seal::DataKey, store::Store};
 use sa_server::{
-	alerts::{self, Telegram},
+	alerts::{self, Alerting},
 	concierge::{Concierge, DevIdentity},
 	forward::{Forward, Services},
 	grafana::Grafana,
 	http, live, mail,
+	outlets::{Discord, Networks},
 	signin::{SignIn, SignInConfig},
-	telegram::{self, BotApi, BotName},
+	telegram::BotName,
 	tokens, trash,
 	web::{self, Files},
+};
+use social_networks_adapters::notify::{
+	email::{Mailer, Smtp},
+	telegram::{BASE, Bot},
 };
 
 use crate::settings::Settings;
@@ -206,9 +212,13 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 					})?),
 			};
 			let forward = settings.forward()?.map(Services::new);
-			let telegram = settings.telegram()?;
+			let networks = AlertSettings {
+				telegram: settings.telegram()?,
+				smtp: settings.smtp()?,
+				discord: settings.panel_public_origin.as_deref().map(|o| settings.discord(url::Url::parse(o)?.join(alerts::DISCORD_CALLBACK)?)).transpose()?.flatten(),
+			};
 			eyre::ensure!(
-				telegram.is_none() || forward.is_some(),
+				networks.telegram.is_none() || forward.is_some(),
 				"TELEGRAM_BOT_TOKEN needs the forward (PANEL_ASSERTION_KEY and the services' URLs): the hub reads the services' feeds"
 			);
 			let grafana = settings.grafana()?;
@@ -236,7 +246,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				panel,
 				identity,
 				forward,
-				telegram,
+				networks,
 				grafana,
 				settings.web()?,
 				settings.browsers()?,
@@ -301,6 +311,13 @@ async fn queries_cache(store: &Store, cmd: QueriesCacheCmd) -> eyre::Result<()> 
 	Ok(())
 }
 
+/// What alerts go out through, as configured.
+struct AlertSettings {
+	telegram: Option<settings::TelegramSettings>,
+	smtp: Option<Smtp>,
+	discord: Option<Discord>,
+}
+
 /// Who signs people in.
 enum Identity {
 	Concierge(settings::SignInSettings),
@@ -313,7 +330,7 @@ async fn serve(
 	panel: Panel,
 	identity: Identity,
 	services: Option<Services>,
-	telegram: Option<settings::TelegramSettings>,
+	networks: AlertSettings,
 	grafana: Option<settings::GrafanaSettings>,
 	files: Option<Files>,
 	browsers: Option<sa_server::browser::Connected>,
@@ -363,6 +380,7 @@ async fn serve(
 	let (stop, stopped) = tokio::sync::watch::channel(false);
 	let bus = panel.bus().clone();
 	let cabinet = config.concierge_origin.clone();
+	let origin = config.panel_origin.clone();
 	let hub_panel = panel.clone();
 	let hub_concierge = concierge.clone();
 	let engine = panel.clone();
@@ -373,10 +391,7 @@ async fn serve(
 		panel: panel.clone(),
 		model: model.clone(),
 		by_itself: production,
-		tell: match &telegram {
-			Some(tg) => Some((tg.locale, config.panel_origin.parse().wrap_err("the panel's origin is not a URL")?)),
-			None => None,
-		},
+		tell: Some(networks.telegram.as_ref().map_or(Locale::En, |tg| tg.locale)),
 	};
 	let sign_in = SignIn::new(panel, concierge, config);
 	let forward = match &services {
@@ -386,27 +401,30 @@ async fn serve(
 			None
 		}
 	};
-	let bot = match (telegram, &forward) {
-		(Some(tg), Some(forward)) => {
+	let alerting = match &forward {
+		Some(forward) => {
+			let origin: url::Url = origin.parse().wrap_err("the panel's origin is not a URL")?;
+			let mut outlets = Networks::try_new(&hub_panel.alerts_push_seed(), &origin)?;
+			let (mut bot, mut locale) = (BotName::default(), Locale::En);
+			if let Some(tg) = networks.telegram {
+				outlets.telegram = Some(Bot::try_new(BASE, zeroize::Zeroizing::new(tg.token))?);
+				(bot, locale) = (BotName::new(tg.username), tg.locale);
+			}
+			outlets.email = networks.smtp.map(Mailer::try_new).transpose()?;
+			outlets.discord = networks.discord;
+			tracing::info!(methods = ?outlets.methods(), "alerts on");
 			let hub = Hub {
 				panel: hub_panel,
-				bot: BotApi::try_new(telegram::API_BASE, zeroize::Zeroizing::new(tg.token))?,
+				outlets,
 				concierge: hub_concierge,
 				feeds: forward.clone(),
-				locale: tg.locale,
+				locale,
 				cabinet: cabinet.parse().wrap_err("the concierge origin is not a URL")?,
+				origin,
 			};
-			tracing::info!("alerts on, by Telegram");
-			Some(Telegram {
-				hub,
-				name: BotName::new(tg.username),
-			})
+			Some(Alerting { hub, bot })
 		}
-		(Some(_), None) => unreachable!("refused before serve"),
-		(None, _) => {
-			tracing::warn!("TELEGRAM_BOT_TOKEN unset: alerts off");
-			None
-		}
+		None => None,
 	};
 	let grafana = match (grafana, &forward) {
 		(Some(g), Some(forward)) => {
@@ -439,7 +457,7 @@ async fn serve(
 		forward,
 		grafana.as_ref().map(|(g, _)| g),
 		http::Limits::default(),
-		bot.clone(),
+		alerting.clone(),
 		browsers,
 		Some(model),
 		sandbox.clone(),
@@ -465,9 +483,9 @@ async fn serve(
 		served
 	};
 	let hubs = async {
-		let bot = async {
-			if let Some(t) = bot {
-				alerts::run(t, stopped.clone()).await;
+		let alerting = async {
+			if let Some(a) = alerting {
+				alerts::run(a, stopped.clone()).await;
 			}
 		};
 		let feed = async {
@@ -497,7 +515,7 @@ async fn serve(
 		// a dev's holds would overwrite what the guard holds prod's accounts to
 		let meters = sa_server::meters::run(metered, readers, production, stopped.clone());
 		let workers = sandbox.run(stopped.clone());
-		tokio::join!(bot, feed, usage, inboxes, mail, tokens, grafana, purge, meters, catalog, workers);
+		tokio::join!(alerting, feed, usage, inboxes, mail, tokens, grafana, purge, meters, catalog, workers);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

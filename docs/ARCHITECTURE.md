@@ -39,7 +39,7 @@ crates/core/             no I/O: the queries cache's wire, a GBP's states and mo
                          snapshot the services are told (`gbp`; review_archive takes it too), Google's
                          mail: its kinds, its cases, whose turn one is (`mail`),
                          brand ids, the HMAC of a signed request and its window, the
-                         conductor's own alert messages, the buttons' signed data, retry and
+                         conductor's own alert messages, when a destination is told and of what (`alerts`), the buttons' signed data, retry and
                          pacing, tokens' renewal and a charge's split, the charge feed's
                          page (`tokens::ChargePage`; review_archive takes it too), and what
                          costs (`prices`: every tool a vendor bills us or we bill a person for, its
@@ -50,9 +50,9 @@ crates/panel/            the engine: `Panel` (sources and their authentication, 
                          requests, the hubs' state), `seal` (XChaCha20-Poly1305 at rest), `store`
                          (SQLite, migrations/ applied on open, writes BEGIN IMMEDIATE; the queries
                          cache among it), `alerts`
-                         (the hub: access, destinations, rules, the feeds fanned out; the
-                         Directory and Feeds ports), `telegram` (the method: links, chats, outbox,
-                         delivery, buttons; the Bot port), `live` (the in-process bus), `gmbs`,
+                         (the hub: access, notes, inboxes, destinations, the feeds told; the
+                         Directory, Feeds and Outlets ports), `own_alerts` (what the conductor tells
+                         itself), `deliver` (the outbox sent), `telegram` (links, chats, buttons), `live` (the in-process bus), `gmbs`,
                          `connections` (a gmail's inbox, Maps key and Business Profile client and grant; who pays a Places request), `inbox` (its mail
                          with Google followed into its GBPs' logs; the Mailbox port), `mail` (that mail as
                          cases, their readings and drafts; the Smtp port), `claude` (a person's own
@@ -147,7 +147,8 @@ crates/server/           the `panel` binary: `serve`, `migrate`, `gen-data-key`;
                          library in process; a pull held, what the study lacks bought, charged
   src/alerts.rs          /api/v1/alerts; the services' feeds as the hub reads them; the hub's
                          work in `serve`
-  src/telegram.rs        the Bot API, its long poll
+  src/outlets.rs         the networks alerts go out through, a message's shape on each
+  src/telegram.rs        the bot's long poll
   src/web.rs             the front end's static export (PANEL_WEB_DIR), behind every other route
   src/settings.rs        the environment (ev_lib `settings!`)
 crates/gen/              `nix run .#gen`: the `/api/v1` document into frontend/src/shared/api/openapi.json,
@@ -259,6 +260,7 @@ second block below to it.
 /api                      public                  the conductor's own, and nothing else's
 /api/v1                   public
 /api/queries_cache        public, rate-limited    open to everyone
+/api/alerts               public, rate-limited    mail's one-click unsubscribe, open
 /api/ingest               in-cluster
 /api/kit                  in-cluster
 /auth                     public, rate-limited
@@ -576,8 +578,17 @@ PUT    /sources/{key_id}/origin             sources:manage, fresh
 POST   /access/requests
 GET    /access/requests/mine
 GET    /alerts
-POST   /alerts/telegram/{link,chats}        own:credentials, fresh
-PUT    /alerts/destinations/{id}/{rules,gmail}
+GET    /alerts/inbox
+GET    /alerts/inbox/{id}
+GET    /alerts/inbox/{id}/photo
+POST   /alerts/inbox/read
+POST   /alerts/inbox/{id}/press                  fresh
+PUT    /alerts/rules/{rule}                      the caller's tier for it
+PUT    /alerts/hours
+POST   /alerts/telegram/{link,chats}             own:credentials, fresh
+POST   /alerts/email{,/confirm}                  own:credentials, fresh
+POST   /alerts/{discord/link,discord/channels,slack,push,webhooks}   own:credentials, fresh
+PUT    /alerts/destinations/{id}
 POST   /alerts/destinations/{id}/test
 DELETE /alerts/destinations/{id}
 GET    /gmails
@@ -1306,75 +1317,105 @@ published study (sha = its Definition's id) ── on a listing version
 
 ## Alerts
 
-One hub: rules, their audiences, destinations and the fan-out are the conductor's; the services
-only publish notes (`sa_alerts`), and Telegram is one method of reaching a destination
-(`TELEGRAM_BOT_TOKEN`; it needs the forward). Without a bot, nothing is sent.
+A **note** says something happened; its **rule** (`sa_alerts`) says whom it is for and how much it
+matters, its **tier**. A person reads their notes in the panel (the inbox) and is told outside it at
+**destinations**, each with a **cadence** per tier and a **filter**. The hub is the conductor's: rules,
+audiences, inboxes, destinations, the outbox. The services only publish notes; the networks'
+endpoints, payloads and failures are `social_networks_adapters::notify`'s (valeratrades/social_networks).
 
 ```text
-rule               feed            audience                                         default
-new_lead           sites           sa:sites:work:leads:edit                         on
-contact_overdue    sites           sa:sites:work:leads:edit                         on
-booked             sites           sa:sites:work:leads:edit                         on
-payment_received   sites           sa:admin:sources:manage                          off
-source_silent      conductor       sa:admin:sources:manage                          off
-access_requested   conductor       every permission of sa:admin                     on
-review_gone        review_archive  the owners of the GMBs the note names            on
-review_new, review_changed, review_reappeared, scan_failed   (the same)             off
-google_mail        conductor       the owners of the case's GBP, else of its gmail's    on
+ sites, review_archive ─ feed ─┐                  ┌─▶ inbox ── bell · /user/alerts · toast · urgent takes the hotbar
+ the conductor ─ Panel::tell ──┴─▶ note ─ tier ───┤
+                                  (rule, event)   └─▶ each destination ─ filter ─ cadence ─ hours ─▶ outbox ─▶ network
+```
+
+```text
+tier       means                 here
+urgent     minutes cost money    takes the hotbar; pierces quiet hours and snooze
+important  today, by you         a toast
+info       nice to know          counted nowhere but the inbox
+a note's: the person's own for the rule, else the note's, else the rule's
+
+rule                                                          from            audience                              tier
+new_lead, contact_overdue                                     sites           sa:sites:work:leads:edit              urgent
+booked                                                        sites           sa:sites:work:leads:edit              important
+payment_received                                              sites           sa:admin:sources:manage               info
+review_gone                                                   review_archive  the owners of the GMBs it names       important
+review_new, review_changed, review_reappeared, scan_failed    review_archive  (the same)                            info
+google_mail, connection_lost                                  conductor       the gmail's owner                     important
+tokens_low, browser_stopped, assistant_waiting                conductor       the person                            important
+kickback, access_granted, release_out, trash_purge            conductor       the person                            info
+access_requested                                              conductor       every permission of sa:admin          important
+source_silent, feed_stalled, meter_held                       conductor       sa:admin:sources:manage               important
+
+method            address                                      private  proved by
+telegram          own chat, channel, group, topic              own chat /start; admin + a test
+email             the account's verified address, or another   yes      concierge; a link mailed there
+discord           the bot's direct message                     yes      Discord's consent
+discord_channel   a channel's webhook                          no       a test
+slack             a channel's incoming webhook                 no       a test
+push              one browser (Web Push)                       yes      a test
+webhook           an https URL of theirs: JSON, HMAC-signed    no       a test
+
+cadence    now · unread (still unread in the panel 10 min later) · hourly · daily (one message each) · off
+starting   private: now, now, off · email: unread, hourly, daily · webhook: now · any other: now, now, daily
 ```
 
 ```text
 feed (2 s)        GET <service>/api/conductor/notifications?after=<cursor>&limit=500 (Conductor), each
                   service under its own cursor → one write transaction, taken only from where the
-                  cursor stands: each note checked against its feed (its rule's, its GMBs and photo
-                  as its rule says, its buttons callable), claimed (rule, event) and queued for its
-                  audience, the cursor moved to the page's `next`; a note that fails fails the page,
-                  the cursor stays (loud, never skipped); 404: a service not cut over, said once,
-                  asked again every 60 s
-own (2 s)         sources silent ≥ 24 h (sites' last receipt per key, else the key's creation; once
-                  per full day of it), access requests (once a day per user and need)
-own (60 s)        Google's mail: a case turned to a person, once per message and turn, for 6 days
-audience          a destination: the rule on there, its user's access confirmed within the hour;
-                  a permission rule: their permissions open it; a GMB rule: they own a GMB the note
-                  names, the GMB on, it and its gmail not removed, the destination's gmail theirs if
-                  it is scoped to one
-delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule waiting for one
-                  destination folded into one summary without PII; claim in one write transaction
-                  (nothing while the outbox is paused): ≤ 25 tries started in any second, one per
-                  private chat per second, one per channel or group per 3 s, none to a chat with a
-                  send in flight; leased 60 s → the user's access checked again → sendMessage, or
-                  sendPhoto with the photo fetched from the note's service (Conductor) → sent |
-                  retry | dead
+                  cursor stands: each note checked against its feed (its rule's, its GMBs, link and photo
+                  as its rule says, its buttons callable) and told, the cursor moved to the page's
+                  `next`; a note that fails fails the page, the cursor stays (loud, never skipped); 404:
+                  a service not cut over, said once, asked again every 60 s
+own               told in the write that made it so, or found due every 2 s (`own_alerts`); Google's mail
+                  every 60 s: a case turned to a person, once per message and turn, for 6 days
+told              once per (rule, event): kept 30 days, sealed; in the inbox of each person of its
+                  audience; queued for each destination of theirs reached, its filter passed, their access
+                  confirmed within the hour
+filter            gmails, trades, brands, GBPs: a note passes when one GBP it names is in every facet
+                  set; one naming none passes
+hours             the person's, in their time zone: quiet hours and snooze hold all but urgent, then send
+                  it as one message
+read              in the panel, by its link, by a button pressed: read everywhere, and what was still
+                  waiting for it is given up
+delivery (0.5 s)  lead messages noted > 1 h ago dropped; > 20 of one rule waiting for one destination go as
+                  one message; claim in one write transaction, most urgent first: ≤ 25 tries of a method
+                  started in any second (none while it is paused), one per private chat per second, one
+                  per any other address per 3 s, none to one with a send in flight; leased 60 s → the
+                  user's access checked again → sent | retry | dead
 ```
 
-- **Destinations.** A user's own private chat (one), and channels, groups and forum topics they
-  add. Each has its rules (a rule without a row is at its default) and may be scoped to one of
-  the user's gmails for the GMB rules.
 - **Private chat.** `POST /api/v1/alerts/telegram/link` (GetMe asked afresh; 256 random bits,
   base64url; SHA-256 stored with the caller's permissions, 10 min) → `t.me/<bot>?start=<token>`;
   `/start <token>`, in a private chat, not forwarded: the token redeemed once, the chat the user's
-  private destination (a chat linked before is let go, the rules kept); a chat that is another
+  private destination (a chat linked before is let go, what they set kept); a chat that is another
   account's is refused ("/stop first"), the token kept. `/stop` removes it.
 - **Channels, groups, topics.** A paste (`@channel`, `-100<id>`, `<group>/<topic>`) is taken
   only after `getChat` sees it, `getChatMember` says the user's own Telegram account (their
   private chat's id; linked first) administers it, and a test went out there: a refusal stores
-  nothing. They get the note's non-PII text, never buttons, never the conductor's access
-  requests. One destination per chat and topic.
-- **A note is its service's rendering**: its text and Telegram entities, a PII text sent only to
-  private chats of holders of `sa:sites:work:pii:see`, the user who is not told (`skip_user`), its
-  buttons (`{id, label, pressed, call: {operation, path: its parameters, body}, leaves}`, sites'; the
-  operation `op_id` of the service's table, resolved in the catalog as `<service>.<operation>`, a write),
-  the GMBs it names, a photo path (`review_gone`'s capture, ≤ 1024 UTF-16 of caption, no
-  buttons). Queued texts are sealed under `PANEL_DATA_KEY` per chat and topic and dropped once
-  sent or dead; no parse mode, link previews off.
+  nothing. One destination per chat and topic.
+- **Mail** goes through `SMTP_*`; each carries a one-click unsubscribe (RFC 8058,
+  `POST /api/alerts/unsubscribe?token=`, open: the sealed token is its only say; a GET is a page with the
+  button, since mail scanners open links). Another address is proved by a link mailed there and opened
+  signed in as who asked.
+- **Discord's direct message** needs the bot (`DISCORD_*`) installed to the person's account: OAuth,
+  back at `/auth/discord/alerts`.
+- **Push** is to a key made of `PANEL_DATA_KEY`; a browser is one person's, whoever subscribed last.
+- **A webhook** is only ever connected to at a public address, and never redirected; a delivery is
+  signed `x-signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>">`.
+- **A note's text**: the one for anyone, the one for a private reader, the one for a private reader who
+  holds `sa:sites:work:pii:see`, whichever the reader may read when they read it; buttons and links out
+  go to private readers only. A channel gets no access request and no mail of Google's.
 - **Updates by long polling.** One process polls, under a lease in `telegram_poller` (60 s,
   renewed every poll); the offset is stored there after each update, and every update is
   idempotent, so one handled twice across a takeover does nothing twice.
-- **Retries.** 429 pauses the whole outbox for `retry_after` and costs the message no try; 5xx,
-  timeouts and a photo not fetched back off from 10 s, doubling, to 15 min; 10 tries, then dead.
-  403 and 400 "chat not found" / "user is deactivated" mark every destination in the chat dead
-  until a send there succeeds again (a link, a test). Any other 4xx is dead at once; so is a
-  queued message that no longer opens.
+- **Retries.** 429 of Telegram's, the mail relay's or Discord's bot pauses the whole method for as long as
+  it says and costs the message no try; 429 of a webhook's, 5xx, timeouts and a photo not fetched back off
+  from 10 s, doubling, to 15 min; 10 tries, then dead. An address that is gone (the bot blocked, the chat or
+  the webhook deleted, the mailbox unknown, the subscription over) marks the destination — of Telegram
+  every one in the chat — dead until a send there succeeds again (a link, a test). Any other refusal is
+  dead at once; so is a message that no longer opens.
 - **Quiet.** The bot answers commands in private chats only; its unsolicited replies go at most
   once per chat per 10 min.
 - **Who gets a message: access concierge confirmed within the hour.** The hub keeps per user the
@@ -1388,12 +1429,14 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   derived from `PANEL_DATA_KEY`, bound to the chat; a message sent with one-letter buttons
   (`t`, `n`) presses as `take`, `no_answer`. The message must be that chat's, the chat the
   private chat of the message's user, and the user's access is asked of concierge at the press —
-  with no live session to ask with, the answer is "open the panel". The button's call goes to
-  its service through the forward as that user (a User assertion, that service's slice) with `Idempotency-Key: tg/<outbox
-  id>/<button id>`, so a press repeated, or its update redelivered, records nothing twice. 201:
-  the message gains "{pressed}: {name}" and keeps the buttons the press `leaves`; 200, 400, 409
-  "already recorded"; 404 "not found"; 403 "no access"; anything else "try again".
-- Language of the conductor's own texts: `TELEGRAM_LOCALE` (`ru` default, `en`).
+  with no live session to ask with, the answer is "open the panel". The panel's own buttons press the
+  same. The button's call goes to its service through the forward as that user (a User assertion, that
+  service's slice) with `Idempotency-Key: alert/<note>/<user>/<button id>`, so a press repeated, from
+  either side, or its update redelivered, records nothing twice. 201: the message gains
+  "{pressed}: {name}" and keeps the buttons the press `leaves`; 200, 400, 409 "already recorded"; 404
+  "not found"; 403 "no access"; anything else "try again".
+- Language of the conductor's own texts: `TELEGRAM_LOCALE` (`ru` default with a bot, else English), what
+  `own_alerts` tells English.
 
 ## Invariants
 
@@ -1412,8 +1455,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   listener, on GETs, for that query's life. The public listener never takes a token.
 - **A source is only ever revoked.** `sources` refuses DELETE and any UPDATE but of `revoked_at`
   and a site's `origin` set once from NULL (only a `site` has one); a key id is never reused.
-- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, queued Telegram
-  texts, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, its mail with Google and the replies to it, and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
+- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, alerts' notes and destinations' addresses, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, its mail with Google and the replies to it, and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
 - **No price beside its use.** What a person is charged is an item of `sa_core::prices` at its
@@ -1465,7 +1507,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   missing and applies the migrations each lacks first (`panel migrate` does only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
-  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `GOLOGIN_TOKEN`,
+  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `SMTP_PASSWORD`, `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_SECRET`, `GOLOGIN_TOKEN`,
   `MULTILOGIN_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`), through
   `ev_lib::settings`, and the Google accounts' keys and readers, which the config file names
   (`{ env = "…" }`); a person's (a gmail's IMAP password, its Maps key, its proxy, its Business Profile client and grant, their Claude token) through the API, sealed at
@@ -1548,12 +1590,16 @@ delivery (0.5 s)  lead messages noted > 1 h ago dead ("stale"); > 20 of one rule
   memory, so a rollout ends every one, each then answered as gone. The runtime must let a process set
   no_new_privs and install a seccomp filter (`seccomp(2)` not denied by the container's own profile):
   a worker that cannot seal itself runs nothing, and `execute` says why. Nothing new in the image.
-- **Telegram, outbound only.** With `TELEGRAM_BOT_TOKEN` the pods need egress to
-  `api.telegram.org:443`; no webhook is set on the bot (`getUpdates` refuses to run while one is).
+- **Alerts, outbound only.** Discord's and Slack's webhooks, the push services and a person's own webhook
+  are public :443; with `TELEGRAM_BOT_TOKEN`, `api.telegram.org:443` too, and no webhook is set on the bot
+  (`getUpdates` refuses to run while one is). `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`
+  (a mailbox the relay lets us send as) turn mail on, `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID` and
+  `DISCORD_CLIENT_SECRET` Discord's direct messages: its application allows user installs, with the redirect
+  `<PANEL_PUBLIC_ORIGIN>/auth/discord/alerts`.
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer
   the response or strip `Upgrade` / `Connection` / `Origin`, and an idle timeout on the way must
   be longer than the 25 s ping.
-- **Rate-limit `/auth`, `/api/hooks`, `/api/queries_cache` and `/mcp/{register,authorize,token}` per client IP at Traefik**; the
+- **Rate-limit `/auth`, `/api/alerts`, `/api/hooks`, `/api/queries_cache` and `/mcp/{register,authorize,token}` per client IP at Traefik**; the
   conductor bounds how many run at once, not who starts them. `/api/queries_cache` is public and
   open: laptops buy through it, and this is its one guard.
 - **One pod, a volume, litestream.** One writer: one replica, rolled out with `Recreate`. No

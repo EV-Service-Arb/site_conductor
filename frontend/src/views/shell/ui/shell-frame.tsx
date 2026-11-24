@@ -6,7 +6,9 @@ import { useEffect } from "react";
 
 import { PANEL } from "@config";
 
+import { AlertsProvider } from "@/entities/alerts";
 import { GmailsProvider, PublishSelection, undo } from "@/entities/gmb";
+import { useAlertLive } from "@/features/alert-live";
 import { Assistant } from "@/features/assistant";
 import { api, goToSignIn } from "@/shared/api";
 import { useT, keys, nav } from "@/shared/i18n";
@@ -49,25 +51,33 @@ export function ShellFrame({ onForbidden, children }: { onForbidden: () => void;
     <KeymapProvider leader={LEADER} elements={elements} labels={{ title: t(keys.help, "Keybinds") }}>
       <UndoProvider labels={{ undo: t(undo.undo, "Undo"), redo: t(undo.redo, "Redo") }}>
         <GmailsProvider>
-          <PublishSelection />
-          <NavKeys />
-          <FloatieKey />
-          <div className="flex h-svh flex-col">
-            <PanelTopBar />
-            <div className="relative flex min-h-0 flex-1">
-              {/* `hidden`, not unmounted, on a phone: the outline keeps `mfe-sites-nav` mounted */}
-              <div style={{ "--shell-rail-w": `${width}px` } as CSSProperties} className="relative hidden shrink-0 md:flex">
-                <Outline folded={folded} />
-                {!folded && <ResizeEdge side="right" width={width} bounds={WIDTH} onWidth={setSidebarWidth} label={t(nav.resizeOutline, "Resize the outline")} />}
+          <AlertsProvider>
+            <PublishSelection />
+            <AlertLive />
+            <NavKeys />
+            <FloatieKey />
+            <div className="flex h-svh flex-col">
+              <PanelTopBar />
+              <div className="relative flex min-h-0 flex-1">
+                {/* `hidden`, not unmounted, on a phone: the outline keeps `mfe-sites-nav` mounted */}
+                <div style={{ "--shell-rail-w": `${width}px` } as CSSProperties} className="relative hidden shrink-0 md:flex">
+                  <Outline folded={folded} />
+                  {!folded && <ResizeEdge side="right" width={width} bounds={WIDTH} onWidth={setSidebarWidth} label={t(nav.resizeOutline, "Resize the outline")} />}
+                </div>
+                <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
+                {PANEL.assistant && at.view !== "assistant" && <Assistant />}
               </div>
-              <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">{children}</main>
-              {PANEL.assistant && at.view !== "assistant" && <Assistant />}
+              <Floats />
+              <PanelHotbar />
             </div>
-            <Floats />
-            <PanelHotbar />
-          </div>
+          </AlertsProvider>
         </GmailsProvider>
       </UndoProvider>
     </KeymapProvider>
   );
+}
+
+function AlertLive() {
+  useAlertLive();
+  return null;
 }

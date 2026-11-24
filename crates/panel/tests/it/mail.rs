@@ -506,7 +506,8 @@ async fn a_turn_to_a_person_is_told_once_to_the_owners_of_the_gbp_else_of_the_gm
 	let now = t("2026-10-05T10:00:00Z");
 	let pool = w.db.pool().await;
 	w.p.alerts_access_seen(w.owner, &sa_panel::testing::operator(), "owner", now).await.unwrap();
-	sqlx::query("INSERT INTO alert_destinations (id, user_id, method, created_at) VALUES (1, $1, 'telegram', 0)")
+	sqlx::query("INSERT INTO alert_destinations (id, user_id, method, private, urgent, important, info, filter, created_at) \
+		 VALUES (1, $1, 'telegram', 1, 'now', 'now', 'off', '{\"gmails\":[],\"trades\":[],\"brands\":[],\"gmbs\":[]}', 0)")
 		.bind(w.owner)
 		.execute(&pool)
 		.await
@@ -515,7 +516,7 @@ async fn a_turn_to_a_person_is_told_once_to_the_owners_of_the_gbp_else_of_the_gm
 		.execute(&pool)
 		.await
 		.unwrap();
-	let tell = async |at: &str| w.p.tell_mail(Locale::En, &"https://sa.evinvest.ltd/".parse().unwrap(), t(at)).await.unwrap();
+	let tell = async |at: &str| w.p.tell_mail(Locale::En, t(at)).await.unwrap();
 	w.arrives(notice("2026-09-20T09:00:00Z", 7, REJECTED, &rejected(" for Plomberie Dupont - Lyon", "15"))).await;
 	w.reads("2026-10-05T10:00:00Z", Kind::VideoRejected, |_| {}).await;
 	assert_eq!(tell("2026-10-05T10:00:00Z").await, 0, "old news is not told");

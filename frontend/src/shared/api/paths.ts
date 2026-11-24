@@ -9,6 +9,7 @@ export const PATHS = [
   "/api",
   "/api/v1",
   "/api/queries_cache",
+  "/api/alerts",
   "/api/ingest",
   "/api/kit",
   "/auth",

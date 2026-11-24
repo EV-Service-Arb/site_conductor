@@ -15,7 +15,7 @@ use std::{
 
 use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
-use sa_alerts::Rule;
+use sa_alerts::{Rule, Tier};
 use sa_core::{
 	mail::{self as rules, Draft as Reply, DraftState, HOLD, Holds, Joining, Kind, MAX_ASKS, MAX_READS, Message, READ_BACK, Reading, Ruled, Sender, State, Topic, Why},
 	notify::{Locale, Note, one_line},
@@ -27,7 +27,7 @@ use zeroize::Zeroizing;
 pub use crate::{smtp::Gmail, store::mail::ReadBy};
 use crate::{
 	Panel, Refused,
-	alerts::{Outgoing as Told, derived_event_id},
+	alerts::{Telling, derived_event_id},
 	inbox::{Account, Mail},
 	seal::{gmail_imap_aad, gmail_mail_aad, mail_draft_aad},
 	store::{
@@ -719,9 +719,9 @@ impl Panel {
 		Ok(answer)
 	}
 
-	/// Queues what turned to a person in anyone's cases, once per message and turn; a link to the case
-	/// on `origin` in private chats. How many messages were queued.
-	pub async fn tell_mail(&self, locale: Locale, origin: &url::Url, now: Timestamp) -> eyre::Result<usize> {
+	/// Tells what turned to a person in anyone's cases, once per message and turn. How many messages
+	/// were queued.
+	pub async fn tell_mail(&self, locale: Locale, now: Timestamp) -> eyre::Result<usize> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection to tell of mail")?;
 		let mut queued = 0;
 		for owner in db::owners(&mut conn).await? {
@@ -752,24 +752,27 @@ impl Panel {
 					gmb: c.gmb.and_then(|id| all.iter().find(|g| g.id == id)).map(|g| g.name.clone()),
 					summary: read.map(|r| r.summary.clone()).or_else(|| last.subject.clone()),
 					deadline: read.and_then(|r| r.deadline).filter(|d| *d > now),
-					case: c.id,
 				};
 				let gmbs: Vec<i64> = match c.gmb {
 					Some(gmb) => vec![gmb],
 					None => all.iter().filter(|g| g.gmail_id == Some(c.gmail)).map(|g| g.id).collect(),
 				};
 				let event = derived_event_id(&["google_mail", &last.said.id.to_string(), turn]);
-				let outgoing = |r: &crate::store::alerts::Recipient| {
-					Some(Told {
-						text: note.render(locale),
-						links: note.link(locale, origin).into_iter().filter(|_| r.private).map(|(label, url)| (label.to_owned(), url)).collect(),
-						buttons: Vec::new(),
-						photo: None,
-					})
+				let telling = Telling {
+					person: Some(owner),
+					gmail: gmbs.is_empty().then_some(c.gmail),
+					gmbs,
+					tier: match read.map(|r| r.kind) {
+						Some(Kind::Suspended | Kind::AccountRestricted | Kind::AccessLost) => Some(Tier::Urgent),
+						_ if turn == "held" => Some(Tier::Info),
+						_ => None,
+					},
+					link: Some(format!("/email?case={}", c.id)),
+					..Telling::new(Rule::GoogleMail, event, at, note.render(locale))
 				};
 				let mut tx = crate::store::begin_write(&mut conn).await?;
-				queued += self.fan_out_one(&mut tx, Rule::GoogleMail, event, None, Some(&gmbs), outgoing, now, now).await?;
-				tx.commit().await.wrap_err("committing a fan-out")?;
+				queued += self.tell(&mut tx, &telling, now).await?;
+				tx.commit().await.wrap_err("committing a note")?;
 			}
 		}
 		Ok(queued)
