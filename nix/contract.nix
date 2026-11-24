@@ -15,8 +15,6 @@
       "PANEL_ASSERTION_KEY"
       "TELEGRAM_BOT_TOKEN"
       "SMTP_PASSWORD"
-      "DISCORD_BOT_TOKEN"
-      "DISCORD_CLIENT_SECRET"
       "GOLOGIN_TOKEN"
       "MULTILOGIN_TOKEN"
       "CLAUDE_CODE_OAUTH_TOKEN"
@@ -33,10 +31,6 @@
       "SMTP_USERNAME"
       "SMTP_PASSWORD"
       "MAIL_FROM"
-      # Discord's direct messages: the three, or none; its application's redirect is <PANEL_PUBLIC_ORIGIN>/auth/discord/alerts
-      "DISCORD_BOT_TOKEN"
-      "DISCORD_CLIENT_ID"
-      "DISCORD_CLIENT_SECRET"
       # 15 and 500 by default
       "TOKENS_DAILY"
       "TOKENS_CAP"

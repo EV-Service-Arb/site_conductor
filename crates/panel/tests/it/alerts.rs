@@ -29,6 +29,8 @@ use uuid::Uuid;
 struct Kept {
 	sent: Arc<Mutex<Vec<(Address, Message)>>>,
 	next: Arc<Mutex<Vec<(Address, Failure)>>>,
+	/// Addresses whose network never answers.
+	hung: Arc<Mutex<Vec<Address>>>,
 }
 
 impl Kept {
@@ -44,6 +46,9 @@ impl Kept {
 
 impl Outlets for Kept {
 	async fn send_to(&self, to: &Address, message: &Message) -> Result<String, Failure> {
+		if self.hung.lock().unwrap().contains(to) {
+			std::future::pending::<()>().await;
+		}
 		let mut next = self.next.lock().unwrap();
 		if let Some(i) = next.iter().position(|(a, _)| a == to) {
 			return Err(next.remove(i).1);
@@ -103,7 +108,7 @@ impl Feeds for Leads {
 		unreachable!("no button here")
 	}
 
-	async fn press(&self, _: &Identity, _: Service, _: &Call, _: &str) -> eyre::Result<u16> {
+	async fn press(&self, _: &Identity, _: Option<&sa_auth::Actor>, _: Service, _: &Call, _: &str) -> eyre::Result<u16> {
 		unreachable!("no button here")
 	}
 
@@ -261,6 +266,46 @@ async fn a_mailed_link_proves_an_address_to_who_asked() {
 	assert_eq!(proved(Uuid::now_v7(), &token, now), None, "another's");
 	assert_eq!(proved(s.user, "nonsense", now), None);
 	assert!(s.panel.alerts(s.user, &operator()).await.unwrap().destinations.is_empty(), "nothing is added by asking");
+}
+
+/// Whoever is mailed a link to prove an address may be anyone: few in an hour by one person, few in a
+/// day to one address.
+#[tokio::test]
+async fn few_links_are_mailed_to_strangers() {
+	let s = Setup::new().await;
+	let now = Timestamp::now();
+	let ask = async |user, to: &str, at| s.hub.prove_email(user, to, "/user/alerts/settings", at).await.unwrap().is_ok();
+	for n in 0..5 {
+		assert!(ask(s.user, &format!("{n}@x.io"), now).await);
+	}
+	assert!(!ask(s.user, "5@x.io", now).await);
+	assert!(ask(s.user, "5@x.io", now + SignedDuration::from_hours(1)).await);
+	for _ in 0..2 {
+		assert!(ask(Uuid::now_v7(), "0@x.io", now).await);
+	}
+	assert!(!ask(Uuid::now_v7(), "0@x.io", now).await, "whoever asks");
+	assert!(ask(Uuid::now_v7(), "0@x.io", now + SignedDuration::from_hours(24)).await);
+	assert_eq!(s.networks.taken().len(), 9, "a refusal mails nothing");
+}
+
+/// A network that hangs holds its own messages alone: not the rest of its pass, nor the passes after.
+#[tokio::test]
+async fn a_network_that_hangs_delays_no_other() {
+	let s = Setup::new().await;
+	let now = Timestamp::now();
+	let hook = || slack("https://hooks.slack.test/a");
+	s.add(hook(), now).await;
+	s.add(email("olga@x.io"), now).await;
+	s.networks.hung.lock().unwrap().push(hook());
+	assert_eq!(s.lead(now).await, 2);
+	let first = s.hub.deliver(now);
+	let mut first = std::pin::pin!(first);
+	assert!(tokio::time::timeout(std::time::Duration::from_millis(300), &mut first).await.is_err());
+	assert_eq!(s.networks.taken().len(), 1, "the mail of its pass");
+	let later = now + SignedDuration::from_secs(5);
+	s.lead(later).await;
+	assert_eq!(s.hub.deliver(later).await.unwrap().sent, 1, "the mail; the hook's waits for its first");
+	s.networks.hung.lock().unwrap().clear();
 }
 
 /// A mailbox that asks to wait holds every mail back; a webhook only its own. What nothing reaches is

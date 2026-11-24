@@ -22,19 +22,11 @@ use zeroize::Zeroizing;
 /// How long a push service keeps an urgent one for a browser that is away; any other, a day.
 const URGENT_FOR: SignedDuration = SignedDuration::from_hours(1);
 
-/// Discord's bot, and the consent a person installs it by.
-#[derive(Clone, Debug)]
-pub struct Discord {
-	pub bot: discord::Bot,
-	pub oauth: discord::OAuth,
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct Networks {
 	pub telegram: Option<telegram::Bot>,
 	pub email: Option<email::Mailer>,
-	pub discord: Option<Discord>,
-	pub discord_channels: Option<discord::Webhooks>,
+	pub discord: Option<discord::Webhooks>,
 	pub slack: Option<slack::Webhooks>,
 	pub push: Option<webpush::Pusher>,
 	/// What a browser subscribes to.
@@ -52,7 +44,7 @@ impl Networks {
 			_ => "mailto:dev@evinvest.ltd", // a push service takes no http subject
 		};
 		Ok(Self {
-			discord_channels: Some(discord::Webhooks::try_new(discord::BASE)?),
+			discord: Some(discord::Webhooks::try_new(discord::BASE)?),
 			slack: Some(slack::Webhooks::try_new(slack::BASE)?),
 			push_key: Some(vapid.public().to_owned()),
 			push: Some(webpush::Pusher::try_new(vapid, subject, None)?),
@@ -67,7 +59,6 @@ impl Networks {
 			(self.telegram.is_some(), Method::Telegram),
 			(self.email.is_some(), Method::Email),
 			(self.discord.is_some(), Method::Discord),
-			(self.discord_channels.is_some(), Method::DiscordChannel),
 			(self.slack.is_some(), Method::Slack),
 			(self.push.is_some(), Method::Push),
 			(self.webhooks.is_some(), Method::Webhook),
@@ -82,13 +73,9 @@ impl Networks {
 		match to {
 			Address::Telegram(chat) => need(&self.telegram, method)?.send(*chat, &whole(m)?).await.map(|id| id.to_string()),
 			Address::Email { to } => need(&self.email, method)?.send(to, &headed(m, true)?).await.map(unnamed),
-			Address::Discord { user } => {
-				let bot = &need(&self.discord, method)?.bot;
-				bot.send(&bot.dm(user).await?, &headed(m, false)?).await.map(unnamed)
-			}
-			Address::DiscordChannel { url, ping } => {
+			Address::Discord { url, ping } => {
 				let ping = *ping && m.tier == Tier::Urgent;
-				need(&self.discord_channels, method)?.send(&url.parse()?, &headed(m, false)?, ping).await.map(unnamed)
+				need(&self.discord, method)?.send(&url.parse()?, &headed(m, false)?, ping).await.map(unnamed)
 			}
 			Address::Slack { url } => need(&self.slack, method)?.send(&url.parse()?, &headed(m, false)?).await.map(unnamed),
 			Address::Push { endpoint, p256dh, auth } => {
@@ -96,7 +83,11 @@ impl Networks {
 				let payload = webpush::Payload {
 					title,
 					body: body.text,
-					url: m.links.last().map_or_else(|| "/user/alerts".to_owned(), |(_, url)| url.clone()),
+					// the panel's own: the service worker opens no other origin's
+					url: match m.notes.as_slice() {
+						[one] => format!("/user/alerts?open={one}"),
+						_ => "/user/alerts".to_owned(),
+					},
 					// a digest and a test replace the one before
 					tag: match m.notes.as_slice() {
 						[one] => format!("alert {one}"),

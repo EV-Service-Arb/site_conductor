@@ -14,16 +14,15 @@ import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 import { ConnectTelegram, PushHere } from "./connect";
 
-const KINDS = ["telegram", "email", "push", "discord", "slack", "webhook"] as const;
-type Kind = (typeof KINDS)[number];
+const METHODS = ["telegram", "email", "push", "discord", "slack", "webhook"] as const satisfies readonly Method[];
 
-const KIND: Record<Kind, { by: readonly Method[]; name: (t: T) => string; what: (t: T) => string }> = {
-  telegram: { by: ["telegram"], name: () => "Telegram", what: (t) => t(keys.add.telegram, "your chat, a channel, group or topic") },
-  email: { by: ["email"], name: (t) => t(keys.method.email, "Email"), what: (t) => t(keys.add.email, "your account's address, or another") },
-  push: { by: ["push"], name: (t) => t(keys.push.here, "Push on this browser"), what: (t) => t(keys.add.push, "this phone or computer, panel closed or not") },
-  discord: { by: ["discord", "discord_channel"], name: () => "Discord", what: (t) => t(keys.add.discord, "a DM, or a channel") },
-  slack: { by: ["slack"], name: () => "Slack", what: (t) => t(keys.add.slack, "a channel") },
-  webhook: { by: ["webhook"], name: () => "Webhook", what: (t) => t(keys.add.webhook, "signed JSON to your https address") },
+const OFFER: Record<Method, { name: (t: T) => string; what: (t: T) => string }> = {
+  telegram: { name: () => "Telegram", what: (t) => t(keys.add.telegram, "your chat, a channel, group or topic") },
+  email: { name: (t) => t(keys.method.email, "Email"), what: (t) => t(keys.add.email, "your account's address, or another") },
+  push: { name: (t) => t(keys.push.here, "Push on this browser"), what: (t) => t(keys.add.push, "this phone or computer, panel closed or not") },
+  discord: { name: () => "Discord", what: (t) => t(keys.add.discord, "a channel") },
+  slack: { name: () => "Slack", what: (t) => t(keys.add.slack, "a channel") },
+  webhook: { name: () => "Webhook", what: (t) => t(keys.add.webhook, "signed JSON to your https address") },
 };
 
 /** + Add: the methods this server has, each one's step a dialog with one field or one button. */
@@ -32,10 +31,10 @@ export function AddDestination({ className }: { className?: string }) {
   const me = useMe();
   const size = useButtonSize();
   const alerts = useAlerts();
-  const [adding, setAdding] = useState<Kind | null>(null);
+  const [adding, setAdding] = useState<Method | null>(null);
   if (alerts.status !== "ok" || !api.mayCall("post", "/alerts/email", me.permissions)) return null;
   const { data } = alerts;
-  const offered = KINDS.filter((k) => KIND[k].by.some((m) => data.methods.includes(m)) && (k !== "push" || (pushable() !== "no" && me.acting === null)));
+  const offered = METHODS.filter((k) => data.methods.includes(k) && (k !== "push" || (pushable() !== "no" && me.acting === null)));
   const done = () => {
     setAdding(null);
     alerts.reload();
@@ -52,13 +51,13 @@ export function AddDestination({ className }: { className?: string }) {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-80">
           {offered.map((k) => {
-            const Icon = METHOD_ICON[KIND[k].by[0]!];
+            const Icon = METHOD_ICON[k];
             return (
               <DropdownMenuItem key={k} onClick={() => setAdding(k)} className="gap-3 py-2">
                 <Icon className="size-4 shrink-0" />
                 <span className="flex min-w-0 flex-col">
-                  <span className="text-ink">{KIND[k].name(t)}</span>
-                  <span className="text-xs text-ink-soft">{KIND[k].what(t)}</span>
+                  <span className="text-ink">{OFFER[k].name(t)}</span>
+                  <span className="text-xs text-ink-soft">{OFFER[k].what(t)}</span>
                 </span>
               </DropdownMenuItem>
             );
@@ -76,7 +75,7 @@ export function AddDestination({ className }: { className?: string }) {
   );
 }
 
-function Step({ kind, alerts, onDone }: { kind: Kind; alerts: Alerts; onDone: () => void }) {
+function Step({ kind, alerts, onDone }: { kind: Method; alerts: Alerts; onDone: () => void }) {
   switch (kind) {
     case "telegram":
       return <Telegram alerts={alerts} onDone={onDone} />;
@@ -85,7 +84,7 @@ function Step({ kind, alerts, onDone }: { kind: Kind; alerts: Alerts; onDone: ()
     case "push":
       return <Push onDone={onDone} />;
     case "discord":
-      return <Discord alerts={alerts} onDone={onDone} />;
+      return <Discord onDone={onDone} />;
     case "slack":
       return <Slack onDone={onDone} />;
     case "webhook":
@@ -236,62 +235,26 @@ function Push({ onDone }: { onDone: () => void }) {
   );
 }
 
-function Discord({ alerts, onDone }: { alerts: Alerts; onDone: () => void }) {
+function Discord({ onDone }: { onDone: () => void }) {
   const t = useT();
   const id = useId();
-  const size = useButtonSize();
-  const dm = alerts.methods.includes("discord");
-  const channel = alerts.methods.includes("discord_channel");
-  const [what, setWhat] = useState<"dm" | "channel">(dm ? "dm" : "channel");
   const [ping, setPing] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const signIn = async () => {
-    setBusy(true);
-    try {
-      window.location.assign((await ok(api.POST("/alerts/discord/link"))).url);
-    } catch (e) {
-      setBusy(false);
-      notifyFailure(e, t);
-    }
-  };
-  const Icon = METHOD_ICON.discord;
   return (
     <>
-      <Head title="Discord" reads={what === "dm" ? "names" : "no_names"} />
-      {dm && channel && (
-        <Either
-          label={t(keys.add.where, "Where")}
-          value={what}
-          onChange={setWhat}
-          options={[
-            { value: "dm", label: t(keys.add.discord.dm, "DM to you") },
-            { value: "channel", label: t(keys.add.discord.channel, "A channel") },
-          ]}
-        />
-      )}
-      {what === "dm" ? (
-        <div className="grid gap-3">
-          <p className="text-sm text-ink-soft">{t(keys.add.discord.how, "Sign in to Discord and install the bot for yourself; it then writes to you.")}</p>
-          <Button type="button" size={size("sm")} disabled={busy} onClick={() => void signIn()} className="justify-self-start">
-            <Icon className="size-4" />
-            {t(keys.add.discord.signIn, "Sign in with Discord")}
-          </Button>
-        </div>
-      ) : (
-        <Address
-          label={t(keys.add.discord.url, "The channel's webhook")}
-          type="url"
-          placeholder="https://discord.com/api/webhooks/…"
-          hint={t(keys.add.discord.hint, "In Discord: Edit channel, Integrations, Webhooks, Copy URL. Add sends a test.")}
-          submit={t(keys.add, "Add")}
-          send={(url) => ok(api.POST("/alerts/discord/channels", { body: { url, ping } })).then(onDone)}
-        >
-          <label htmlFor={id} className="flex items-center gap-2 text-sm text-ink">
-            <Checkbox id={id} checked={ping} onCheckedChange={setPing} />
-            {t(keys.add.discord.ping, "Urgent ones say @here")}
-          </label>
-        </Address>
-      )}
+      <Head title="Discord" reads="no_names" />
+      <Address
+        label={t(keys.add.discord.url, "The channel's webhook")}
+        type="url"
+        placeholder="https://discord.com/api/webhooks/…"
+        hint={t(keys.add.discord.hint, "In Discord: Edit channel, Integrations, Webhooks, Copy URL. Add sends a test.")}
+        submit={t(keys.add, "Add")}
+        send={(url) => ok(api.POST("/alerts/discord", { body: { url, ping } })).then(onDone)}
+      >
+        <label htmlFor={id} className="flex items-center gap-2 text-sm text-ink">
+          <Checkbox id={id} checked={ping} onCheckedChange={setPing} />
+          {t(keys.add.discord.ping, "Urgent ones say @here")}
+        </label>
+      </Address>
     </>
   );
 }

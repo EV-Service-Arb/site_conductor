@@ -31,10 +31,8 @@ pub enum Method {
 	/// A chat with the bot, a channel, a group or a topic of one.
 	Telegram,
 	Email,
-	/// The bot's direct message.
-	Discord,
 	/// A channel's webhook.
-	DiscordChannel,
+	Discord,
 	/// A channel's incoming webhook.
 	Slack,
 	/// One browser's Web Push.
@@ -168,9 +166,14 @@ impl Hours {
 	fn open_from(&self, at: Timestamp) -> Timestamp {
 		let at = self.snoozed_until.filter(|until| *until > at).unwrap_or(at); // not snoozed: as it was
 		let Some((from, to)) = self.quiet else { return at };
-		let here = at.to_zoned(self.tz.clone()).time();
-		let quiet = if from < to { from <= here && here < to } else { here >= from || here < to };
-		if quiet { self.next(at, to) } else { at }
+		let here = at.to_zoned(self.tz.clone()).datetime();
+		let quiet = if from < to { from <= here.time() && here.time() < to } else { here.time() >= from || here.time() < to };
+		if !quiet {
+			return at;
+		}
+		// the hour clocks repeat says `to` twice
+		let repeated = self.tz.to_ambiguous_zoned(here.date().to_datetime(to)).later().expect("every time of a day has a later one").timestamp();
+		Some(repeated).filter(|r| *r > at).map_or(self.next(at, to), |r| r.min(self.next(at, to)))
 	}
 
 	/// When a note of `tier` taken at `now` goes out to a destination at `cadence`, and whether as one
@@ -257,6 +260,13 @@ mod tests {
 		let snoozed = Hours::try_new("UTC", 0, None, Some(at("2026-11-24T13:00:00Z"))).unwrap();
 		assert_eq!(snoozed.due(Cadence::Now, Tier::Info, at(noon)).unwrap().at, at("2026-11-24T13:00:00Z"));
 		assert_eq!(snoozed.due(Cadence::Now, Tier::Urgent, at(noon)).unwrap().at, at(noon));
+		// 25 October 2026: at 3:00 Paris goes back to 2:00
+		let late = Hours::try_new("Europe/Paris", 0, Some((60, 150)), None).unwrap();
+		let held = |now: &str| late.due(Cadence::Now, Tier::Info, at(now)).unwrap().at;
+		assert_eq!(held("2026-10-25T00:10:00Z"), at("2026-10-25T00:30:00Z"), "2:10, the first");
+		assert_eq!(held("2026-10-25T01:10:00Z"), at("2026-10-25T01:30:00Z"), "2:10, the second");
+		// 29 March 2026: at 2:00 it goes on to 3:00
+		assert_eq!(held("2026-03-29T00:10:00Z"), at("2026-03-29T01:30:00Z"), "1:10 to what would be 2:30");
 		assert!(Hours::try_new("Mars/Olympus", 0, None, None).is_err());
 		assert!(Hours::try_new("UTC", 1440, None, None).is_err());
 		assert!(Hours::try_new("UTC", 0, Some((60, 60)), None).is_err());

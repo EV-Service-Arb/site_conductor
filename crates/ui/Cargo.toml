@@ -12,9 +12,9 @@ readme.workspace = true
 test = false
 
 [dependencies]
-ev_lib = { version = "0.25.0", default-features = false, features = ["uikit"] } # not the workspace's: the apps that use this are on 0.25
 
 dioxus.workspace = true
+ev_lib = { version = "0.25.0", default-features = false, features = ["uikit"] } # not the workspace's: the apps that use this are on 0.25
 
 [lints]
 workspace = true

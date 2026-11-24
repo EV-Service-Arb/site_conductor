@@ -587,7 +587,7 @@ PUT    /alerts/rules/{rule}                      the caller's tier for it
 PUT    /alerts/hours
 POST   /alerts/telegram/{link,chats}             own:credentials, fresh
 POST   /alerts/email{,/confirm}                  own:credentials, fresh
-POST   /alerts/{discord/link,discord/channels,slack,push,webhooks}   own:credentials, fresh
+POST   /alerts/{discord,slack,push,webhooks}   own:credentials, fresh
 PUT    /alerts/destinations/{id}
 POST   /alerts/destinations/{id}/test
 DELETE /alerts/destinations/{id}
@@ -1351,8 +1351,7 @@ source_silent, feed_stalled, meter_held                       conductor       sa
 method            address                                      private  proved by
 telegram          own chat, channel, group, topic              own chat /start; admin + a test
 email             the account's verified address, or another   yes      concierge; a link mailed there
-discord           the bot's direct message                     yes      Discord's consent
-discord_channel   a channel's webhook                          no       a test
+discord           a channel's webhook                          no       a test
 slack             a channel's incoming webhook                 no       a test
 push              one browser (Web Push)                       yes      a test
 webhook           an https URL of theirs: JSON, HMAC-signed    no       a test
@@ -1379,8 +1378,8 @@ hours             the person's, in their time zone: quiet hours and snooze hold 
                   it as one message
 read              in the panel, by its link, by a button pressed: read everywhere, and what was still
                   waiting for it is given up
-delivery (0.5 s)  lead messages noted > 1 h ago dropped; > 20 of one rule waiting for one destination go as
-                  one message; claim in one write transaction, most urgent first: ≤ 25 tries of a method
+delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead messages noted > 1 h ago
+                  dropped; > 20 of one rule waiting for one destination go as one message; claim in one write transaction, most urgent first: ≤ 25 tries of a method
                   started in any second (none while it is paused), one per private chat per second, one
                   per any other address per 3 s, none to one with a send in flight; leased 60 s → the
                   user's access checked again → sent | retry | dead
@@ -1398,19 +1397,17 @@ delivery (0.5 s)  lead messages noted > 1 h ago dropped; > 20 of one rule waitin
 - **Mail** goes through `SMTP_*`; each carries a one-click unsubscribe (RFC 8058,
   `POST /api/alerts/unsubscribe?token=`, open: the sealed token is its only say; a GET is a page with the
   button, since mail scanners open links). Another address is proved by a link mailed there and opened
-  signed in as who asked.
-- **Discord's direct message** needs the bot (`DISCORD_*`) installed to the person's account: OAuth,
-  back at `/auth/discord/alerts`.
+  signed in as who asked: at most 5 an hour by one person, 3 a day to one address.
 - **Push** is to a key made of `PANEL_DATA_KEY`; a browser is one person's, whoever subscribed last.
 - **A webhook** is only ever connected to at a public address, and never redirected; a delivery is
   signed `x-signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>">`.
 - **A note's text**: the one for anyone, the one for a private reader, the one for a private reader who
   holds `sa:sites:work:pii:see`, whichever the reader may read when they read it; buttons and links out
-  go to private readers only. A channel gets no access request and no mail of Google's.
+  go to private readers only. A channel gets no access request, and of Google's mail its kind and GBP alone.
 - **Updates by long polling.** One process polls, under a lease in `telegram_poller` (60 s,
   renewed every poll); the offset is stored there after each update, and every update is
   idempotent, so one handled twice across a takeover does nothing twice.
-- **Retries.** 429 of Telegram's, the mail relay's or Discord's bot pauses the whole method for as long as
+- **Retries.** 429 of Telegram's or the mail relay's pauses the whole method for as long as
   it says and costs the message no try; 429 of a webhook's, 5xx, timeouts and a photo not fetched back off
   from 10 s, doubling, to 15 min; 10 tries, then dead. An address that is gone (the bot blocked, the chat or
   the webhook deleted, the mailbox unknown, the subscription over) marks the destination — of Telegram
@@ -1507,7 +1504,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dropped; > 20 of one rule waitin
   missing and applies the migrations each lacks first (`panel migrate` does only that). A migration newer than the build is let be. Tables are STRICT, foreign keys
   enforced, timestamps INTEGER microseconds since the epoch, UUIDs 16-byte blobs.
 - **The conductor's secrets come from the environment only** (`PANEL_DATA_KEY`, `SENTRY_DSN`,
-  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `SMTP_PASSWORD`, `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_SECRET`, `GOLOGIN_TOKEN`,
+  `RP_CLIENT_SECRET_SA`, `PANEL_ASSERTION_KEY`, `TELEGRAM_BOT_TOKEN`, `SMTP_PASSWORD`, `GOLOGIN_TOKEN`,
   `MULTILOGIN_TOKEN`, `CLAUDE_CODE_OAUTH_TOKEN`), through
   `ev_lib::settings`, and the Google accounts' keys and readers, which the config file names
   (`{ env = "…" }`); a person's (a gmail's IMAP password, its Maps key, its proxy, its Business Profile client and grant, their Claude token) through the API, sealed at
@@ -1593,9 +1590,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dropped; > 20 of one rule waitin
 - **Alerts, outbound only.** Discord's and Slack's webhooks, the push services and a person's own webhook
   are public :443; with `TELEGRAM_BOT_TOKEN`, `api.telegram.org:443` too, and no webhook is set on the bot
   (`getUpdates` refuses to run while one is). `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`
-  (a mailbox the relay lets us send as) turn mail on, `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID` and
-  `DISCORD_CLIENT_SECRET` Discord's direct messages: its application allows user installs, with the redirect
-  `<PANEL_PUBLIC_ORIGIN>/auth/discord/alerts`.
+  (a mailbox the relay lets us send as) turn mail on.
 - **`/api/v1/live` through the public IngressRoute, as a WebSocket.** Nothing in front may buffer
   the response or strip `Upgrade` / `Connection` / `Origin`, and an idle timeout on the way must
   be longer than the 25 s ping.

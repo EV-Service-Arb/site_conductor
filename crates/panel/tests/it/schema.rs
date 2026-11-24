@@ -128,7 +128,7 @@ impl Feeds for TwoLeads {
 		unreachable!("no button here")
 	}
 
-	async fn press(&self, _: &Identity, _: Service, _: &Call, _: &str) -> eyre::Result<u16> {
+	async fn press(&self, _: &Identity, _: Option<&sa_auth::Actor>, _: Service, _: &Call, _: &str) -> eyre::Result<u16> {
 		unreachable!("no button here")
 	}
 }

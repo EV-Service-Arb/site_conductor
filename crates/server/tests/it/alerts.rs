@@ -1893,7 +1893,7 @@ async fn a_press_in_the_panel_is_the_press_in_telegram() {
 		panic!("a live session")
 	};
 
-	assert!(matches!(s.n.press(&who, note, "no_answer", at(1_000)).await.unwrap(), Pressed::Done { left, .. } if left.len() == 1));
+	assert!(matches!(s.n.press(&who, None, note, "no_answer", at(1_000)).await.unwrap(), Pressed::Done { left, .. } if left.len() == 1));
 	let alert = s.inbox(user, &aliases::admin()).await.remove(0);
 	assert_eq!(alert.buttons.iter().map(|b| b.id.as_str()).collect::<Vec<_>>(), ["take"]);
 	assert!(alert.read_at.is_some(), "pressed is read");
@@ -1907,8 +1907,8 @@ async fn a_press_in_the_panel_is_the_press_in_telegram() {
 		user_id: Uuid::now_v7(),
 		..who.clone()
 	};
-	assert!(matches!(s.n.press(&stranger, note, "take", at(3_000)).await.unwrap(), Pressed::Unknown), "not a note of theirs");
-	assert!(matches!(s.n.press(&who, note, "nope", at(3_000)).await.unwrap(), Pressed::Unknown));
+	assert!(matches!(s.n.press(&stranger, None, note, "take", at(3_000)).await.unwrap(), Pressed::Unknown), "not a note of theirs");
+	assert!(matches!(s.n.press(&who, None, note, "nope", at(3_000)).await.unwrap(), Pressed::Unknown));
 	assert_eq!(s.presses().len(), 2, "neither reached sites");
 }
 
@@ -1993,8 +1993,8 @@ async fn what_is_no_address_is_not_added() {
 	for (path, body) in [
 		("slack", json!({"url": "https://evil.example/services/T/B/x"})),
 		("slack", json!({"url": "http://hooks.slack.com/services/T/B/x"})),
-		("discord/channels", json!({"url": "https://discord.com.evil.example/api/webhooks/1/x", "ping": true})),
-		("discord/channels", json!({"url": "https://discord.com/api/users/@me", "ping": false})),
+		("discord", json!({"url": "https://discord.com.evil.example/api/webhooks/1/x", "ping": true})),
+		("discord", json!({"url": "https://discord.com/api/users/@me", "ping": false})),
 		("push", push("https://evil.example/push")),
 		("push", push("https://fcm.googleapis.com/fcm/send/x")),
 		("webhooks", json!({"url": "not a url"})),

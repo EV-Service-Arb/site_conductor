@@ -4,7 +4,7 @@ The conductor with its Grafana, sites_panel, review_archive and the landings (aq
 debouchage) on one machine, wired as in the cluster: a lead posted on a landing reaches sites_panel through
 the conductor's ingest, a place's phone or hours edited on the sites page shows on the landing
 through sites' `/api/internal`, review_archive's overview and boards draw in the conductor's
-Grafana, and the conductor's GMBs and tokens reach review_archive. No concierge, no PostHog, no Telegram, no Google for review_archive
+Grafana, and the conductor's GMBs and tokens reach review_archive. No concierge, no PostHog, no Google for review_archive
 (review_archive scans nothing): the conductor signs you in by itself (dev sign-in, below).
 
 ## Prerequisites
@@ -248,6 +248,9 @@ the shell's `CLAUDE_CODE_OAUTH_TOKEN`; under `--no-peers` only on the latter. Th
 and is read as the conductor starts: refused, restart the stack. Google's mail is read on it too.
 
 ## Browsers
+
+Alerts go out by Telegram with `SERVICE_ARB_TELEGRAM_BOT_TOKEN` in the shell (not under `--port`: a bot has one poller), and
+by mail with `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`.
 
 With `MULTILOGIN_TOKEN` or `GOLOGIN_TOKEN` in the shell (a paid plan's: neither runs without
 one), the stack runs sa_browsers on `BROWSERS_BIND` beside the conductor: Orbita from `.#orbita`,

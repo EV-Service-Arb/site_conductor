@@ -21,7 +21,7 @@ use sa_server::{
 	forward::{Forward, Services},
 	grafana::Grafana,
 	http, live, mail,
-	outlets::{Discord, Networks},
+	outlets::Networks,
 	signin::{SignIn, SignInConfig},
 	telegram::BotName,
 	tokens, trash,
@@ -215,7 +215,6 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 			let networks = AlertSettings {
 				telegram: settings.telegram()?,
 				smtp: settings.smtp()?,
-				discord: settings.panel_public_origin.as_deref().map(|o| settings.discord(url::Url::parse(o)?.join(alerts::DISCORD_CALLBACK)?)).transpose()?.flatten(),
 			};
 			eyre::ensure!(
 				networks.telegram.is_none() || forward.is_some(),
@@ -315,7 +314,6 @@ async fn queries_cache(store: &Store, cmd: QueriesCacheCmd) -> eyre::Result<()> 
 struct AlertSettings {
 	telegram: Option<settings::TelegramSettings>,
 	smtp: Option<Smtp>,
-	discord: Option<Discord>,
 }
 
 /// Who signs people in.
@@ -411,7 +409,6 @@ async fn serve(
 				(bot, locale) = (BotName::new(tg.username), tg.locale);
 			}
 			outlets.email = networks.smtp.map(Mailer::try_new).transpose()?;
-			outlets.discord = networks.discord;
 			tracing::info!(methods = ?outlets.methods(), "alerts on");
 			let hub = Hub {
 				panel: hub_panel,

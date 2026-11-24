@@ -32,7 +32,7 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Audience, Button, Call, NotePage, Rule, Tier};
-use sa_auth::{PermissionSet, Pii, Service};
+use sa_auth::{Actor, PermissionSet, Pii, Service};
 use sa_core::{
 	alerts::{Cadence, Cadences, Filter, Method, Subject},
 	notify::{self, Failure, Locale, Note, Rendered},
@@ -49,7 +49,7 @@ pub use crate::store::{
 };
 use crate::{
 	Panel, Refused,
-	seal::{DISCORD_STATE_AAD, EMAIL_TOKEN_AAD, UNSUBSCRIBE_AAD, alert_address_aad, alert_note_aad},
+	seal::{EMAIL_TOKEN_AAD, UNSUBSCRIBE_AAD, alert_address_aad, alert_note_aad},
 	session::{Refresher, SessionError},
 	store::{
 		alerts::{self as db, Sealed},
@@ -72,9 +72,6 @@ pub const NOTES_PAGE: usize = 500;
 
 /// How long the link mailed to an address to prove it stays good.
 pub const EMAIL_TOKEN_TTL: SignedDuration = SignedDuration::from_hours(24);
-
-/// How long a Discord consent may take.
-const DISCORD_STATE_TTL: SignedDuration = SignedDuration::from_mins(10);
 
 /// A person's destinations, at most.
 const DESTINATIONS: usize = 50;
@@ -104,8 +101,9 @@ pub trait Feeds: Sync {
 	fn received(&self) -> impl Future<Output = eyre::Result<BTreeMap<String, Timestamp>>> + Send;
 	/// Whether `call` is a write of `service`'s that a press can make: refused, the note fails its page.
 	fn callable(&self, service: Service, call: &Call) -> eyre::Result<()>;
-	/// `call` made to `service` as `who`, under `idempotency_key`: the status it answered.
-	fn press(&self, who: &Identity, service: Service, call: &Call, idempotency_key: &str) -> impl Future<Output = eyre::Result<u16>> + Send;
+	/// `call` made to `service` as `who`, `actor` acting in their account, under `idempotency_key`: the
+	/// status it answered.
+	fn press(&self, who: &Identity, actor: Option<&Actor>, service: Service, call: &Call, idempotency_key: &str) -> impl Future<Output = eyre::Result<u16>> + Send;
 	/// The photo at `path` of `service`, as a note named it.
 	fn photo(&self, service: Service, path: &str) -> impl Future<Output = eyre::Result<Vec<u8>>> + Send;
 }
@@ -135,9 +133,6 @@ pub enum Address {
 		to: String,
 	},
 	Discord {
-		user: String,
-	},
-	DiscordChannel {
 		url: String,
 		/// Urgent ones say `@here`.
 		ping: bool,
@@ -163,7 +158,6 @@ impl Address {
 			Self::Telegram(_) => Method::Telegram,
 			Self::Email { .. } => Method::Email,
 			Self::Discord { .. } => Method::Discord,
-			Self::DiscordChannel { .. } => Method::DiscordChannel,
 			Self::Slack { .. } => Method::Slack,
 			Self::Push { .. } => Method::Push,
 			Self::Webhook { .. } => Method::Webhook,
@@ -172,7 +166,7 @@ impl Address {
 
 	/// Read by its person alone.
 	fn private(&self) -> bool {
-		matches!(self, Self::Email { .. } | Self::Discord { .. } | Self::Push { .. })
+		matches!(self, Self::Email { .. } | Self::Push { .. })
 	}
 
 	/// What tells it from a person's others of its method.
@@ -180,8 +174,7 @@ impl Address {
 		match self {
 			Self::Telegram(_) => unreachable!("a chat is its own"),
 			Self::Email { to } => to,
-			Self::Discord { user } => user,
-			Self::DiscordChannel { url, .. } | Self::Slack { url } | Self::Webhook { url, .. } => url,
+			Self::Discord { url, .. } | Self::Slack { url } | Self::Webhook { url, .. } => url,
 			Self::Push { endpoint, .. } => endpoint,
 		}
 	}
@@ -338,7 +331,7 @@ impl<O, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 	/// `who` presses a button of a note of theirs: what it came to, and the line and buttons it leaves.
 	/// The same button of the same note is one action of theirs, wherever and however often it is
 	/// pressed or its update delivered: the service derives its event ids from the key.
-	pub async fn press(&self, who: &Identity, note: i64, button: &str, now: Timestamp) -> eyre::Result<Pressed> {
+	pub async fn press(&self, who: &Identity, actor: Option<&Actor>, note: i64, button: &str, now: Timestamp) -> eyre::Result<Pressed> {
 		let mut conn = self.panel.store.pool().acquire().await.wrap_err("a connection for a button")?;
 		let sought = Sought {
 			id: Some(note),
@@ -353,7 +346,7 @@ impl<O, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		};
 		let service = received.note.rule.feed().expect("only a service's note carries buttons");
 		let key = format!("alert/{note}/{}/{button}", who.user_id);
-		let status = match self.feeds.press(who, service, &pressed.call, &key).await {
+		let status = match self.feeds.press(who, actor, service, &pressed.call, &key).await {
 			Ok(status) => status,
 			Err(e) => {
 				tracing::warn!(error = format!("{e:#}"), "alerts: a service did not take a press");
@@ -616,7 +609,7 @@ impl Panel {
 			db::remove_others_push(&mut tx, user, &tag).await?;
 		}
 		if db::destinations(&mut tx, user).await?.len() >= DESTINATIONS {
-			return Ok(Err(Refused::Conflict(format!("at most {DESTINATIONS} destinations"))));
+			return Ok(Err(Refused::Invalid(format!("at most {DESTINATIONS} destinations"))));
 		}
 		let address_row = Sealed {
 			blob: &sealed,
@@ -661,17 +654,6 @@ impl Panel {
 	pub fn alerts_email_proved(&self, user: Uuid, token: &str, now: Timestamp) -> Option<String> {
 		let token: EmailToken = self.opened(EMAIL_TOKEN_AAD, token)?;
 		(token.user == user && token.until > now).then_some(token.address)
-	}
-
-	/// What a Discord consent of the user's carries back.
-	pub fn alerts_discord_state(&self, user: Uuid, now: Timestamp) -> eyre::Result<String> {
-		let plain = serde_json::to_vec(&(user, now + DISCORD_STATE_TTL)).wrap_err("serializing a consent's state")?;
-		Ok(URL_SAFE_NO_PAD.encode(self.key.seal(DISCORD_STATE_AAD, &plain)?))
-	}
-
-	/// Whether `state` is a consent's the user began, a while ago at most.
-	pub fn alerts_discord_began(&self, user: Uuid, state: &str, now: Timestamp) -> bool {
-		self.opened::<(Uuid, Timestamp)>(DISCORD_STATE_AAD, state).is_some_and(|(who, until)| who == user && until > now)
 	}
 
 	/// The key browsers' push subscriptions are to.

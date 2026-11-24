@@ -339,6 +339,32 @@ fn destination(
 	})
 }
 
+/// Counts a link about to be mailed to the address, unless the user had `per_user` mailed within the
+/// hour, or the address was mailed `per_address` within the day; whether it may be.
+pub async fn count_proof(conn: &mut SqliteConnection, user: Uuid, address_tag: &[u8; 32], per_user: i64, per_address: i64, now: Timestamp) -> eyre::Result<bool> {
+	let hours = |n| to_db(now - jiff::SignedDuration::from_hours(n));
+	sqlx::query("DELETE FROM alert_proofs WHERE at <= $1")
+		.bind(hours(24))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("pruning the proofs")?;
+	let counted = sqlx::query(
+		"INSERT INTO alert_proofs (user_id, address_tag, at) SELECT $1, $2, $3 \
+		 WHERE (SELECT count(*) FROM alert_proofs WHERE user_id = $1 AND at > $4) < $5 AND (SELECT count(*) FROM alert_proofs WHERE address_tag = $2) < $6",
+	)
+	.bind(user)
+	.bind(address_tag.as_slice())
+	.bind(to_db(now))
+	.bind(hours(1))
+	.bind(per_user)
+	.bind(per_address)
+	.execute(&mut *conn)
+	.await
+	.wrap_err("counting a proof")?
+	.rows_affected();
+	Ok(counted == 1)
+}
+
 // ── a person's hours and tiers ──────────────────────────────────────────────────────────
 
 /// A person's hours as they set them, in minutes since midnight in `tz`.

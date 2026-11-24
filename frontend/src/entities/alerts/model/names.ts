@@ -96,9 +96,8 @@ export const METHOD_NAME: Named<Method> = {
   email: (t) => t(alerts.method.email, "Email"),
   push: (t) => t(alerts.method.push, "Push"),
   discord: () => "Discord",
-  discord_channel: () => "Discord",
   slack: () => "Slack",
   webhook: () => "Webhook",
 };
 
-export const METHOD_ICON: Record<Method, Icon> = { telegram: TelegramIcon, email: Mail, push: Smartphone, discord: DiscordIcon, discord_channel: DiscordIcon, slack: SlackIcon, webhook: Webhook };
+export const METHOD_ICON: Record<Method, Icon> = { telegram: TelegramIcon, email: Mail, push: Smartphone, discord: DiscordIcon, slack: SlackIcon, webhook: Webhook };

@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 
 use eyre::WrapErr;
-use futures::{StreamExt, TryStreamExt};
+use futures::StreamExt;
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::Tier;
 use sa_auth::PermissionSet;
@@ -37,8 +37,14 @@ pub const SEND_LEASE: SignedDuration = SignedDuration::from_secs(60);
 /// A lead message noted longer ago than this is news nobody needs.
 const STALE_AFTER: SignedDuration = SignedDuration::from_hours(1);
 
-/// Messages sent at once in a pass.
-const PARALLEL_SENDS: usize = 8;
+/// Messages sent at once in a pass: past what networks that hang may hold of it.
+const PARALLEL_SENDS: usize = 64;
+
+/// Links to prove an address a person has mailed in an hour: the mail goes to whoever they name.
+const PROOFS_PER_USER: i64 = 5;
+
+/// And an address is mailed in a day, whoever asks.
+const PROOFS_PER_ADDRESS: i64 = 3;
 
 /// What one delivery pass did.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -58,8 +64,9 @@ impl Delivered {
 }
 
 impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
-	/// Sends what is due at `now`, within the pace. First, lead messages noted over an hour ago are
-	/// given up, and past [`BACKLOG`] of one rule's messages for one destination they go as one.
+	/// Sends what is due at `now`, within the pace; a pass may begin while another's sends last. First,
+	/// lead messages noted over an hour ago are given up, and past [`BACKLOG`] of one rule's messages
+	/// for one destination they go as one.
 	pub async fn deliver(&self, now: Timestamp) -> eyre::Result<Delivered> {
 		let due = {
 			let mut conn = self.panel.store.pool().acquire().await.wrap_err("a connection to claim messages")?;
@@ -76,8 +83,10 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		futures::stream::iter(sends)
 			.map(|rows| self.send(rows, now))
 			.buffer_unordered(PARALLEL_SENDS)
-			.try_fold(Delivered::default(), |sum, one| async move { Ok(sum.add(one)) })
+			.collect::<Vec<_>>() // a pass that stopped at the first failure would cut the rest short, to go out twice
 			.await
+			.into_iter()
+			.try_fold(Delivered::default(), |sum, one| Ok(sum.add(one?)))
 	}
 
 	/// One message of `rows`, claimed for one destination. Whether each may still go is asked again
@@ -180,7 +189,7 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		// The bot's and the mailbox's limits are ours, whatever the address: the method waits, and the
 		// message keeps its tries. A webhook's are its own.
 		if let Failure::RetryAfter(wait) = failure
-			&& matches!(to.method, Method::Telegram | Method::Email | Method::Discord)
+			&& matches!(to.method, Method::Telegram | Method::Email)
 		{
 			let until = now.saturating_add((*wait).max(notify::PER_CHAT_GAP)).unwrap_or(Timestamp::MAX);
 			outbox::pause(conn, d.id, to.method, until, error).await?;
@@ -277,6 +286,12 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 	/// Mails `address` the link that makes it a destination of the user's, on the settings page at
 	/// `page`, a path.
 	pub async fn prove_email(&self, user: Uuid, address: &str, page: &str, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
+		let tag = self.panel.key.alert_address_tag(Method::Email.as_ref(), address);
+		let mut tx = self.panel.store.begin_write().await?;
+		if !db::count_proof(&mut tx, user, &tag, PROOFS_PER_USER, PROOFS_PER_ADDRESS, now).await? {
+			return Ok(Err(Refused::Unavailable("too many links mailed: try again later".into())));
+		}
+		tx.commit().await.wrap_err("committing a proof")?;
 		let mut url = self.origin.join(page).expect("a path on an origin");
 		url.query_pairs_mut().append_pair("confirm", &self.panel.alerts_email_token(user, address, now)?);
 		let mut text = Rendered::default();
