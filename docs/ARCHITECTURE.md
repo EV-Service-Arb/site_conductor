@@ -1198,7 +1198,7 @@ follow (60 s) ─ kept, joined to its case ─ read ─┬─ by rule: the sende
                                                  └─ by a person, over either
 case's state: needs_you (why) │ reply_due │ reply_ready │ sending │ waiting │ done │ quiet
 reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ SMTP ─▶ sent | failed
-                     └─▶ held (15 min; its topic switched on, nothing lacking) ─┘
+                     └─▶ held (≥ 15 min; its topic switched on, to be pressed) ─┘
                          either ─ another message in its case ─▶ superseded
 ```
 
@@ -1215,15 +1215,21 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   readings of the GBP, the GBP, and, of a case about reviews, those review_archive sees gone (a full page
   of them is no count); what it lacks is a need, and a draft with one never goes by itself. Where the
   archive does not track the GBP the list is a need; while it does not answer, the reply waits.
-- **Whose turn.** A deflection, a refusal, or silence past Google's term (48 h where it gave none) is
-  pressed. What Google asks for is its operator's, the reply ready around it. A specialist of Google's
-  is waited for, told of, and pressed once. A case is settled by a later reading of its GBP, or the GBP's
-  move to verified.
-- **A reply** goes as the gmail, to the last message of the case that takes one. `sending` is committed
-  before SMTP; one left so is never tried again. A held one (never one to what Google asks) goes only while its
-  topic's switch (`verification`, `reviews`; off unless its owner's) is on, its case is as it was, and fewer than
-  `MAX_ASKS` of ours went unanswered; a person may send past that. Only production's goes by itself: a
-  copy of its database would answer Google too.
+- **Whose turn.** A deflection, a refusal, a call that failed, or silence past Google's term (48 h where it
+  gave none, a week for a video or an appeal; only an inbox read past it is silent) is pressed. What Google
+  asks for is its operator's, the reply ready around it. A specialist of Google's is waited for, told of, and
+  pressed once. A survey counts for nothing in a conversation, whose topic is its first specific kind's. What a
+  notice says stands until a kind that supersedes it; a verification is over once its GBP is verified, a
+  suspension once it is reinstated, a case once its GBP is in the trash.
+- **A reply** goes as the gmail, to support's one address, to the last message of the case that takes one.
+  `sending` is committed before SMTP; one left so is never tried again, nor is another sent to what it answers.
+  One goes by itself only while its topic's switch (`verification`, `reviews`; off unless its owner's) is on
+  and its case may be pressed, asked as it is written, held and sent (`sa_core::mail::press`): by Google's last
+  word alone, nothing asked or lacking, its GBP known and live, mailed to the gmail's own account or written to by
+  it, 12 h after ours, fewer than `MAX_ASKS` of ours unanswered; once its inbox was read past its moment, and
+  at most an hour late. A correction holds it back; another account on the gmail, or the same on two, and
+  nothing goes. A person may send past all that. Only production's goes by itself: a copy of its database
+  would answer Google too.
 
 ## Review kit
 
@@ -1459,7 +1465,7 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   listener, on GETs, for that query's life. The public listener never takes a token.
 - **A source is only ever revoked.** `sources` refuses DELETE and any UPDATE but of `revoked_at`
   and a site's `origin` set once from NULL (only a `site` has one); a key id is never reused.
-- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, alerts' notes and destinations' addresses, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, its mail with Google and the replies to it, and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
+- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, alerts' notes and destinations' addresses, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, the bodies of its mail with Google and of the replies to it (what they were read as is in the clear), and a person's Claude token are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
 - **No price beside its use.** What a person is charged is an item of `sa_core::prices` at its
@@ -1480,8 +1486,8 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   stop never opens on an account without its reading.**
 - **Alerts are the conductor's.** A service publishes notes and never reaches a person itself;
   who is told, where and how is decided here.
-- **A reply to Google is handed to SMTP once**, only to an address @google.com somebody reads, of a
-  message proved Google's; by itself only where its gmail's owner switched its topic on and it lacks nothing.
+- **A message of Google's is answered through SMTP once**, only to support's own address, only one proved
+  Google's; by itself only where its gmail's owner switched its topic on and its case may be pressed.
 - **A note is in the outbox before the cursor passes it**: the page and the cursor move in one
   transaction. **So is a charge in the ledger**, and a page is taken only from where the cursor
   stands.
