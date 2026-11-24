@@ -58,6 +58,8 @@ fn now() -> u64 {
 struct Stub {
 	/// Each request: its key, field mask, and what it asked.
 	got: Arc<Mutex<Vec<(String, String, Value)>>>,
+	/// Its searches' bodies, as sent: what their keys are of.
+	bodies: Arc<Mutex<Vec<String>>>,
 	/// A key's next answers are these refusals.
 	refuse: Arc<Mutex<Refusals>>,
 }
@@ -91,6 +93,7 @@ fn mold_assist() -> Value {
 }
 
 async fn search_text(State(s): State<Stub>, headers: HeaderMap, body: String) -> Response {
+	s.bodies.lock().unwrap().push(body.clone());
 	let body: Value = serde_json::from_str(&body).unwrap();
 	let query = body["textQuery"].as_str().unwrap().to_owned();
 	if let Some(refused) = s.refusal(&headers, body) {
@@ -110,6 +113,7 @@ async fn search_text(State(s): State<Stub>, headers: HeaderMap, body: String) ->
 }
 
 async fn autocomplete(State(s): State<Stub>, headers: HeaderMap, body: String) -> Response {
+	s.bodies.lock().unwrap().push(body.clone());
 	let body: Value = serde_json::from_str(&body).unwrap();
 	if let Some(refused) = s.refusal(&headers, body) {
 		return refused;
@@ -310,6 +314,22 @@ async fn an_answer_is_paid_for_once() {
 	google.details(PROCOPE, Ask::Afresh, &Payer::house()).await.unwrap();
 	server.abort();
 	assert_eq!(s.asked(), 3, "asked afresh");
+}
+
+#[tokio::test]
+async fn a_body_is_keyed_with_its_keys_sorted() {
+	let (s, google, _store, server) = google(&["k"]).await;
+	google.candidates(SEARCH, &Payer::house()).await.unwrap();
+	google.suggest("le procope", &["FR"], &["plumber"], &Payer::house()).await.unwrap();
+	server.abort();
+	assert_eq!(
+		*s.bodies.lock().unwrap(),
+		[
+			r#"{"locationBias":{"circle":{"center":{"latitude":48.853,"longitude":2.3389},"radius":500.0}},"pageSize":20,"textQuery":"Le Procope"}"#,
+			r#"{"includedPrimaryTypes":["plumber"],"includedRegionCodes":["FR"],"input":"le procope"}"#,
+		],
+		"in the queries cache under these bytes"
+	);
 }
 
 #[tokio::test]
