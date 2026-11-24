@@ -4,7 +4,7 @@ use std::collections::BTreeSet;
 
 use eyre::WrapErr;
 use jiff::Timestamp;
-use sa_core::mail::{DraftState, Holds, Reading, Topic};
+use sa_core::mail::{DraftState, Holds, Reading, Sender, Topic};
 use sqlx::{SqliteConnection, types::Json};
 use uuid::Uuid;
 
@@ -166,23 +166,30 @@ fn json<T: serde::Serialize + ?Sized>(v: &T) -> String {
 
 /// What each case of the gmail's holds, for a message to join; a message not Google's draws none.
 pub(crate) async fn holds(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Vec<Holds>> {
-	let rows: Vec<(i64, Json<BTreeSet<String>>, Json<BTreeSet<String>>, Json<Vec<Option<String>>>)> = sqlx::query_as(
-		"SELECT c.id, c.numbers, json_group_array(m.thread), json_group_array(m.message_id) FROM mail_cases c \
-		 JOIN mails m ON m.case_id = c.id AND (m.authentic OR m.sent) WHERE c.gmail_id = $1 GROUP BY c.id ORDER BY c.id",
+	let rows: Vec<(i64, Json<BTreeSet<String>>, String, Option<String>, bool, Option<String>)> = sqlx::query_as(
+		"SELECT c.id, c.numbers, m.thread, m.message_id, m.sent, m.from_address FROM mail_cases c \
+		 JOIN mails m ON m.case_id = c.id AND (m.authentic OR m.sent) WHERE c.gmail_id = $1 ORDER BY c.id",
 	)
 	.bind(gmail)
 	.fetch_all(&mut *conn)
 	.await
 	.wrap_err("reading what a gmail's cases hold")?;
-	Ok(rows
-		.into_iter()
-		.map(|(case, Json(numbers), Json(threads), Json(ids))| Holds {
-			case,
-			threads,
-			message_ids: ids.into_iter().flatten().collect(),
-			numbers,
-		})
-		.collect())
+	let mut held: Vec<Holds> = Vec::new();
+	for (case, Json(numbers), thread, message_id, sent, from) in rows {
+		if held.last().is_none_or(|h| h.case != case) {
+			held.push(Holds {
+				case,
+				numbers,
+				..Holds::default()
+			});
+		}
+		let h = held.last_mut().expect("pushed for its first message");
+		if sent || from.is_some_and(|f| Sender::of(&f) == Sender::Support) {
+			h.threads.insert(thread);
+		}
+		h.message_ids.extend(message_id);
+	}
+	Ok(held)
 }
 
 pub(crate) async fn kept(conn: &mut SqliteConnection, gmail: i64, message: &str) -> eyre::Result<bool> {

@@ -222,11 +222,12 @@ impl Panel {
 		let sender = m.from.as_deref().map_or(Sender::Other, Sender::of);
 		let thread = format!("{:x}", m.thread);
 		let numbers = rules::numbers(subject);
+		let alone = !m.sent && sender != Sender::Support;
 		let joined = match forged {
 			true => None, // one that drew a case could silence it
 			false => rules::join(
 				&Joining {
-					alone: !m.sent && sender != Sender::Support,
+					alone,
 					thread: &thread,
 					refs: &m.refs,
 					numbers: &numbers,
@@ -287,7 +288,9 @@ impl Panel {
 				cases.last_mut().expect("pushed just now")
 			}
 		};
-		held.threads.insert(thread.clone());
+		if !alone {
+			held.threads.insert(thread.clone());
+		}
 		held.message_ids.extend(m.message_id.clone());
 		let known = held.numbers.len();
 		held.numbers.extend(numbers);

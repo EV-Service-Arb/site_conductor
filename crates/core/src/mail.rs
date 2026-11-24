@@ -487,6 +487,7 @@ pub struct Joining<'a> {
 #[derive(Clone, Debug, Default)]
 pub struct Holds {
 	pub case: i64,
+	/// Its conversation's: a notice's holds other profiles' too.
 	pub threads: BTreeSet<String>,
 	pub message_ids: BTreeSet<String>,
 	pub numbers: BTreeSet<String>,
@@ -911,13 +912,13 @@ mod tests {
 			},
 			Holds {
 				case: 2,
-				threads: set(&["bb"]),
+				threads: set(&[]),
 				message_ids: set(&["<n1@x>"]),
 				numbers: set(&[]),
 			},
 			Holds {
 				case: 3,
-				threads: set(&["bb"]),
+				threads: set(&[]),
 				message_ids: set(&["<n2@x>"]),
 				numbers: set(&[]),
 			},
