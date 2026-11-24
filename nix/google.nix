@@ -20,12 +20,8 @@
       };
     }
     {
-      name = "v7916"; # v79166789533@gmail.com, its free trial over: reopened as a full account
-      export = {
-        table = "gmp-demo-project-985008120.billing.gcp_billing_export_v1_01AFF0_385455_2AC92F";
-        reader = { file = "~/.config/gcloud/v7916-reader.json"; }; # accounting-reader@gmp-demo-project-985008120
-        since = "2026-11-23";
-      };
+      name = "v7916"; # v79166789533@gmail.com
+      export = null; # its billing account 01AFF0-385455-2AC92F is closed: nothing of ours uses it. Once open: gmp-demo-project-985008120.billing.gcp_billing_export_v1_01AFF0_385455_2AC92F, its reader ~/.config/gcloud/v7916-reader.json
       credits = [ ];
       provides.places = { key = { env = "GOOGLE_MAPS_KEY"; }; }; # Maps Platform Demo API Key: Places, Geocoding, Maps JS, Routes, YouTube
     }
