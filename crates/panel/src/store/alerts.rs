@@ -184,7 +184,6 @@ pub struct Sealed<'a> {
 }
 
 /// A new destination of the user's; `None` when the address is one of theirs already.
-#[expect(clippy::too_many_arguments, reason = "a row's columns")]
 pub async fn add(
 	conn: &mut SqliteConnection,
 	user: Uuid,
@@ -343,7 +342,7 @@ fn destination(
 // ── a person's hours and tiers ──────────────────────────────────────────────────────────
 
 /// A person's hours as they set them, in minutes since midnight in `tz`.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, schemars::JsonSchema, serde::Serialize)]
 #[schemars(rename = "AlertHours")]
 pub struct Hours {
 	/// An IANA time zone.

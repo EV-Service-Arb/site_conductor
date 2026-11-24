@@ -331,7 +331,7 @@ impl Worker {
 	}
 }
 
-/// Runs `w` every [`EVERY`] until `shutdown` turns true; a send begun is seen through. Nothing here ends
+/// Runs `w` every minute until `shutdown` turns true; a send begun is seen through. Nothing here ends
 /// `serve`.
 pub async fn run(w: Worker, mut shutdown: watch::Receiver<bool>) {
 	while !*shutdown.borrow() {

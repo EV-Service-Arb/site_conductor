@@ -341,7 +341,7 @@ pub struct Told {
 	pub error: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, schemars::JsonSchema, serde::Serialize, strum::EnumString)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::EnumString, schemars::JsonSchema, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[schemars(rename = "ToldState")]
