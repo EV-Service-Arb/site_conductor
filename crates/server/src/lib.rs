@@ -31,6 +31,7 @@ mod ingest;
 pub mod kit;
 mod library;
 pub mod live;
+pub mod mail;
 mod mcp;
 pub mod meters;
 mod oauth;

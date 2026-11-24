@@ -695,6 +695,7 @@ async fn beside_another(db: &TestDb) -> (Router, Browser, i64) {
 			label: None,
 			note: None,
 		}],
+		note: None,
 	};
 	let gbp = p.create_gmb(other, unplaced, jiff::Timestamp::now()).await.unwrap().unwrap();
 	let app = app(p, admin());

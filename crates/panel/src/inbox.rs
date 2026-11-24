@@ -1,6 +1,6 @@
 //! A gmail's inbox followed for its mail with Google (docs/ARCHITECTURE.md, Tokens and GBPs): each
-//! message logged once, on each GBP of the gmail it names, else the gmail's; read through a
-//! [`Mailbox`], in `serve` [`Gmail`].
+//! message logged once, on each GBP of the gmail it names, else the gmail's, and what is about a
+//! Business Profile kept ([`crate::mail`]); read through a [`Mailbox`], in `serve` [`Gmail`].
 
 use eyre::WrapErr;
 use jiff::Timestamp;
@@ -9,14 +9,12 @@ pub use crate::imap::Gmail;
 use crate::{
 	Panel,
 	seal::gmail_imap_aad,
-	store::{connections, gmbs as gmbs_db, gmbs::Event, inbox as db},
+	store::{connections, gmbs as gmbs_db, gmbs::Event, inbox as db, mail as mail_db},
 };
 
 /// Messages read at once.
 pub const BATCH: usize = 50;
 const SNIPPET: usize = 200;
-/// A shorter name, place id or address line is in every other message.
-const NAMES_FROM: usize = 4;
 
 /// A mailbox the follower reads.
 pub trait Mailbox: Sync {
@@ -58,6 +56,17 @@ pub struct Mail {
 	pub subject: Option<String>,
 	/// Its sender; one sent, its recipients.
 	pub counterparts: Vec<String>,
+	/// Its sender's address.
+	pub from: Option<String>,
+	pub reply_to: Option<String>,
+	/// Its recipients' addresses.
+	pub to: Vec<String>,
+	/// Without its brackets, as each of `refs`.
+	pub message_id: Option<String>,
+	/// The Message-IDs it answers.
+	pub refs: Vec<String>,
+	/// Proved Google's ([`sa_core::mail::authentic`]).
+	pub authentic: bool,
 	/// From the account itself.
 	pub sent: bool,
 	/// Its text, as far as it was read.
@@ -95,28 +104,16 @@ impl Panel {
 		if set.as_ref() != Some(&imap.username) || db::cursor(&mut tx, gmail).await? != before {
 			return Ok(false);
 		}
-		let gmbs: Vec<(i64, String, Vec<String>)> = db::gmbs(&mut tx, gmail)
-			.await?
-			.into_iter()
-			.map(|(id, name, place, address)| {
-				let title = name.clone().expect("gmbs.name is NOT NULL");
-				let line = address.as_deref().map(|a| a.split(',').next().expect("split yields one").trim().to_owned());
-				let names = [name, place, line].into_iter().flatten().map(|n| n.to_lowercase()).filter(|n| n.chars().count() >= NAMES_FROM);
-				(id, title, names.collect())
-			})
-			.collect();
+		let gmbs = db::gmbs(&mut tx, gmail).await?;
+		let mut cases = mail_db::holds(&mut tx, gmail).await?;
 		for m in &batch.mails {
 			let message = m.message.to_string();
+			let read = m.subject.iter().chain([&m.text]).map(String::as_str).collect::<Vec<_>>().join("\n");
+			let named: Vec<i64> = sa_core::mail::named(&read, &gmbs).into_iter().collect();
+			self.keep_mail(&mut tx, gmail, m, &named, &mut cases, now).await?;
 			if db::logged(&mut tx, gmail, &message).await? {
 				continue;
 			}
-			let read = m.subject.iter().chain([&m.text]).map(|s| s.to_lowercase()).collect::<Vec<_>>().join("\n");
-			let named: Vec<(i64, &str)> = gmbs
-				.iter()
-				.filter(|(_, _, names)| names.iter().any(|n| read.contains(n.as_str())))
-				.map(|(id, title, _)| (*id, title.as_str()))
-				.collect();
-			self.tell_google_mail(&mut tx, gmail, &named, m, now).await?;
 			let words = m.text.split_whitespace().collect::<Vec<_>>().join(" ");
 			let snippet = match words.char_indices().nth(SNIPPET) {
 				Some((cut, _)) => format!("{}…", &words[..cut]),
@@ -134,7 +131,7 @@ impl Panel {
 			match named.as_slice() {
 				[] => gmbs_db::log(&mut tx, None, Some(gmail), None, now, &event).await?,
 				named =>
-					for &(gmb, _) in named {
+					for &gmb in named {
 						gmbs_db::log(&mut tx, Some(gmb), Some(gmail), None, now, &event).await?;
 					},
 			}

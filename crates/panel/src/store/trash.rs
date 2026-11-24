@@ -11,7 +11,7 @@ use super::{
 	connections::{self, Connection},
 	from_db,
 	gmbs::{Unique, taken},
-	to_db,
+	mail, to_db,
 };
 
 /// Kept this long with no row of the owner's.
@@ -208,7 +208,7 @@ pub(crate) async fn restore(conn: &mut SqliteConnection, gmail: Option<i64>, gmb
 }
 
 /// Everything removed past its owner's kept days, unless they keep everything
-/// (`keep_by_default` without their say): purged, and the purged gmails' connections deleted.
+/// (`keep_by_default` without their say): purged, the purged gmails' connections and mail and the notes on the GBPs deleted.
 pub(crate) async fn purge(conn: &mut SqliteConnection, now: Timestamp, keep_by_default: bool) -> eyre::Result<()> {
 	const DUE: &str = "removed_at IS NOT NULL AND purged_at IS NULL \
 		AND NOT coalesce((SELECT never_purge FROM trash_settings t WHERE t.user_id = owner), $2) \
@@ -230,7 +230,17 @@ pub(crate) async fn purge(conn: &mut SqliteConnection, now: Timestamp, keep_by_d
 		.execute(&mut *conn)
 		.await
 		.wrap_err("purging GBPs")?;
+	forget_notes(conn).await?;
 	disconnect(conn, gmails).await
+}
+
+/// No one's note outlives its GBP.
+async fn forget_notes(conn: &mut SqliteConnection) -> eyre::Result<()> {
+	sqlx::query("DELETE FROM gmb_notes WHERE gmb_id IN (SELECT id FROM gmbs WHERE purged_at IS NOT NULL)")
+		.execute(&mut *conn)
+		.await
+		.wrap_err("deleting the notes on purged GBPs")?;
+	Ok(())
 }
 
 async fn disconnect(conn: &mut SqliteConnection, gmails: Vec<i64>) -> eyre::Result<()> {
@@ -238,12 +248,13 @@ async fn disconnect(conn: &mut SqliteConnection, gmails: Vec<i64>) -> eyre::Resu
 		for &which in Connection::VARIANTS {
 			connections::delete(conn, g, which).await?;
 		}
+		mail::forget(conn, g).await?;
 	}
 	Ok(())
 }
 
 /// Gone for good at `now`: GBP `gmb_id`, else gmail `gmail` with every GBP of it in the trash,
-/// which could not come back without it, and its connections.
+/// which could not come back without it, its connections, its mail and the notes on them.
 pub(crate) async fn erase(conn: &mut SqliteConnection, gmail: Option<i64>, gmb_id: Option<i64>, now: Timestamp) -> eyre::Result<()> {
 	if let Some(g) = gmail {
 		sqlx::query("UPDATE gmbs SET purged_at = $2 WHERE gmail_id = $1 AND removed_at IS NOT NULL AND purged_at IS NULL")
@@ -268,5 +279,5 @@ pub(crate) async fn erase(conn: &mut SqliteConnection, gmail: Option<i64>, gmb_i
 			.await
 			.wrap_err("erasing a GBP")?;
 	}
-	Ok(())
+	forget_notes(conn).await
 }

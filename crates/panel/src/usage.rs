@@ -37,8 +37,10 @@ const CLAUDE: &str = "claude";
 /// What an answer on our Claude has run up for its asker.
 #[derive(Debug)]
 pub struct Tab {
-	/// The answer's turn id: its charges' key.
+	/// The answer's id: its charges' key.
 	answer: String,
+	/// What its charges are called.
+	label: &'static str,
 	rates: BTreeMap<ModelTokens, Rate>,
 	/// Tokens × price, in [`Item::per`]ths of a token.
 	owed: i64,
@@ -107,9 +109,9 @@ impl Panel {
 		Ok(Ok(balance - price))
 	}
 
-	/// The tab `by`'s answer `answer` runs up on our Claude, at the prices in effect now; refused
+	/// The tab `by`'s answer `answer`, a `label`, runs up on our Claude, at the prices in effect now; refused
 	/// while one of its items is unpriced or their balance is spent.
-	pub async fn model_tab(&self, by: Spender<ModelTokens>, answer: &str, now: Timestamp) -> eyre::Result<Result<Tab, String>> {
+	pub async fn model_tab(&self, by: Spender<ModelTokens>, answer: &str, label: &'static str, now: Timestamp) -> eyre::Result<Result<Tab, String>> {
 		let mut tx = self.store.begin_write().await?;
 		if !is_open(&mut tx).await? {
 			return Ok(Err(Refused::Closed.to_string()));
@@ -125,6 +127,7 @@ impl Panel {
 		}
 		Ok(Ok(Tab {
 			answer: answer.to_owned(),
+			label,
 			rates,
 			owed: 0,
 			cost: 0,
@@ -133,7 +136,7 @@ impl Panel {
 		}))
 	}
 
-	/// The assistant's `model` answered `by`, reading and writing `used`: on our Claude (`tab`),
+	/// `model` answered `by`, reading and writing `used`: on our Claude (`tab`),
 	/// charged in the same write. Why no further round runs on ours, once their balance is spent.
 	pub async fn model_used(&self, by: Spender<ModelTokens>, model: &str, used: &[(ModelTokens, i64)], tab: Option<&mut Tab>, now: Timestamp) -> eyre::Result<Option<String>> {
 		let mut tx = self.store.begin_write().await?;
@@ -169,7 +172,7 @@ impl Panel {
 				charged: Some(Charged {
 					service: CLAUDE.to_owned(),
 					key: tab.answer.clone(),
-					label: Some("The assistant's answer".to_owned()),
+					label: Some(tab.label.to_owned()),
 				}),
 				cost: Some(tab.cost),
 				by: None,
@@ -184,7 +187,7 @@ impl Panel {
 			tab.cost = 0;
 		}
 		if charge > 0 {
-			tracing::info!(user_id = %by.user(), tokens = charge, "the assistant's answer charged");
+			tracing::info!(user_id = %by.user(), tokens = charge, "a model's answer charged");
 			self.snapshot_due.notify_one();
 		}
 		Ok((balance - charge <= 0).then(|| spent(balance - charge)))

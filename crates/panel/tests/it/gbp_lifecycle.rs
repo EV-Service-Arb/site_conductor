@@ -81,6 +81,7 @@ async fn create(p: &Panel, owner: Uuid, name: &str, state: State, gmail_id: Opti
 		} else {
 			Vec::new()
 		},
+		note: None,
 	};
 	p.create_gmb(owner, unplaced, now()).await.unwrap()
 }

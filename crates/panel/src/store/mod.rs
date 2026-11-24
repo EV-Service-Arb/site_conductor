@@ -23,6 +23,7 @@ pub mod gmbs;
 pub(crate) mod inbox;
 pub mod kit;
 pub(crate) mod library;
+pub(crate) mod mail;
 pub mod meters;
 pub mod oauth;
 pub mod outbox;

@@ -11,13 +11,19 @@ use serde_json::{Value, json};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-use crate::Invalid;
+use crate::{
+	Invalid,
+	mail::{Kind, State, Why},
+};
 
 /// How long a source may send nothing before the admins hear of it.
 pub const SOURCE_SILENCE: SignedDuration = SignedDuration::from_hours(24);
 
 /// Longest a name may run in a message, in characters.
 pub const MAX_NAME: usize = 80;
+
+/// Longest what a mail says may run in a message, in characters.
+const MAX_SUMMARY: usize = 200;
 
 /// At most one message a second to a private chat (Telegram's limit for one).
 pub const PER_CHAT_GAP: SignedDuration = SignedDuration::from_secs(1);
@@ -116,12 +122,23 @@ pub enum Note {
 		name: String,
 		need: String,
 	},
+	/// A case of Google's mail turned to a person, or its reply is about to go.
+	GoogleMail {
+		state: State,
+		/// Google's last word, once read.
+		kind: Option<Kind>,
+		/// Its GBP's name.
+		gmb: Option<String>,
+		summary: Option<String>,
+		deadline: Option<Timestamp>,
+	},
 }
 impl Note {
 	pub fn rule(&self) -> Rule {
 		match self {
 			Self::SourceSilent { .. } => Rule::SourceSilent,
 			Self::AccessRequested { .. } => Rule::AccessRequested,
+			Self::GoogleMail { .. } => Rule::GoogleMail,
 		}
 	}
 
@@ -174,6 +191,35 @@ impl Note {
 				if !name.is_empty() {
 					out.push(if ru { "\nИмя: " } else { "\nName: " });
 					out.code(&name);
+				}
+			}
+			Self::GoogleMail {
+				state,
+				kind,
+				gmb,
+				summary,
+				deadline,
+			} => {
+				out.push(&match (state, ru) {
+					(State::ReplyReady, true) => "✉️ Google: ответ готов, отправьте его".to_owned(),
+					(State::ReplyReady, false) => "✉️ Google: a reply is ready to send".to_owned(),
+					(State::Sending { at }, true) => format!("✉️ Google: ответ уйдёт сам {}", minute(*at)),
+					(State::Sending { at }, false) => format!("✉️ Google: a reply goes by itself {}", minute(*at)),
+					(State::NeedsYou { why: Why::Needs { needs } }, true) => format!("✉️ Google: для ответа нужно: {}", one_line(&needs.join("; "), MAX_SUMMARY)),
+					(State::NeedsYou { why: Why::Needs { needs } }, false) => format!("✉️ Google: the reply needs: {}", one_line(&needs.join("; "), MAX_SUMMARY)),
+					(_, true) => "✉️ Google: нужны вы".to_owned(),
+					(_, false) => "✉️ Google needs you".to_owned(),
+				});
+				let of: Vec<String> = [kind.map(|k| kind_name(k, locale).to_owned()), gmb.as_deref().map(|g| one_line(g, MAX_NAME))].into_iter().flatten().collect();
+				if !of.is_empty() {
+					out.push(&format!("\n{}", of.join(" · ")));
+				}
+				if let Some(summary) = summary.as_deref().map(|s| one_line(s, MAX_SUMMARY)).filter(|s| !s.is_empty()) {
+					out.push("\n");
+					out.code(&summary);
+				}
+				if let Some(at) = deadline {
+					out.push(&if ru { format!("\nДо {}", minute(*at)) } else { format!("\nBy {}", minute(*at)) });
 				}
 			}
 		}
@@ -414,6 +460,56 @@ fn callback_mac(key: &[u8; 32], chat_id: ChatId, message: OutboxId, button: &str
 	out
 }
 
+fn kind_name(kind: Kind, locale: Locale) -> &'static str {
+	let (ru, en) = match kind {
+		Kind::VideoRejected => ("видео отклонено", "video rejected"),
+		Kind::VideoInReview => ("видео на проверке", "video in review"),
+		Kind::Verified => ("подтверждён", "verified"),
+		Kind::ReverificationRequired => ("нужно подтвердить снова", "verify again"),
+		Kind::SelfServe => ("предлагают записанное видео", "pointed at the recorded video"),
+		Kind::CallOffered => ("доступен видеозвонок", "live call offered"),
+		Kind::CallFailed => ("видеозвонок не прошёл", "live call failed"),
+		Kind::OptionsExhausted => ("способов подтверждения не осталось", "no way to verify left"),
+		Kind::Suspended => ("приостановлен", "suspended"),
+		Kind::AccountRestricted => ("аккаунт ограничен", "account restricted"),
+		Kind::AppealReceived => ("апелляция получена", "appeal received"),
+		Kind::AppealApproved => ("апелляция одобрена", "appeal approved"),
+		Kind::AppealDenied => ("апелляция отклонена", "appeal denied"),
+		Kind::ReviewsPaused => ("отзывы приостановлены", "reviews paused"),
+		Kind::ReviewsRestricted => ("отзывы ограничены", "reviews restricted"),
+		Kind::RestrictionLifted => ("ограничение снято", "restriction lifted"),
+		Kind::ReviewRemoved => ("отзыв удалён", "review removed"),
+		Kind::ReinstatementRefused => ("отзывы не вернут", "reviews not reinstated"),
+		Kind::ReinstatementDone => ("отзывы возвращены", "reviews reinstated"),
+		Kind::ReviewsLiveAlready => ("отзывы уже видны", "reviews live already"),
+		Kind::ReviewsNoData => ("нет данных об отзывах", "no data on the reviews"),
+		Kind::StillActive => ("ещё работает?", "still active?"),
+		Kind::Invited => ("приглашение", "invited"),
+		Kind::AccessGranted => ("доступ выдан", "access granted"),
+		Kind::AccessLost => ("доступ отозван", "access lost"),
+		Kind::OwnershipRequested => ("запрос на владение", "ownership requested"),
+		Kind::ManagementRequested => ("запрос на управление", "management requested"),
+		Kind::EditSuggested => ("предложена правка", "edit suggested"),
+		Kind::EditRejected => ("правка отклонена", "edit rejected"),
+		Kind::ChangedByGoogle => ("изменено Google", "changed by Google"),
+		Kind::ContentRemoved => ("контент удалён", "content removed"),
+		Kind::PolicyWarning => ("предупреждение о правилах", "policy warning"),
+		Kind::Duplicate => ("дубликат", "duplicate"),
+		Kind::Acknowledged => ("получено", "acknowledged"),
+		Kind::Routed => ("передано специалисту", "routed to a specialist"),
+		Kind::Asks => ("Google просит", "Google asks"),
+		Kind::Closed => ("обращение закрыто", "closed"),
+		Kind::Unclear => ("неясно", "unclear"),
+		Kind::Noise => ("рассылка", "noise"),
+		Kind::NotBusiness => ("не о профиле", "not a profile's"),
+		Kind::Impersonation => ("не от Google", "not from Google"),
+	};
+	match locale {
+		Locale::Ru => ru,
+		Locale::En => en,
+	}
+}
+
 /// Whether a character is one a user's text may not carry into a message as it is: any control
 /// character (a line break could start a line that reads as ours), the line and paragraph
 /// separators, and the marks that reorder text (bidi overrides and isolates).
@@ -501,6 +597,19 @@ mod tests {
 			})
 			.collect();
 		assert_eq!(spans, ["eve@x.io Взял: Mallory", "Eve"], "what a user typed is code, on one line");
+		let mail = Note::GoogleMail {
+			state: State::Sending {
+				at: "2026-10-06T10:15:00Z".parse().unwrap(),
+			},
+			kind: Some(Kind::Asks),
+			gmb: Some("Plomberie Dupont".into()),
+			summary: Some("Asks for a photo\nof the signage".into()),
+			deadline: Some("2026-10-10T00:00:00Z".parse().unwrap()),
+		};
+		assert_eq!(
+			mail.text(Locale::En),
+			"✉️ Google: a reply goes by itself 2026-10-06 10:15 UTC\nGoogle asks · Plomberie Dupont\nAsks for a photo of the signage\nBy 2026-10-10 00:00 UTC"
+		);
 		assert_eq!(one_line("  a \u{2066}b\u{2069}  c ", 80), "a b c");
 		assert_eq!(one_line("abcdef", 4), "abc…");
 	}

@@ -5,7 +5,7 @@
 //! not sit in the clear. [`session`] is signing in through concierge and the sessions that
 //! follow; [`access`] the access requests; [`gmbs`] people's gmails and the GMBs they manage;
 //! [`connections`] a gmail's inbox and Maps key, and who pays for a Places request; [`inbox`] its mail
-//! with Google followed into its GBPs' logs; [`browsers`]
+//! with Google followed into its GBPs' logs; [`mail`] that mail as cases, read and answered; [`browsers`]
 //! a gmail's antidetect browser; [`claude`] a person's own Claude, which their assistant runs on;
 //! [`tokens`] their balances and review_archive's charges, and [`import`] both from there;
 //! [`alerts`] the hub: what is told, to whom, when; [`deliver`] what it owes their destinations sent;
@@ -34,12 +34,14 @@ pub mod inbox;
 pub mod kit;
 pub mod library;
 pub mod live;
+pub mod mail;
 pub mod meters;
 pub mod oauth;
 mod own_alerts;
 pub mod placement;
 pub mod seal;
 pub mod session;
+mod smtp;
 pub mod store;
 pub mod street_view;
 pub mod telegram;
@@ -141,11 +143,13 @@ pub struct Panel {
 	/// The Google billing accounts our keys bill on.
 	accounts: Arc<sa_places::Accounts>,
 	purses: connections::Purses,
+	/// What sends a gmail's replies.
+	smtp: Arc<dyn mail::Smtp>,
 	/// Told of every change review_archive's snapshot carries.
 	snapshot_due: Arc<tokio::sync::Notify>,
 }
 impl Panel {
-	pub fn new(store: Store, key: DataKey, renewal: Renewal, google: sa_places::Google, accounts: Arc<sa_places::Accounts>) -> Self {
+	pub fn new(store: Store, key: DataKey, renewal: Renewal, google: sa_places::Google, accounts: Arc<sa_places::Accounts>, smtp: Arc<dyn mail::Smtp>) -> Self {
 		Self {
 			store,
 			key: Arc::new(key),
@@ -154,6 +158,7 @@ impl Panel {
 			google: Arc::new(google),
 			accounts,
 			purses: Arc::default(),
+			smtp,
 			snapshot_due: Arc::default(),
 		}
 	}

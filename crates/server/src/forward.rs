@@ -27,6 +27,7 @@ use axum::{
 use ev_lib::api::Refusal;
 use hyper_util::client::legacy::{Client, connect::HttpConnector};
 use sa_auth::{Assertion, Principal, Service, Signer, User};
+use sa_core::feeds;
 
 use crate::{
 	api::Code,
@@ -322,6 +323,16 @@ impl Services {
 		let status = res.status();
 		let body = to_bytes(res.into_body(), ANSWER).await.map_err(|e| eyre::eyre!("reading {service:?}'s answer to {path}: {e}"))?;
 		Ok((status, body))
+	}
+
+	/// The GBP's reviews currently gone, newest first, [`feeds::GONE_MAX`] at most; `None` while the archive tracks no such GBP.
+	pub async fn gone(&self, gmb: i64) -> eyre::Result<Option<Vec<feeds::GoneReview>>> {
+		let (status, body) = self.conductor_fetch(Service::ReviewArchive, &feeds::GONE.replace("{gmb}", &gmb.to_string())).await?;
+		match status {
+			StatusCode::NOT_FOUND => Ok(None),
+			StatusCode::OK => serde_json::from_slice(&body).map(Some).map_err(|e| eyre::eyre!("review_archive's gone reviews of GBP {gmb}: {e}")),
+			other => eyre::bail!("review_archive answered GBP {gmb}'s gone reviews with {other}: {}", String::from_utf8_lossy(&body)),
+		}
 	}
 }
 

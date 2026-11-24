@@ -351,6 +351,44 @@ export const VIEWS = {
         "type": "object"
       }
     },
+    "email": {
+      "path": "/email",
+      "description": "Google's mail about the caller's GBPs, as cases.",
+      "params": {
+        "properties": {},
+        "required": [],
+        "type": "object"
+      },
+      "query": {
+        "properties": {
+          "case": {
+            "description": "The case open.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "show": {
+            "description": "Which cases are listed; without it, those needing the operator.",
+            "enum": [
+              "all",
+              "needs_you",
+              "waiting",
+              "automatic",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [],
+        "type": "object"
+      },
+      "key": "i"
+    },
     "gbp": {
       "path": "/gbps/{gmb}",
       "description": "A GBP's window as its own page.",
@@ -618,12 +656,8 @@ export const VIEWS = {
             ]
           },
           "pressure": {
-            "description": "The pressure field, at this radius in metres.",
-            "format": "double",
-            "type": [
-              "number",
-              "null"
-            ]
+            "description": "The pressure field drawn.",
+            "type": "boolean"
           },
           "schematic": {
             "description": "The schematic base map, not the satellite.",
@@ -666,26 +700,13 @@ export const VIEWS = {
               "null"
             ]
           },
-          "tiers": {
-            "additionalProperties": {
-              "properties": {
-                "show": {
-                  "type": "boolean"
-                },
-                "weight": {
-                  "format": "double",
-                  "type": "number"
-                }
-              },
-              "required": [
-                "weight",
-                "show"
-              ],
-              "type": "object"
+          "tiers_shown": {
+            "description": "The tiers of competitors shown, by name; without it, every one.",
+            "items": {
+              "type": "string"
             },
-            "description": "Tiers whose weight or visibility was moved off the study's own.",
             "type": [
-              "object",
+              "array",
               "null"
             ]
           },

@@ -21,6 +21,7 @@ use uuid::Uuid;
 use crate::{
 	Panel,
 	live::Signal,
+	mail::{Outgoing, SendError, Sending, Smtp},
 	seal::DataKey,
 	store::{self, Store},
 };
@@ -135,8 +136,13 @@ pub fn panel_with(store: Store, key: DataKey) -> Panel {
 	panel_on(store, key, keyless, sa_places::Accounts::new(vec![], vec![]))
 }
 
-/// A panel on `store` asking `google` on `accounts`, tokens as [`panel_with`].
+/// A panel on `store` asking `google` on `accounts`, tokens as [`panel_with`], sending no mail.
 pub fn panel_on(store: Store, key: DataKey, google: sa_places::Google, accounts: sa_places::Accounts) -> Panel {
+	panel_sending(store, key, google, accounts, Arc::new(Outbox::default()))
+}
+
+/// [`panel_on`], its mail handed to `smtp`.
+pub fn panel_sending(store: Store, key: DataKey, google: sa_places::Google, accounts: sa_places::Accounts, smtp: Arc<dyn Smtp>) -> Panel {
 	let renewal = sa_core::tokens::Renewal {
 		daily: 15,
 		cap: 500,
@@ -144,7 +150,24 @@ pub fn panel_on(store: Store, key: DataKey, google: sa_places::Google, accounts:
 	}
 	.validate()
 	.expect("a valid renewal");
-	Panel::new(store, key, renewal, google, Arc::new(accounts))
+	Panel::new(store, key, renewal, google, Arc::new(accounts), smtp)
+}
+
+/// An SMTP server that keeps what it is handed, answering each with the next of `answers`, then taking it.
+#[derive(Debug, Default)]
+pub struct Outbox {
+	pub sent: std::sync::Mutex<Vec<Outgoing>>,
+	pub answers: std::sync::Mutex<Vec<Result<(), SendError>>>,
+}
+
+impl Smtp for Outbox {
+	fn send<'a>(&'a self, _: crate::inbox::Account<'a>, mail: &'a Outgoing) -> Sending<'a> {
+		Box::pin(async {
+			self.sent.lock().expect("never poisoned").push(mail.clone());
+			let mut answers = self.answers.lock().expect("never poisoned");
+			if answers.is_empty() { Ok(()) } else { answers.remove(0) }
+		})
+	}
 }
 
 /// What every [`account`] names its `allow` of: the meters' slice alone.

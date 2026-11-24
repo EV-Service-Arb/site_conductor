@@ -59,7 +59,7 @@ pub enum Rule {
 	ReviewGone,
 	ReviewReappeared,
 	ScanFailed,
-	/// Mail from Google in a gmail's inbox.
+	/// A case of Google's mail turned to a person.
 	GoogleMail,
 	/// A gmail's inbox no longer answers.
 	ConnectionLost,

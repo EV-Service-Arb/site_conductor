@@ -23,6 +23,7 @@ const LABEL: Record<Keyed, (t: T) => string> = {
   wallet: (t) => t(nav.wallet, "Wallet"),
   members: (t) => t(nav.members, "View as member"),
   alerts: (t) => t(nav.alerts, "Alerts"),
+  email: (t) => t(nav.email, "Email"),
   account: (t) => t(nav.account, "Profile"),
   kits: (t) => t(nav.kits, "Review kits"),
 };

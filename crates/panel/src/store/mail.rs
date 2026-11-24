@@ -1,0 +1,515 @@
+//! Google's mail as kept: the cases, their messages (each text sealed), the drafts of replies to them.
+
+use std::collections::BTreeSet;
+
+use eyre::WrapErr;
+use jiff::Timestamp;
+use sa_core::mail::{DraftState, Holds, Reading, Topic};
+use sqlx::{SqliteConnection, types::Json};
+use uuid::Uuid;
+
+use super::{connections::Sealed, from_db, to_db};
+
+/// Who read a message.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, schemars::JsonSchema, strum::EnumString, strum::IntoStaticStr)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+#[schemars(rename = "MailReader")]
+pub enum ReadBy {
+	Rule,
+	Model,
+	/// A person corrected it.
+	Person,
+}
+
+/// A message to keep.
+pub(crate) struct NewMail<'a> {
+	pub case: i64,
+	pub gmail: i64,
+	pub message: &'a str,
+	pub thread: &'a str,
+	pub at: Timestamp,
+	pub sent: bool,
+	pub from: Option<&'a str>,
+	pub reply_to: Option<&'a str>,
+	pub to: &'a [String],
+	pub subject: Option<&'a str>,
+	pub message_id: Option<&'a str>,
+	pub refs: &'a [String],
+	pub authentic: bool,
+	pub repliable: bool,
+	pub gmb: Option<i64>,
+	pub listing: Option<&'a str>,
+	pub text: &'a Sealed,
+}
+
+#[derive(sqlx::FromRow)]
+pub(crate) struct MailRow {
+	pub id: i64,
+	pub case_id: i64,
+	pub gmail_id: i64,
+	pub message: String,
+	pub thread: String,
+	at: i64,
+	pub sent: bool,
+	pub from_address: Option<String>,
+	pub reply_to: Option<String>,
+	recipients: Json<Vec<String>>,
+	pub subject: Option<String>,
+	pub message_id: Option<String>,
+	refs: Json<Vec<String>>,
+	pub authentic: bool,
+	pub repliable: bool,
+	pub gmb_id: Option<i64>,
+	pub listing: Option<String>,
+	reading: Option<Json<Reading>>,
+	read_by: Option<String>,
+	pub attempts: i64,
+	pub read_error: Option<String>,
+}
+impl MailRow {
+	pub(crate) fn at(&self) -> eyre::Result<Timestamp> {
+		from_db(self.at)
+	}
+
+	pub(crate) fn to(&self) -> &[String] {
+		&self.recipients.0
+	}
+
+	pub(crate) fn refs(&self) -> &[String] {
+		&self.refs.0
+	}
+
+	pub(crate) fn reading(&self) -> Option<&Reading> {
+		self.reading.as_ref().map(|r| &r.0)
+	}
+
+	pub(crate) fn read_by(&self) -> eyre::Result<Option<ReadBy>> {
+		self.read_by.as_deref().map(|r| r.parse().wrap_err("a stored reader")).transpose()
+	}
+}
+
+const MAIL: &str = "SELECT m.id, m.case_id, m.gmail_id, m.message, m.thread, m.at, m.sent, m.from_address, m.reply_to, m.recipients, m.subject, m.message_id, m.refs, \
+	m.authentic, m.repliable, m.gmb_id, m.listing, m.reading, m.read_by, m.attempts, m.read_error FROM mails m";
+
+#[derive(sqlx::FromRow)]
+pub(crate) struct CaseRow {
+	pub id: i64,
+	pub gmail_id: i64,
+	numbers: Json<BTreeSet<String>>,
+	pub gmb_id: Option<i64>,
+	topic: Option<String>,
+	pub done_mail: Option<i64>,
+}
+impl CaseRow {
+	pub(crate) fn numbers(&self) -> &BTreeSet<String> {
+		&self.numbers.0
+	}
+
+	pub(crate) fn topic(&self) -> eyre::Result<Option<Topic>> {
+		self.topic.as_deref().map(|t| t.parse().wrap_err("a stored topic")).transpose()
+	}
+}
+
+/// A draft as stored; its body stays sealed.
+pub(crate) struct DraftRow {
+	pub id: i64,
+	pub case: i64,
+	pub answers: i64,
+	pub body: Sealed,
+	pub needs: Vec<String>,
+	pub state: DraftState,
+	pub send_at: Option<Timestamp>,
+	pub created_at: Timestamp,
+	pub sent_at: Option<Timestamp>,
+	pub error: Option<String>,
+}
+
+#[derive(sqlx::FromRow)]
+struct RawDraft {
+	id: i64,
+	case_id: i64,
+	answers: i64,
+	body_sealed: Vec<u8>,
+	data_key_fp: Vec<u8>,
+	needs: Json<Vec<String>>,
+	state: String,
+	send_at: Option<i64>,
+	created_at: i64,
+	sent_at: Option<i64>,
+	error: Option<String>,
+}
+
+const DRAFT: &str = "SELECT d.id, d.case_id, d.answers, d.body_sealed, d.data_key_fp, d.needs, d.state, d.send_at, d.created_at, d.sent_at, d.error FROM mail_drafts d";
+
+fn draft(r: RawDraft) -> eyre::Result<DraftRow> {
+	Ok(DraftRow {
+		id: r.id,
+		case: r.case_id,
+		answers: r.answers,
+		body: Sealed {
+			blob: r.body_sealed,
+			data_key_fp: r.data_key_fp,
+		},
+		needs: r.needs.0,
+		state: r.state.parse().wrap_err("a stored draft's state")?,
+		send_at: r.send_at.map(from_db).transpose()?,
+		created_at: from_db(r.created_at)?,
+		sent_at: r.sent_at.map(from_db).transpose()?,
+		error: r.error,
+	})
+}
+
+fn json<T: serde::Serialize + ?Sized>(v: &T) -> String {
+	serde_json::to_string(v).expect("strings serialize")
+}
+
+/// What each case of the gmail's holds, for a message to join; a message not Google's draws none.
+pub(crate) async fn holds(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Vec<Holds>> {
+	let rows: Vec<(i64, Json<BTreeSet<String>>, Json<BTreeSet<String>>, Json<Vec<Option<String>>>)> = sqlx::query_as(
+		"SELECT c.id, c.numbers, json_group_array(m.thread), json_group_array(m.message_id) FROM mail_cases c \
+		 JOIN mails m ON m.case_id = c.id AND (m.authentic OR m.sent) WHERE c.gmail_id = $1 GROUP BY c.id ORDER BY c.id",
+	)
+	.bind(gmail)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("reading what a gmail's cases hold")?;
+	Ok(rows
+		.into_iter()
+		.map(|(case, Json(numbers), Json(threads), Json(ids))| Holds {
+			case,
+			threads,
+			message_ids: ids.into_iter().flatten().collect(),
+			numbers,
+		})
+		.collect())
+}
+
+pub(crate) async fn kept(conn: &mut SqliteConnection, gmail: i64, message: &str) -> eyre::Result<bool> {
+	sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM mails WHERE gmail_id = $1 AND message = $2)")
+		.bind(gmail)
+		.bind(message)
+		.fetch_one(&mut *conn)
+		.await
+		.wrap_err("looking a message up")
+}
+
+pub(crate) async fn add_case(conn: &mut SqliteConnection, gmail: i64, numbers: &BTreeSet<String>) -> eyre::Result<i64> {
+	sqlx::query_scalar("INSERT INTO mail_cases (gmail_id, numbers) VALUES ($1, $2) RETURNING id")
+		.bind(gmail)
+		.bind(json(numbers))
+		.fetch_one(&mut *conn)
+		.await
+		.wrap_err("opening a case")
+}
+
+pub(crate) async fn set_numbers(conn: &mut SqliteConnection, case: i64, numbers: &BTreeSet<String>) -> eyre::Result<()> {
+	sqlx::query("UPDATE mail_cases SET numbers = $2 WHERE id = $1")
+		.bind(case)
+		.bind(json(numbers))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("numbering a case")?;
+	Ok(())
+}
+
+pub(crate) async fn add(conn: &mut SqliteConnection, m: &NewMail<'_>) -> eyre::Result<i64> {
+	sqlx::query_scalar(
+		"INSERT INTO mails (case_id, gmail_id, message, thread, at, sent, from_address, reply_to, recipients, subject, message_id, refs, authentic, repliable, gmb_id, \
+		 listing, text_sealed, data_key_fp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id",
+	)
+	.bind(m.case)
+	.bind(m.gmail)
+	.bind(m.message)
+	.bind(m.thread)
+	.bind(to_db(m.at))
+	.bind(m.sent)
+	.bind(m.from)
+	.bind(m.reply_to)
+	.bind(json(m.to))
+	.bind(m.subject)
+	.bind(m.message_id)
+	.bind(json(m.refs))
+	.bind(m.authentic)
+	.bind(m.repliable)
+	.bind(m.gmb)
+	.bind(m.listing)
+	.bind(&m.text.blob)
+	.bind(&m.text.data_key_fp)
+	.fetch_one(&mut *conn)
+	.await
+	.wrap_err("keeping a message")
+}
+
+/// The case's drafts not handed to SMTP: another message came.
+pub(crate) async fn supersede(conn: &mut SqliteConnection, case: i64) -> eyre::Result<()> {
+	sqlx::query("UPDATE mail_drafts SET state = 'superseded' WHERE case_id = $1 AND state IN ('proposed', 'held', 'failed')")
+		.bind(case)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("superseding a case's drafts")?;
+	Ok(())
+}
+
+/// The cases of the owner's gmails not removed, oldest first.
+pub(crate) async fn cases(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<CaseRow>> {
+	sqlx::query_as(
+		"SELECT c.id, c.gmail_id, c.numbers, c.gmb_id, c.topic, c.done_mail FROM mail_cases c JOIN gmails g ON g.id = c.gmail_id \
+		 WHERE g.owner = $1 AND g.removed_at IS NULL ORDER BY c.id",
+	)
+	.bind(owner)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing a person's cases")
+}
+
+/// The messages of the owner's gmails not removed, oldest first.
+pub(crate) async fn mails(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<MailRow>> {
+	sqlx::query_as(sqlx::AssertSqlSafe(format!(
+		"{MAIL} JOIN gmails g ON g.id = m.gmail_id WHERE g.owner = $1 AND g.removed_at IS NULL ORDER BY m.at, m.id"
+	)))
+	.bind(owner)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing a person's mail with Google")
+}
+
+/// Each case's latest draft, of the owner's gmails not removed.
+pub(crate) async fn drafts(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<DraftRow>> {
+	let rows: Vec<RawDraft> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+		"{DRAFT} JOIN mail_cases c ON c.id = d.case_id JOIN gmails g ON g.id = c.gmail_id WHERE g.owner = $1 AND g.removed_at IS NULL \
+		 AND d.id = (SELECT max(o.id) FROM mail_drafts o WHERE o.case_id = d.case_id)"
+	)))
+	.bind(owner)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing a person's drafts")?;
+	rows.into_iter().map(draft).collect()
+}
+
+/// A message's text, sealed, by its message's id.
+pub(crate) async fn text(conn: &mut SqliteConnection, mail: i64) -> eyre::Result<Sealed> {
+	let (blob, data_key_fp) = sqlx::query_as("SELECT text_sealed, data_key_fp FROM mails WHERE id = $1")
+		.bind(mail)
+		.fetch_one(&mut *conn)
+		.await
+		.wrap_err("loading a message's text")?;
+	Ok(Sealed { blob, data_key_fp })
+}
+
+/// Whoever has mail kept, in a gmail not removed.
+pub(crate) async fn owners(conn: &mut SqliteConnection) -> eyre::Result<Vec<Uuid>> {
+	sqlx::query_scalar("SELECT DISTINCT g.owner FROM mail_cases c JOIN gmails g ON g.id = c.gmail_id WHERE g.removed_at IS NULL ORDER BY g.owner")
+		.fetch_all(&mut *conn)
+		.await
+		.wrap_err("listing whose mail is kept")
+}
+
+pub(crate) async fn set_reading(conn: &mut SqliteConnection, mail: i64, reading: &Reading, by: ReadBy, now: Timestamp) -> eyre::Result<()> {
+	let by: &'static str = by.into();
+	sqlx::query("UPDATE mails SET reading = $2, read_by = $3, read_at = $4, read_error = NULL WHERE id = $1")
+		.bind(mail)
+		.bind(json(reading))
+		.bind(by)
+		.bind(to_db(now))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("keeping a message's reading")?;
+	Ok(())
+}
+
+pub(crate) async fn read_failed(conn: &mut SqliteConnection, mail: i64, error: &str) -> eyre::Result<()> {
+	sqlx::query("UPDATE mails SET attempts = attempts + 1, read_error = $2 WHERE id = $1")
+		.bind(mail)
+		.bind(error)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("keeping a failed reading")?;
+	Ok(())
+}
+
+/// `Some(None)` takes what was set by hand away.
+pub(crate) async fn edit_case(conn: &mut SqliteConnection, case: i64, gmb: Option<Option<i64>>, topic: Option<Option<Topic>>) -> eyre::Result<()> {
+	sqlx::query("UPDATE mail_cases SET gmb_id = CASE WHEN $2 THEN $3 ELSE gmb_id END, topic = CASE WHEN $4 THEN $5 ELSE topic END WHERE id = $1")
+		.bind(case)
+		.bind(gmb.is_some())
+		.bind(gmb.flatten())
+		.bind(topic.is_some())
+		.bind(topic.flatten().map(<&'static str>::from))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("editing a case")?;
+	Ok(())
+}
+
+/// Marked done at message `at` by `by`; `None`, no longer.
+pub(crate) async fn set_done(conn: &mut SqliteConnection, case: i64, at: Option<(i64, Uuid)>) -> eyre::Result<()> {
+	sqlx::query("UPDATE mail_cases SET done_mail = $2, done_by = $3 WHERE id = $1")
+		.bind(case)
+		.bind(at.map(|(m, _)| m))
+		.bind(at.map(|(_, by)| by))
+		.execute(&mut *conn)
+		.await
+		.wrap_err("marking a case done")?;
+	Ok(())
+}
+
+/// A draft to keep.
+pub(crate) struct NewDraft<'a> {
+	pub case: i64,
+	pub answers: i64,
+	pub body: &'a Sealed,
+	pub needs: &'a [String],
+	pub state: DraftState,
+	pub send_at: Option<Timestamp>,
+	pub error: Option<&'a str>,
+}
+
+pub(crate) async fn add_draft(conn: &mut SqliteConnection, d: &NewDraft<'_>, now: Timestamp) -> eyre::Result<i64> {
+	let state: &'static str = d.state.into();
+	sqlx::query_scalar(
+		"INSERT INTO mail_drafts (case_id, answers, body_sealed, data_key_fp, needs, state, send_at, created_at, error) \
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+	)
+	.bind(d.case)
+	.bind(d.answers)
+	.bind(&d.body.blob)
+	.bind(&d.body.data_key_fp)
+	.bind(json(d.needs))
+	.bind(state)
+	.bind(d.send_at.map(to_db))
+	.bind(to_db(now))
+	.bind(d.error)
+	.fetch_one(&mut *conn)
+	.await
+	.wrap_err("keeping a draft")
+}
+
+/// A draft of the owner's, and its case's gmail.
+pub(crate) async fn draft_of(conn: &mut SqliteConnection, owner: Uuid, id: i64) -> eyre::Result<Option<DraftRow>> {
+	let row: Option<RawDraft> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
+		"{DRAFT} JOIN mail_cases c ON c.id = d.case_id JOIN gmails g ON g.id = c.gmail_id WHERE d.id = $1 AND g.owner = $2 AND g.removed_at IS NULL"
+	)))
+	.bind(id)
+	.bind(owner)
+	.fetch_optional(&mut *conn)
+	.await
+	.wrap_err("loading a draft")?;
+	row.map(draft).transpose()
+}
+
+/// The held drafts due, with whose they are.
+pub(crate) async fn held_due(conn: &mut SqliteConnection, now: Timestamp) -> eyre::Result<Vec<(Uuid, i64)>> {
+	sqlx::query_as(
+		"SELECT g.owner, d.id FROM mail_drafts d JOIN mail_cases c ON c.id = d.case_id JOIN gmails g ON g.id = c.gmail_id \
+		 WHERE d.state = 'held' AND d.send_at <= $1 AND g.removed_at IS NULL ORDER BY d.send_at, d.id",
+	)
+	.bind(to_db(now))
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing the drafts due")
+}
+
+/// What becomes of a draft; each absent field stays, but `error`.
+pub(crate) struct Decided<'a> {
+	pub state: DraftState,
+	pub body: Option<&'a Sealed>,
+	pub by: Option<Uuid>,
+	pub send_at: Option<Timestamp>,
+	pub sent_at: Option<Timestamp>,
+	pub message_id: Option<&'a str>,
+	pub error: Option<&'a str>,
+}
+impl Decided<'_> {
+	pub(crate) fn new(state: DraftState) -> Self {
+		Self {
+			state,
+			body: None,
+			by: None,
+			send_at: None,
+			sent_at: None,
+			message_id: None,
+			error: None,
+		}
+	}
+}
+
+pub(crate) async fn decide(conn: &mut SqliteConnection, id: i64, d: &Decided<'_>) -> eyre::Result<()> {
+	let state: &'static str = d.state.into();
+	sqlx::query(
+		"UPDATE mail_drafts SET state = $2, body_sealed = coalesce($3, body_sealed), data_key_fp = coalesce($4, data_key_fp), decided_by = coalesce($5, decided_by), \
+		 send_at = coalesce($6, send_at), sent_at = $7, message_id = coalesce($8, message_id), error = $9 WHERE id = $1",
+	)
+	.bind(id)
+	.bind(state)
+	.bind(d.body.map(|b| &b.blob))
+	.bind(d.body.map(|b| &b.data_key_fp))
+	.bind(d.by)
+	.bind(d.send_at.map(to_db))
+	.bind(d.sent_at.map(to_db))
+	.bind(d.message_id)
+	.bind(d.error)
+	.execute(&mut *conn)
+	.await
+	.wrap_err("deciding a draft")?;
+	Ok(())
+}
+
+/// The topics whose replies go by themselves, per gmail of the owner's not removed.
+pub(crate) async fn auto(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<(i64, Topic)>> {
+	let rows: Vec<(i64, String)> = sqlx::query_as(
+		"SELECT a.gmail_id, a.topic FROM gmail_mail_auto a JOIN gmails g ON g.id = a.gmail_id WHERE g.owner = $1 AND g.removed_at IS NULL ORDER BY a.gmail_id, a.topic",
+	)
+	.bind(owner)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing the topics answered automatically")?;
+	rows.into_iter().map(|(g, t)| Ok((g, t.parse().wrap_err("a stored topic")?))).collect()
+}
+
+pub(crate) async fn set_auto(conn: &mut SqliteConnection, gmail: i64, topic: Topic, on: bool) -> eyre::Result<()> {
+	let topic: &'static str = topic.into();
+	let sql = match on {
+		true => "INSERT INTO gmail_mail_auto (gmail_id, topic) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+		false => "DELETE FROM gmail_mail_auto WHERE gmail_id = $1 AND topic = $2",
+	};
+	sqlx::query(sql)
+		.bind(gmail)
+		.bind(topic)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("switching a topic's automatic replies")?;
+	Ok(())
+}
+
+pub(crate) async fn stuck(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Option<String>> {
+	sqlx::query_scalar("SELECT why FROM mail_stuck WHERE user_id = $1")
+		.bind(owner)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("reading why a person's mail waits")
+}
+
+pub(crate) async fn set_stuck(conn: &mut SqliteConnection, owner: Uuid, why: Option<&str>) -> eyre::Result<()> {
+	let set = match why {
+		Some(why) => sqlx::query("INSERT INTO mail_stuck (user_id, why) VALUES ($1, $2) ON CONFLICT (user_id) DO UPDATE SET why = excluded.why")
+			.bind(owner)
+			.bind(why),
+		None => sqlx::query("DELETE FROM mail_stuck WHERE user_id = $1").bind(owner),
+	};
+	set.execute(&mut *conn).await.wrap_err("saying why a person's mail waits")?;
+	Ok(())
+}
+
+/// A purged gmail's mail, its cases and drafts.
+pub(crate) async fn forget(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<()> {
+	for sql in [
+		"DELETE FROM mail_drafts WHERE case_id IN (SELECT id FROM mail_cases WHERE gmail_id = $1)",
+		"DELETE FROM mails WHERE gmail_id = $1",
+		"DELETE FROM mail_cases WHERE gmail_id = $1",
+		"DELETE FROM gmail_mail_auto WHERE gmail_id = $1",
+	] {
+		sqlx::query(sql).bind(gmail).execute(&mut *conn).await.wrap_err("forgetting a purged gmail's mail")?;
+	}
+	Ok(())
+}

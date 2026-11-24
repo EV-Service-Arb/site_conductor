@@ -11,7 +11,7 @@ import type { GmbPlace } from "@/shared/api/services/sites";
 
 import type { Tags } from "./issues";
 
-type Read<T> = Resource<T, Failure> & { reload: () => void };
+type Read<T> = Resource<T, Failure> & { reload: () => void; fresh: boolean };
 
 interface Gmbs {
   gmails: Read<Gmails>;

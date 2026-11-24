@@ -2,7 +2,7 @@
 //! that makes it so, once for what it is about.
 //!
 //! ```text
-//! google_mail        a message from Google followed into a gmail's log, dated within a day
+//! google_mail        a case turned to a person ([`crate::mail`])
 //! connection_lost    an inbox that has failed for 15 min       \
 //! feed_stalled       a service's notes that failed for 10 min   > said when it starts, again after a day
 //! meter_held         a Google account's guard unlinking billing /
@@ -31,7 +31,6 @@ use crate::{
 	Panel,
 	access::AccessRequest,
 	alerts::{Body, Telling, derived_event_id},
-	inbox::Mail,
 	library::{Listing, Released},
 	meters::{Gauge, Lever},
 	store::{
@@ -39,9 +38,6 @@ use crate::{
 		tokens::{Kickback, Owed},
 	},
 };
-
-/// Mail older than this when it is first read is a mailbox's backlog.
-const MAIL_FRESH: SignedDuration = SignedDuration::from_hours(24);
 
 /// What goes on failing is said again after this.
 const AGAIN: SignedDuration = SignedDuration::from_hours(24);
@@ -60,26 +56,6 @@ const PURGE_KEPT: i64 = 7;
 
 /// The longest an outside text runs.
 const QUOTE: usize = 200;
-
-/// A subject that names one of these is of a suspension, in Google's English, French and Russian.
-const SUSPENDED: &[&str] = &["suspend", "suspens", "disabled", "désactiv", "приостановл", "заблокир"];
-
-/// Or of what its owner is in the middle of with Google.
-const IN_HAND: &[&str] = &[
-	"appeal", "appel", "reinstat", "réintégr", "verif", "vérif", "valid", "violat", "infraction", "policy", "règle", "access", "accès", "owner", "propriét", "manager", "case", "demande",
-	"апелляц", "подтвержд", "нарушен", "владел", "доступ",
-];
-
-/// How much mail with `subject` matters.
-fn weighed(subject: &str) -> Tier {
-	let subject = subject.to_lowercase();
-	let names = |words: &[&str]| words.iter().any(|w| subject.contains(w));
-	match (names(SUSPENDED), names(IN_HAND)) {
-		(true, _) => Tier::Urgent,
-		(false, true) => Tier::Important,
-		(false, false) => Tier::Info,
-	}
-}
 
 fn text(s: &str) -> Rendered {
 	let mut out = Rendered::default();
@@ -100,49 +76,6 @@ impl Panel {
 			told |= db::told_since(conn, rule, of(days_ago), now - AGAIN).await?;
 		}
 		Ok((!told).then(|| of(0)))
-	}
-
-	/// A message from Google just followed into gmail `gmail`'s log, naming `gmbs` of it.
-	pub(crate) async fn tell_google_mail(&self, tx: &mut SqliteConnection, gmail: i64, gmbs: &[(i64, &str)], m: &Mail, now: Timestamp) -> eyre::Result<()> {
-		if m.sent || m.date < now - MAIL_FRESH {
-			return Ok(());
-		}
-		let Some(owner) = gmbs_db::gmail_owner(tx, gmail).await? else {
-			return Ok(()); // removed since its inbox was read
-		};
-		let about = match gmbs {
-			[(_, name)] => (*name).to_owned(),
-			_ => connections_db::address(tx, gmail).await?,
-		};
-		let subject = m.subject.as_deref().unwrap_or_default(); // a mail without one is of its text alone
-		let mut open = text("Google · ");
-		open.code(&one_line(&about, 24));
-		open.push(": ");
-		open.code(&one_line(if subject.is_empty() { "(no subject)" } else { subject }, 44));
-		// what it says may hold a code to sign in with: for the owner's own eyes
-		let mut private = open.clone();
-		private.push("\n");
-		private.code(&one_line(&m.text, QUOTE));
-		let link = match gmbs {
-			[(gmb, _)] => format!("/?gmb={gmb}&tab=log"),
-			_ => format!("/?account={gmail}"),
-		};
-		let event = derived_event_id(&["google_mail", &gmail.to_string(), &m.message.to_string()]);
-		let telling = Telling {
-			body: Body {
-				open: Some(open),
-				private: Some(private),
-				..Body::default()
-			},
-			person: Some(owner),
-			gmbs: gmbs.iter().map(|(id, _)| *id).collect(),
-			gmail: gmbs.is_empty().then_some(gmail),
-			tier: Some(weighed(subject)),
-			link: Some(link),
-			..Telling::new(Rule::GoogleMail, event, m.date, Rendered::default())
-		};
-		self.tell(tx, &telling, now).await?;
-		Ok(())
 	}
 
 	/// Gmail `gmail`'s inbox has failed for a while, with `why`.

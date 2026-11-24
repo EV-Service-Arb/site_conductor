@@ -2,7 +2,7 @@
 
 import { CloseButton, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, buttonVariants, cn } from "@evinvest/uikit";
 
-import { CategoryChip, type Listed, gmbPhotoSrc, issueOf, issueText, openWindow, useGmbTags, gmbs } from "@/entities/gmb";
+import { CategoryChip, GmbNote, type Listed, gmbPhotoSrc, issueOf, issueText, openWindow, useGmbTags, gmbs } from "@/entities/gmb";
 import { ViewLink } from "@/shared/lib/location";
 import { useT, home } from "@/shared/i18n";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -37,6 +37,7 @@ export function Peek({ listed, onClose, className }: { listed: Listed; onClose: 
         <CloseButton size={button("sm")} label={t(home.peek.close, "Close")} onClose={onClose} />
       </CardHeader>
       <CardContent className="flex flex-col gap-3 px-4">
+        <GmbNote key={gmb.id} gmb={gmb.id} />
         {(gmb.phone || gmb.website || gmb.hours.length > 0) && (
           <div className="flex flex-col gap-0.5 text-xs text-ink-soft">
             {gmb.phone && (

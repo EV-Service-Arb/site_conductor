@@ -283,6 +283,19 @@ fn mail(u: &Untagged, username: &str) -> eyre::Result<Mail> {
 		(true, None) => Vec::new(),
 		(false, _) => from.and_then(named).into_iter().collect(),
 	};
+	let froms: Vec<&str> = parsed.all_from().flat_map(|a| a.mailboxes().filter_map(|m| m.address()).collect::<Vec<_>>()).collect();
+	let verdicts: Vec<String> = parsed
+		.headers()
+		.all("Authentication-Results")
+		.map(|h| String::from_utf8_lossy(h.raw_value()).into_owned())
+		.collect();
+	let mut text = parsed.body_text(0).map(|t| t.into_owned()).unwrap_or_default(); // no text part: none to read
+	if sent {
+		// what we sent along: Google's answers speak of it
+		for name in parsed.attachments().filter_map(|a| a.attachment_name().map(str::to_owned)) {
+			text = format!("[attached: {name}]\n{text}");
+		}
+	}
 	Ok(Mail {
 		uid,
 		message: number("X-GM-MSGID")?,
@@ -290,8 +303,19 @@ fn mail(u: &Untagged, username: &str) -> eyre::Result<Mail> {
 		date,
 		subject: parsed.subject().map(str::to_owned),
 		counterparts,
+		from: from.and_then(|a| a.address()).map(str::to_owned),
+		reply_to: parsed.reply_to().and_then(|a| a.first()).and_then(|a| a.address()).map(str::to_owned),
+		to: parsed.to().map(|t| t.mailboxes().filter_map(|m| m.address()).map(str::to_owned).collect()).unwrap_or_default(), // undisclosed recipients
+		message_id: parsed.message_id().map(str::to_owned),
+		refs: parsed
+			.references()
+			.into_iter()
+			.chain(parsed.in_reply_to())
+			.flat_map(|l| l.iter().map(str::to_owned).collect::<Vec<_>>())
+			.collect(),
+		authentic: sa_core::mail::authentic(&froms, &verdicts.iter().map(String::as_str).collect::<Vec<_>>()),
 		sent,
-		text: parsed.body_text(0).map(|t| t.into_owned()).unwrap_or_default(), // no text part: none to read
+		text,
 	})
 }
 
