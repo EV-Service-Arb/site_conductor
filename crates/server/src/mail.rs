@@ -186,8 +186,6 @@ pub struct DraftDto {
 	/// RFC 3339; held, when it goes.
 	pub send_at: Option<String>,
 	/// RFC 3339.
-	pub created_at: String,
-	/// RFC 3339.
 	pub sent_at: Option<String>,
 	/// Why it did not go, or why nothing was written.
 	pub error: Option<String>,
@@ -219,11 +217,7 @@ pub struct MessageDto {
 	pub spam: bool,
 	/// Proved Google's.
 	pub authentic: bool,
-	/// It takes a reply.
-	pub repliable: bool,
 	pub gmb_id: Option<i64>,
-	/// The profile it links, by Google's id in the link.
-	pub listing: Option<String>,
 	/// `null`: ours, or not read.
 	pub reading: Option<Reading>,
 	pub read_by: Option<ReadBy>,
@@ -243,9 +237,7 @@ impl MessageDto {
 			text_error: text.as_ref().err().cloned(),
 			spam: m.spam,
 			authentic: m.authentic,
-			repliable: m.said.repliable,
 			gmb_id: m.gmb,
-			listing: m.listing.clone(),
 			reading: m.said.reading.clone(),
 			read_by: m.read_by,
 			read_error: m.said.read_error.clone(),
@@ -338,7 +330,6 @@ impl From<&Draft> for DraftDto {
 			body: d.body.clone(),
 			needs: d.reply.needs.clone(),
 			send_at: d.reply.send_at.map(|t| t.to_string()),
-			created_at: d.reply.written_at.to_string(),
 			sent_at: d.reply.sent_at.map(|t| t.to_string()),
 			error: d.reply.error.clone(),
 		}
@@ -353,8 +344,8 @@ pub struct Worker {
 	pub model: Model,
 	/// Where the review archive is asked of the reviews gone; none, they are not known.
 	pub services: Option<Services>,
-	/// The alerts' language; none tells nothing.
-	pub tell: Option<Locale>,
+	/// The alerts' language.
+	pub locale: Locale,
 }
 impl Worker {
 	/// Everyone's unread mail read, and the replies due written. A person's failing pass is reported, and
@@ -362,8 +353,7 @@ impl Worker {
 	pub async fn read_and_write(&self) -> eyre::Result<()> {
 		for owner in self.panel.mail_owners().await? {
 			let why = match self.of(owner).await {
-				Ok(asked) if !asked => continue,
-				Ok(_) => None,
+				Ok(()) => None,
 				Err(Unanswered::Stuck(why)) => Some(why),
 				Err(Unanswered::Unread(why)) => unreachable!("kept with its mail: {why}"),
 				Err(Unanswered::Internal(e)) => {
@@ -384,16 +374,11 @@ impl Worker {
 	}
 
 	async fn tell(&self) -> eyre::Result<()> {
-		match self.tell {
-			Some(locale) => self.panel.tell_mail(locale, Timestamp::now()).await.map(drop),
-			None => Ok(()),
-		}
+		self.panel.tell_mail(self.locale, Timestamp::now()).await.map(drop)
 	}
 
-	/// The person's mail; whether the model was asked anything.
-	async fn of(&self, owner: Uuid) -> Result<bool, Unanswered> {
+	async fn of(&self, owner: Uuid) -> Result<(), Unanswered> {
 		let Self { panel, model, services, .. } = self;
-		let mut asked = false;
 		for m in panel.unread_mail(owner, Timestamp::now()).await? {
 			let text = match &m.text {
 				Ok(text) => text,
@@ -402,8 +387,7 @@ impl Worker {
 					continue;
 				}
 			};
-			asked = true;
-			match read(panel, model, &m, text).await {
+			match read(panel, model, owner, &m, text).await {
 				Ok(reading) => panel.mail_read(m.mail, reading, &m.gmbs, Timestamp::now()).await?,
 				Err(Unanswered::Unread(why)) => panel.mail_unread(m.mail, &why).await?,
 				Err(e) => return Err(e),
@@ -423,7 +407,6 @@ impl Worker {
 					continue;
 				}
 			};
-			asked = true;
 			let written = match write(panel, model, Spender::new(owner), &brief, gone.as_ref(), None).await {
 				Ok(w) => w,
 				Err(Unanswered::Unread(why)) => Written::Failed(why),
@@ -431,7 +414,7 @@ impl Worker {
 			};
 			panel.draft_mail(owner, &brief.case, written, false, Timestamp::now()).await?;
 		}
-		Ok(asked)
+		Ok(())
 	}
 }
 
@@ -497,6 +480,11 @@ async fn gone(services: Option<&Services>, c: &Case) -> eyre::Result<Option<Gone
 	}))
 }
 
+/// Whether `c` holds nothing but Google's routine notices, known by their subjects.
+fn routine(c: &Case) -> bool {
+	c.messages.iter().all(|m| m.read_by == Some(ReadBy::Rule) && !m.said.heard())
+}
+
 /// Where a reply in case `c` goes.
 fn recipient(c: &Case) -> Option<&str> {
 	let counterpart = rules::counterpart(c.messages.iter().map(|m| &m.said))?;
@@ -560,11 +548,12 @@ pub(crate) struct Listed {
 }
 
 /// The caller's mail with Google about their GBPs, as cases: a conversation with support, or a lone
-/// notice; what each says, whose turn it is and why.
+/// notice; what each says, whose turn it is and why. A routine notice (a performance report, a new review) is in its
+/// GBP's lines alone.
 async fn mail_cases(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<Listed>) -> ApiResult<Json<CasesDto>> {
 	let now = Timestamp::now();
 	let cases = panel.mail_cases(caller.user_id, now).await?;
-	let listed = |c: &&Case| q.gmail.is_none_or(|g| c.gmail == g) && q.gmb.is_none_or(|g| c.gmb == Some(g)) && q.state.is_none_or(|s| Standing::from(&c.state) == s);
+	let listed = |c: &&Case| !routine(c) && q.gmail.is_none_or(|g| c.gmail == g) && q.gmb.is_none_or(|g| c.gmb == Some(g)) && q.state.is_none_or(|s| Standing::from(&c.state) == s);
 	Ok(Json(CasesDto {
 		cases: cases.iter().filter(listed).map(|c| CaseDto::of(c, now)).collect(),
 	}))
@@ -826,7 +815,7 @@ async fn gmb_mail(State(panel): State<Panel>, Extension(caller): Extension<Calle
 	let about = about(&cases, id);
 	Ok(Json(GmbMailDto {
 		attempts: attempts(&about),
-		cases: cases.iter().filter(|c| c.gmb == Some(id)).map(|c| CaseDto::of(c, now)).collect(),
+		cases: cases.iter().filter(|c| c.gmb == Some(id) && !routine(c)).map(|c| CaseDto::of(c, now)).collect(),
 		lines: about.iter().map(|(c, m)| MailLineDto::of(c, m)).collect(),
 	}))
 }
@@ -902,7 +891,7 @@ fn names<T: VariantArray + Copy + Into<&'static str>>() -> Vec<&'static str> {
 }
 
 /// What message `m` says.
-async fn read(panel: &Panel, model: &Model, m: &Unread, text: &str) -> Result<Reading, Unanswered> {
+async fn read(panel: &Panel, model: &Model, owner: Uuid, m: &Unread, text: &str) -> Result<Reading, Unanswered> {
 	let kinds: Vec<String> = Kind::VARIANTS
 		.iter()
 		.map(|&k| {
@@ -974,7 +963,7 @@ answer_within_hours: only when it says within how long Google answers, the longe
 		mail,
 		shape: &shape,
 	};
-	let reading: Reading = answered(panel, model, Spender::new(m.owner), asked).await?;
+	let reading: Reading = answered(panel, model, Spender::new(owner), asked).await?;
 	// the schema can ask for neither
 	if !reading.summary.trim().contains(' ') {
 		return Err(Unanswered::Unread(format!("the model summed it up as {:?}", reading.summary)));

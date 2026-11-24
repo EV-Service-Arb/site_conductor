@@ -2056,7 +2056,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's mail with Google about their GBPs, as cases: a conversation with support, or a lone notice; what each says, whose turn it is and why. */
+        /** The caller's mail with Google about their GBPs, as cases: a conversation with support, or a lone notice; what each says, whose turn it is and why. A routine notice (a performance report, a new review) is in its GBP's lines alone. */
         get: operations["mail_cases"];
         put?: never;
         post?: never;
@@ -4624,8 +4624,6 @@ export interface components {
         MailDraft: {
             /** @description `null`: it does not open, `error` says why. */
             body: string | null;
-            /** @description RFC 3339. */
-            created_at: string;
             /** @description Why it did not go, or why nothing was written. */
             error: string | null;
             /** Format: int64 */
@@ -4755,15 +4753,11 @@ export interface components {
             gmb_id: number | null;
             /** Format: int64 */
             id: number;
-            /** @description The profile it links, by Google's id in the link. */
-            listing: string | null;
             read_by: components["schemas"]["MailReader"] | null;
             /** @description Why it is not read, once given up on. */
             read_error: string | null;
             /** @description `null`: ours, or not read. */
             reading: components["schemas"]["MailReading"] | null;
-            /** @description It takes a reply. */
-            repliable: boolean;
             sent: boolean;
             /** @description Gmail has it in Spam. */
             spam: boolean;

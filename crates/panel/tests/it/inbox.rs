@@ -9,6 +9,7 @@ use sa_panel::{
 	gmbs::{Event, EventKind, Existing},
 	import::Export,
 	inbox::{Account, BATCH, Batch, Cursor, Folder, Mail, Mailbox},
+	own_alerts::Lost,
 	seal::{DataKey, gmail_imap_aad},
 	testing::{TestDb, panel_with},
 	tokens::User,
@@ -164,4 +165,11 @@ async fn a_thread_naming_a_gbp_is_its_and_one_naming_none_the_gmails_each_once()
 		"the code names it: its own; the sign-in names no GBP: the gmail's, in each GBP's log"
 	);
 	assert_eq!(emails(other).await, vec![own]);
+
+	let says = async || p.connections(owner, gmail).await.unwrap().unwrap().imap.unwrap().checked.error;
+	p.alerts_connection_lost(gmail, Lost::Inbox, "refused the login", later).await.unwrap();
+	p.follow_inbox(gmail, &inbox, later).await.unwrap();
+	assert_eq!(says().await, None, "it reads again");
+	p.alerts_connection_lost(gmail, Lost::Inbox, "refused the login", later).await.unwrap();
+	assert_eq!(says().await.as_deref(), Some("refused the login"), "its owner reads why, told of it today already");
 }

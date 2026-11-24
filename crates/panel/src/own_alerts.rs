@@ -33,6 +33,7 @@ use crate::{
 	Panel,
 	access::AccessRequest,
 	alerts::{Body, Telling, derived_event_id},
+	connections::{Checked, Connection},
 	library::{Listing, Released},
 	meters::{Gauge, Lever},
 	store::{
@@ -110,6 +111,19 @@ impl Panel {
 	pub async fn alerts_connection_lost(&self, gmail: i64, lost: Lost, why: &str, now: Timestamp) -> eyre::Result<()> {
 		let (title, cost) = lost.said();
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a connection lost")?;
+		// the others' checks are recorded as they are asked
+		if lost == Lost::Inbox
+			&& let Some((imap, _)) = connections_db::imap(&mut conn, gmail).await?
+			&& imap.checked.error.as_deref() != Some(why)
+		{
+			let mut tx = crate::store::begin_write(&mut conn).await?;
+			let failed = Checked {
+				at: now,
+				error: Some(why.to_owned()),
+			};
+			connections_db::checked(&mut tx, gmail, Connection::Imap, &failed).await?;
+			tx.commit().await.wrap_err("committing an inbox's check")?;
+		}
 		let Some(event) = self.again(&mut conn, Rule::ConnectionLost, &[lost.as_ref(), &gmail.to_string()], now).await? else {
 			return Ok(());
 		};

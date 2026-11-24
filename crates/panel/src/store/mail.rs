@@ -470,11 +470,11 @@ pub(crate) struct NewDraft<'a> {
 	pub error: Option<&'a str>,
 }
 
-pub(crate) async fn add_draft(conn: &mut SqliteConnection, d: &NewDraft<'_>, now: Timestamp) -> eyre::Result<i64> {
+pub(crate) async fn add_draft(conn: &mut SqliteConnection, d: &NewDraft<'_>, now: Timestamp) -> eyre::Result<()> {
 	let state: &'static str = d.state.into();
-	sqlx::query_scalar(
+	sqlx::query(
 		"INSERT INTO mail_drafts (case_id, answers, body_sealed, data_key_fp, needs, state, send_at, created_at, error) \
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id",
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
 	)
 	.bind(d.case)
 	.bind(d.answers)
@@ -485,12 +485,13 @@ pub(crate) async fn add_draft(conn: &mut SqliteConnection, d: &NewDraft<'_>, now
 	.bind(d.send_at.map(to_db))
 	.bind(to_db(now))
 	.bind(d.error)
-	.fetch_one(&mut *conn)
+	.execute(&mut *conn)
 	.await
-	.wrap_err("keeping a draft")
+	.wrap_err("keeping a draft")?;
+	Ok(())
 }
 
-/// A draft of the owner's, and its case's gmail.
+/// A draft of the owner's.
 pub(crate) async fn draft_of(conn: &mut SqliteConnection, owner: Uuid, id: i64) -> eyre::Result<Option<DraftRow>> {
 	let row: Option<RawDraft> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
 		"{DRAFT} JOIN mail_cases c ON c.id = d.case_id JOIN gmails g ON g.id = c.gmail_id WHERE d.id = $1 AND g.owner = $2 AND g.removed_at IS NULL"

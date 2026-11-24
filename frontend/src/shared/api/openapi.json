@@ -5824,10 +5824,6 @@
               "null"
             ]
           },
-          "created_at": {
-            "description": "RFC 3339.",
-            "type": "string"
-          },
           "error": {
             "description": "Why it did not go, or why nothing was written.",
             "type": [
@@ -5870,7 +5866,6 @@
           "body",
           "needs",
           "send_at",
-          "created_at",
           "sent_at",
           "error"
         ],
@@ -6135,13 +6130,6 @@
             "format": "int64",
             "type": "integer"
           },
-          "listing": {
-            "description": "The profile it links, by Google's id in the link.",
-            "type": [
-              "string",
-              "null"
-            ]
-          },
           "read_by": {
             "anyOf": [
               {
@@ -6169,10 +6157,6 @@
               }
             ],
             "description": "`null`: ours, or not read."
-          },
-          "repliable": {
-            "description": "It takes a reply.",
-            "type": "boolean"
           },
           "sent": {
             "type": "boolean"
@@ -6219,9 +6203,7 @@
           "text_error",
           "spam",
           "authentic",
-          "repliable",
           "gmb_id",
-          "listing",
           "reading",
           "read_by",
           "read_error"
@@ -35671,7 +35653,7 @@
             "description": "`unavailable`, `browsers_not_connected`"
           }
         },
-        "summary": "The caller's mail with Google about their GBPs, as cases: a conversation with support, or a lone notice; what each says, whose turn it is and why.",
+        "summary": "The caller's mail with Google about their GBPs, as cases: a conversation with support, or a lone notice; what each says, whose turn it is and why. A routine notice (a performance report, a new review) is in its GBP's lines alone.",
         "tags": [
           "mail"
         ],

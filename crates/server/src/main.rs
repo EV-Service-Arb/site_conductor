@@ -397,7 +397,7 @@ async fn serve(
 		panel: panel.clone(),
 		model: model.clone(),
 		services: services.clone(),
-		tell: Some(networks.telegram.as_ref().map_or(Locale::En, |tg| tg.locale)),
+		locale: networks.telegram.as_ref().map_or(Locale::En, |tg| tg.locale),
 	};
 	let sign_in = SignIn::new(panel, concierge, config);
 	let forward = match &services {

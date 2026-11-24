@@ -13,6 +13,7 @@ use jiff::Timestamp;
 pub use crate::imap::Gmail;
 use crate::{
 	Panel,
+	connections::{Checked, Connection},
 	seal::gmail_imap_aad,
 	store::{connections, gmbs as gmbs_db, gmbs::Event, inbox as db, mail as mail_db},
 };
@@ -121,6 +122,11 @@ impl Panel {
 			}
 		}
 		if !more {
+			if imap.checked.error.is_some() {
+				let mut tx = self.store.begin_write().await?;
+				connections::checked(&mut tx, gmail, Connection::Imap, &Checked { at: now, error: None }).await?;
+				tx.commit().await.wrap_err("committing an inbox's check")?;
+			}
 			let was = (imap.username.clone(), now);
 			self.inboxes_read.lock().expect("never poisoned: no panic while held").insert(gmail, was);
 		}

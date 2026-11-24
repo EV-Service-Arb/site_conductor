@@ -33,7 +33,7 @@ use crate::{
 	store::{
 		connections,
 		gmbs::{self as gmbs_db, Gmb},
-		mail::{self as db, Decided, DraftRow, MailRow, NewDraft, NewMail},
+		mail::{self as db, CaseRow, Decided, DraftRow, MailRow, NewDraft, NewMail},
 	},
 };
 pub use crate::{smtp::Gmail, store::mail::ReadBy};
@@ -43,7 +43,7 @@ pub const PORTS: [u16; 2] = [crate::imap::PORT, crate::smtp::PORT];
 /// Topics a person may have answered automatically.
 pub const AUTO: [Topic; 2] = [Topic::Verification, Topic::Reviews];
 /// Unread mail the model is handed in one pass, per person.
-pub const READS: usize = 20;
+const READS: usize = 20;
 /// A reply's files, in all.
 pub const FILES_MAX: usize = 18 << 20;
 const SUMMARY_MAX: usize = 160;
@@ -157,7 +157,6 @@ pub struct ByHand {
 #[derive(Clone, Debug)]
 pub struct Kept {
 	pub said: Message,
-	pub gmail: i64,
 	/// Gmail's id of it, and its thread's, hex.
 	pub message: String,
 	pub thread: String,
@@ -168,7 +167,6 @@ pub struct Kept {
 	pub message_id: Option<String>,
 	pub refs: Vec<String>,
 	pub authentic: bool,
-	pub listing: Option<String>,
 	/// The GBP it is about: what a person said, else what it names, what its link is known by, what its reader saw.
 	pub gmb: Option<i64>,
 	pub read_by: Option<ReadBy>,
@@ -197,7 +195,6 @@ pub type Text = Result<Zeroizing<String>, String>;
 
 /// A message the model is to read.
 pub struct Unread {
-	pub owner: Uuid,
 	pub mail: i64,
 	pub from: String,
 	pub subject: Option<String>,
@@ -390,7 +387,7 @@ impl Panel {
 		record.sort_by_key(|(at, _)| *at);
 		let mut texts = Vec::new();
 		for m in &case.messages {
-			texts.push(self.mail_text(&mut conn, m.gmail, &m.message, m.said.id).await?);
+			texts.push(self.mail_text(&mut conn, case.gmail, &m.message, m.said.id).await?);
 		}
 		let gmb = match case.gmb {
 			Some(gmb) => gmbs_db::gmb_of(&mut conn, Some(owner), gmb).await?,
@@ -518,7 +515,7 @@ impl Panel {
 		db::owners(&mut conn).await
 	}
 
-	/// The person's mail the model is to read, the oldest first, at most [`READS`].
+	/// The person's mail the model is to read, the oldest first, no more than a pass reads.
 	pub async fn unread_mail(&self, owner: Uuid, now: Timestamp) -> eyre::Result<Vec<Unread>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for unread mail")?;
 		let cases = self.gathered(&mut conn, owner, now).await?;
@@ -534,7 +531,7 @@ impl Panel {
 		let mut unread = Vec::new();
 		for (c, at) in due.into_iter().take(READS) {
 			let m = &c.messages[at];
-			let (own, others) = crate::store::inbox::gmbs(&mut conn, m.gmail).await?;
+			let (own, others) = crate::store::inbox::gmbs(&mut conn, c.gmail).await?;
 			let mut before = Vec::new();
 			for b in &c.messages[..at] {
 				match &b.said.reading {
@@ -543,7 +540,7 @@ impl Panel {
 						before.push((b.said.at, false, format!("{topic}: {}", r.summary)));
 					}
 					None if b.said.sent => {
-						let text = self.mail_text(&mut conn, b.gmail, &b.message, b.said.id).await?;
+						let text = self.mail_text(&mut conn, c.gmail, &b.message, b.said.id).await?;
 						let said = text.map_or_else(|why| format!("(not known: {why})"), |t| one_line(&t, BEFORE_MAX));
 						before.push((b.said.at, true, said));
 					}
@@ -551,12 +548,11 @@ impl Panel {
 				}
 			}
 			unread.push(Unread {
-				owner,
 				mail: m.said.id,
 				from: m.from.clone().ok_or_else(|| eyre::eyre!("message {} is authentic and names no sender", m.said.id))?,
 				subject: m.subject.clone(),
 				at: m.said.at,
-				text: self.mail_text(&mut conn, m.gmail, &m.message, m.said.id).await?,
+				text: self.mail_text(&mut conn, c.gmail, &m.message, m.said.id).await?,
 				gmbs: own.into_iter().chain(others).collect(),
 				before,
 			});
@@ -993,7 +989,10 @@ impl Panel {
 			let account = inboxes.get(&m.gmail_id).filter(|(_, shared)| !shared).map(|(u, _)| u.as_str());
 			held.entry(one(m.case_id)).or_default().push(kept(m, &known, account)?);
 		}
-		let numbers = |id: i64| rows.iter().filter(|r| one(r.id) == id).flat_map(|r| r.numbers().clone()).collect();
+		let mut parts: HashMap<i64, Vec<&CaseRow>> = HashMap::new();
+		for r in &rows {
+			parts.entry(one(r.id)).or_default().push(r);
+		}
 		let mut cases = Vec::new();
 		for r in rows.iter().filter(|r| r.joined.is_none()) {
 			let messages = held.remove(&r.id).ok_or_else(|| eyre::eyre!("case {} holds no message", r.id))?;
@@ -1014,8 +1013,8 @@ impl Panel {
 						gmb: r.gmb_id.is_some(),
 						topic: by_hand.is_some(),
 					},
-					numbers: numbers(r.id),
-					joined: rows.iter().filter(|j| j.joined == Some(r.id)).map(|j| j.id).collect(),
+					numbers: parts[&r.id].iter().flat_map(|p| p.numbers().clone()).collect(),
+					joined: parts[&r.id].iter().filter(|p| p.id != r.id).map(|p| p.id).collect(),
 					state: State::Quiet,
 					stuck: stuck.clone(),
 					due: false,
@@ -1187,7 +1186,6 @@ fn kept(m: MailRow, known: &HashMap<String, i64>, account: Option<&str>) -> eyre
 			reading,
 			read_error: unread.or(m.read_error.clone().filter(|_| m.attempts >= MAX_READS)),
 		},
-		gmail: m.gmail_id,
 		read_by,
 		to: m.to().to_vec(),
 		refs: m.refs().to_vec(),
@@ -1198,7 +1196,6 @@ fn kept(m: MailRow, known: &HashMap<String, i64>, account: Option<&str>) -> eyre
 		subject: m.subject,
 		message_id: m.message_id,
 		authentic: m.authentic,
-		listing: m.listing,
 		spam: m.spam,
 	})
 }

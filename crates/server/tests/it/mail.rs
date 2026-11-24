@@ -13,6 +13,7 @@ use jiff::{SignedDuration, Timestamp};
 use sa_core::{
 	feeds::{GONE_MAX, GoneReview},
 	gbp::Country,
+	notify::Locale,
 	prices::{ClaudeTokens, Item, Provider, Spender},
 };
 use sa_panel::{
@@ -198,7 +199,7 @@ impl World {
 				panel: p.clone(),
 				model,
 				services: Some(services),
-				tell: None,
+				locale: Locale::En,
 			},
 			p,
 			app,
@@ -285,9 +286,11 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 		"About “Plomberie Dupont - Lyon”: please share a photo of the signage.",
 	)
 	.await;
+	w.arrives(1, "businessprofile-noreply@google.com", "Marie left a review for Plomberie Dupont - Lyon", "Marie left a review for Plomberie Dupont - Lyon")
+		.await;
 	w.worker.read_and_write().await.unwrap();
 	let cases = w.cases().await;
-	assert_eq!(cases.len(), 2);
+	assert_eq!(cases.len(), 2, "a routine notice is none");
 	let (case, rejected) = (&cases[0], &cases[1]);
 	assert_eq!(
 		(&case["gmb_id"], &case["topic"], &case["asks"]),
@@ -324,7 +327,8 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	assert_eq!((&detail["attempts"][0]["method"], &detail["attempts"][0]["outcome"]), (&json!("video"), &json!("rejected")));
 	let (_, of_gmb) = w.call(Method::GET, &format!("/gmbs/{}/mail", w.gmb), None).await;
 	assert_eq!((of_gmb["attempts"].as_array().unwrap().len(), of_gmb["cases"].as_array().unwrap().len()), (1, 2));
-	let lines: Vec<_> = of_gmb["lines"].as_array().unwrap().iter().map(|l| (&l["who"], &l["kind"], &l["case_id"])).collect();
+	let mut lines: Vec<_> = of_gmb["lines"].as_array().unwrap().iter().map(|l| (&l["who"], &l["kind"], &l["case_id"])).collect();
+	assert_eq!(lines.remove(0).1, "noise");
 	assert_eq!(
 		lines,
 		[(&json!("support"), &json!("asks"), &case["id"]), (&json!("google"), &json!("video_rejected"), &rejected["id"])]
@@ -574,6 +578,12 @@ async fn mail_waits_without_a_claude_and_a_reading_that_never_reads_is_a_persons
 	assert_eq!(case["state"]["why"]["code"], "stuck", "{case}");
 	let (status, refused) = w.call(Method::POST, &format!("/mail/cases/{}/draft", case["id"]), Some(json!({ "instruction": null }))).await;
 	assert_eq!((status, &refused["code"]), (503, &json!("unavailable")));
+	assert!(!case["stuck"].is_null(), "{case}");
+	let message = case["last"]["id"].clone();
+	let (status, _) = w.call(Method::PATCH, &format!("/mail/messages/{message}"), Some(json!({ "kind": "noise" }))).await;
+	assert_eq!(status, 200);
+	w.worker.read_and_write().await.unwrap();
+	assert!(w.cases().await.remove(0)["stuck"].is_null(), "nothing of theirs waits");
 
 	let invented = json!({ "topic": "verification", "kind": "a_kind_of_its_own", "gmb": null, "summary": "", "asks": [], "reasons": [], "deadline": null, "answer_within_hours": null });
 	let mut w = World::new(vec![invented.clone(), invented.clone(), invented], true).await;
