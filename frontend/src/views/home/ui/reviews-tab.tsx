@@ -6,6 +6,7 @@ import { ExternalLink, RefreshCw, Search } from "lucide-react";
 import { useState } from "react";
 
 import { LiveReviews, type Listed, useGmbTags, windowKeys } from "@/entities/gmb";
+import { CaseLinks, useGmbMail } from "@/entities/mail";
 import { useSpendConfirm } from "@/entities/tokens";
 import { ok, reviewArchive } from "@/shared/api";
 import type { Board, BoardCard, LocationSummary, RunDto } from "@/shared/api/services/review_archive";
@@ -21,8 +22,37 @@ const WEEK_MS = 7 * 24 * 3600 * 1000;
 type Filter = "non_five" | "unresponded" | "new_7d";
 const FILTERS: readonly Filter[] = ["non_five", "unresponded", "new_7d"];
 
-/** Its reviews as review_archive tracks them (02c). */
+/** Its reviews as review_archive tracks them (02c), and what Google says of those asked back. */
 export function ReviewsTab({ listed }: { listed: Listed }) {
+  return (
+    <>
+      <Reinstatement gmb={listed.gmb.id} />
+      <Archived listed={listed} />
+    </>
+  );
+}
+
+function Reinstatement({ gmb }: { gmb: number }) {
+  const t = useT();
+  const mail = useGmbMail(gmb);
+  if (mail.status === "loading") return null;
+  if (mail.status === "error")
+    return (
+      <div className="px-5 pt-5">
+        <ErrorState failure={mail.failure} onRetry={mail.reload} />
+      </div>
+    );
+  const cases = mail.data.cases.filter((c) => c.topic === "reviews" && c.state.is !== "quiet");
+  if (cases.length === 0) return null;
+  return (
+    <section className="mx-5 mt-5 flex flex-col gap-1 rounded-lg border border-border px-4 py-2">
+      <h3 className="text-xs text-ink-soft">{t(windowKeys.reviews.reinstatement, "With Google support")}</h3>
+      <CaseLinks cases={cases} />
+    </section>
+  );
+}
+
+function Archived({ listed }: { listed: Listed }) {
   const t = useT();
   const overview = useResource(reviewArchive, "/me/overview");
   if (overview.status === "loading") return <Skeleton className="m-4 h-96" />;
