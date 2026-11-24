@@ -243,8 +243,9 @@ studied.
 
 ## The assistant
 
-It answers on prod's Claude subscription (`claude_oauth_token` in `../devops`'s sops), or the shell's
-`CLAUDE_CODE_OAUTH_TOKEN`; on neither under `--no-peers`.
+It answers on the login this device's running claudes follow (`ask_llm dev claude-account running`), or
+the shell's `CLAUDE_CODE_OAUTH_TOKEN`; under `--no-peers` only on the latter. The login's token lives hours
+and is read as the conductor starts: refused, restart the stack. Google's mail is read on it too.
 
 ## Browsers
 
