@@ -19,6 +19,7 @@ import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
+import { useLastWord } from "../model/last-word";
 import { AppealTab } from "./appeal-tab";
 import { BrowserTab } from "./browser-tab";
 import { ConnectionsTab } from "./connections-tab";
@@ -51,9 +52,13 @@ const CLOSED_WHY = {
 /** Its tabs, as its state orders them, the closed greyed with why: the title bar over the map, the strip above a narrow page. */
 export function GbpTabs({ k, gmb, except }: { k: Key; gmb: Gmb; except?: Tab }) {
   const t = useT();
+  const list = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    list.current!.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [k.tab]);
   return (
     <Tabs value={k.tab} onValueChange={(tab) => openWindow({ ...k, tab: tab as Tab })} className="min-w-0 justify-center">
-      <TabsList aria-label={t(windowKeys.tabs, "Sections")} className="max-w-full overflow-x-auto">
+      <TabsList ref={list} aria-label={t(windowKeys.tabs, "Sections")} className="max-w-full justify-start overflow-x-auto">
         {gmb.tabs
           .filter(({ tab }) => tab !== except)
           .map(({ tab, closed }) => (
@@ -90,7 +95,7 @@ export function GbpTitle({ k, page }: { k: Key; page: boolean }) {
   if (!page) return <GbpTabs k={k} gmb={listed.gmb} />;
   return (
     <span className="flex min-w-0 items-center gap-2">
-      <span className="truncate font-semibold text-ink">{listed.gmb.name}</span>
+      <h2 className="truncate font-semibold text-ink">{listed.gmb.name}</h2>
       <Badge tone={STATE_TONE[listed.gmb.state]}>{STATE_NAME[listed.gmb.state](t)}</Badge>
     </span>
   );
@@ -115,7 +120,7 @@ export function GbpBody({ k, page }: { k: Key; page: boolean }) {
   if (listed === null || lost) return null;
   return (
     <div ref={setBox} className="flex min-h-0 flex-1 flex-col">
-      <LocationHeader k={k} listed={listed} />
+      <LocationHeader k={k} listed={listed} page={page} />
       {wide ? <Split k={k} listed={listed} page={page} /> : <Tabbed k={k} listed={listed} page={page} />}
     </div>
   );
@@ -194,7 +199,7 @@ function TabBody({ tab, listed, page }: { tab: Tab; listed: Listed; page: boolea
 }
 
 /** What every tab sits under (02): who it is, how it stands, where it is; the GBPs in the map's view a step away. */
-function LocationHeader({ k, listed: { gmb, gmail } }: { k: Key; listed: Listed }) {
+function LocationHeader({ k, listed: { gmb, gmail }, page }: { k: Key; listed: Listed; page: boolean }) {
   const t = useT();
   const { tags } = useGmbTags();
   const archive = tags.archive?.get(gmb.id);
@@ -203,8 +208,13 @@ function LocationHeader({ k, listed: { gmb, gmail } }: { k: Key; listed: Listed 
   return (
     <header className="flex shrink-0 flex-col gap-1 border-b border-border px-5 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <h2 className="min-w-0 truncate text-lg font-semibold text-ink">{gmb.name}</h2>
-        <Badge tone={STATE_TONE[gmb.state]}>{STATE_NAME[gmb.state](t)}</Badge>
+        {/* as a page, its title's */}
+        {!page && (
+          <>
+            <h2 className="min-w-0 truncate text-lg font-semibold text-ink">{gmb.name}</h2>
+            <Badge tone={STATE_TONE[gmb.state]}>{STATE_NAME[gmb.state](t)}</Badge>
+          </>
+        )}
         <CategoryChip gmb={gmb} />
         {archive?.rating != null && (
           <span className="flex items-center gap-1 text-sm text-ink tabular-nums">
@@ -214,7 +224,8 @@ function LocationHeader({ k, listed: { gmb, gmail } }: { k: Key; listed: Listed 
           </span>
         )}
         {archive && <LiveReviews days={archive.live_30d} />}
-        <StateNote gmb={gmb.id} />
+        {/* those tabs lead with it */}
+        {k.tab !== "verification" && k.tab !== "appeal" && <StateNote gmb={gmb.id} />}
         <span className="flex-1" />
         {gmb.place_id !== null && (
           <a href={`https://www.google.com/maps/place/?q=place_id:${gmb.place_id}`} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-ink-soft hover:text-ink">
@@ -260,16 +271,19 @@ function Website({ url }: { url: string }) {
   );
 }
 
-/** The latest word on its standing: a move of its state, or an email with Google. */
+/** The latest word on its standing: a move of its state, or Google's mail. */
 function StateNote({ gmb }: { gmb: number }) {
   const t = useT();
   const locale = useLocale();
-  const log = useResource(api, "/gmbs/{id}/log", { params: { path: { id: gmb } } });
-  if (log.status !== "ok") return null;
-  const e = log.data.events.find((x) => x.kind === "state" || x.kind === "email");
-  if (e === undefined) return null;
-  const said = e.kind === "state" ? t(windowKeys.header.moved, "{state} {ago}", { state: STATE_NAME[e.to](t), ago: ago(e.at, locale) }) : e.kind === "email" ? t(windowKeys.header.email, "Google: {subject} · {ago}", { subject: e.subject ?? t(windowKeys.log.noSubject, "(no subject)"), ago: ago(e.at, locale) }) : null;
-  return <span className="min-w-0 truncate text-xs text-ink-soft">{said}</span>;
+  const word = useLastWord(gmb);
+  if (word == null) return null;
+  return (
+    <span className="min-w-0 truncate text-xs text-ink-soft">
+      {"who" in word
+        ? t(windowKeys.header.email, "Google: {said} · {ago}", { said: word.summary ?? word.subject ?? t(windowKeys.log.noSubject, "(no subject)"), ago: ago(word.at, locale) })
+        : t(windowKeys.header.moved, "{state} {ago}", { state: STATE_NAME[word.to](t), ago: ago(word.at, locale) })}
+    </span>
+  );
 }
 
 /** The GBPs in the map's view, in the outline's order: the one before and after this. */

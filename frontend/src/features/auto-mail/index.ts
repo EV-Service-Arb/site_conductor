@@ -1,2 +1,1 @@
-export { AutoLink } from "./ui/auto-link";
-export { AutoReplies } from "./ui/auto-replies";
+export { AutoOf, AutoReplies } from "./ui/auto-replies";

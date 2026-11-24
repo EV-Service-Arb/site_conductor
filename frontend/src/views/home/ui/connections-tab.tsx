@@ -6,9 +6,9 @@ import { Check, ExternalLink, Fingerprint, ImageIcon, Mail, ShieldCheck, Sparkle
 
 import { type Listed, browser as browserKeys, openWindow, photoSrc, useBrands, useGmbTags, windowKeys } from "@/entities/gmb";
 import { startWith } from "@/features/assistant";
-import { AutoLink } from "@/features/auto-mail";
+import { AutoOf } from "@/features/auto-mail";
 import { api } from "@/shared/api";
-import { mustHaveValues } from "@/shared/api/schema";
+import { type Gmail, mustHaveValues } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { failureText } from "@/shared/ui/failure-text";
@@ -100,7 +100,7 @@ export function ConnectionsTab({ listed: { gmb, gmail } }: { listed: Listed }) {
             </CardContent>
           </Card>
         ) : (
-          <Inbox gmail={gmail.id} address={gmail.gmail} />
+          <Inbox gmail={gmail} />
         )}
 
         {gmail !== null && <Browser gmail={gmail.id} address={gmail.gmail} />}
@@ -151,10 +151,10 @@ export function ConnectionsTab({ listed: { gmb, gmail } }: { listed: Listed }) {
   );
 }
 
-function Inbox({ gmail, address }: { gmail: number; address: string }) {
+function Inbox({ gmail }: { gmail: Gmail }) {
   const t = useT();
   const locale = useLocale();
-  const connections = useResource(api, "/gmails/{id}/connections", { params: { path: { id: gmail } } });
+  const connections = useResource(api, "/gmails/{id}/connections", { params: { path: { id: gmail.id } } });
   const imap = connections.status === "ok" ? connections.data.imap : null;
   return (
     <Card className="gap-3 py-4">
@@ -168,7 +168,7 @@ function Inbox({ gmail, address }: { gmail: number; address: string }) {
         {connections.status === "error" && <p className="text-sm text-accent-error">{failureText(connections.failure, t)}</p>}
         {connections.status === "ok" &&
           (imap === null ? (
-            <p className="text-sm text-ink-soft">{t(windowKeys.connections.inbox.none, "{gmail}'s inbox is not read yet: Google's emails need its IMAP.", { gmail: address })}</p>
+            <p className="text-sm text-ink-soft">{t(windowKeys.connections.inbox.none, "{gmail}'s inbox is not read yet: Google's emails need its IMAP.", { gmail: gmail.gmail })}</p>
           ) : (
             <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
               <dt className="text-ink-soft">{t(windowKeys.connections.inbox.inbox, "Inbox")}</dt>
@@ -180,7 +180,7 @@ function Inbox({ gmail, address }: { gmail: number; address: string }) {
               {imap.checked.error !== null && <dd className="col-span-2 text-xs text-accent-error">{imap.checked.error}</dd>}
             </dl>
           ))}
-        <AutoLink gmail={gmail} />
+        <AutoOf g={gmail} />
       </CardContent>
     </Card>
   );

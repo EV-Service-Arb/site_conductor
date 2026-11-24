@@ -1,14 +1,12 @@
 "use client";
 
-import { useResource } from "@evinvest/api/react";
 import { Badge, Button, Planned, Skeleton } from "@evinvest/uikit";
-import { Phone, RefreshCw, ShieldCheck, Video } from "lucide-react";
+import { ChevronRight, Phone, RefreshCw, ShieldCheck, Video } from "lucide-react";
 
-import { type Listed, STATE_NAME, STATE_TONE, openWindow, windowKeys } from "@/entities/gmb";
-import { CaseLinks, METHOD_NAME, MailLines, OUTCOME_NAME, OUTCOME_TONE, over, useGmbMail } from "@/entities/mail";
-import { AutoLink } from "@/features/auto-mail";
-import { api } from "@/shared/api";
-import type { Gmail, GmbMail, VerificationAttempt } from "@/shared/api/schema";
+import { type Listed, STATE_NAME, openWindow, windowKeys } from "@/entities/gmb";
+import { CaseLinks, METHOD_NAME, MailLines, OUTCOME_NAME, OUTCOME_TONE, over, unnamed, useCases, useGmbMail } from "@/entities/mail";
+import { AutoOf } from "@/features/auto-mail";
+import type { Gmail, GmbMail, MailKind, VerificationAttempt } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { ViewLink } from "@/shared/lib/location";
@@ -16,21 +14,15 @@ import { ago } from "@/shared/lib/time";
 import { ErrorState } from "@/shared/ui/error-state";
 import { useButtonSize } from "@/shared/ui/touch";
 
+import { useLastWord } from "../model/last-word";
+
 /** A verifying GBP's road to Verified (05e). */
 export function VerificationTab({ listed: { gmb, gmail } }: { listed: Listed }) {
   const t = useT();
   const locale = useLocale();
   const button = useButtonSize();
-  const log = useResource(api, "/gmbs/{id}/log", { params: { path: { id: gmb.id } } });
   const mail = useGmbMail(gmb.id);
-  if (log.status === "loading") return <Skeleton className="m-5 h-64" />;
-  if (log.status === "error")
-    return (
-      <div className="p-5">
-        <ErrorState failure={log.failure} onRetry={log.reload} />
-      </div>
-    );
-  const latest = log.data.events.find((e) => e.kind === "state" || e.kind === "email");
+  const word = useLastWord(gmb.id);
   const kit = [
     [t(windowKeys.verification.kit.phone, "Phone"), gmb.phone],
     [t(windowKeys.verification.kit.film, "Film"), gmb.film],
@@ -41,17 +33,17 @@ export function VerificationTab({ listed: { gmb, gmail } }: { listed: Listed }) 
     <div className="@container flex flex-col gap-4 p-5">
       <section className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-accent-info/40 bg-accent-info/5 px-4 py-3">
         <ShieldCheck aria-hidden className="size-5 shrink-0 text-accent-info" />
-        <div className="flex min-w-0 flex-1 basis-60 flex-col gap-0.5">
-          <p className="font-medium break-words text-ink">
-            {latest === undefined
-              ? t(windowKeys.verification.banner.none, "Nothing from Google yet")
-              : latest.kind === "state"
-                ? t(windowKeys.verification.banner.state, "{from} → {to} · {ago}", { from: STATE_NAME[latest.from](t), to: STATE_NAME[latest.to](t), ago: ago(latest.at, locale) })
-                : t(windowKeys.verification.banner.email, "Google wrote: {subject} · {ago}", { subject: latest.kind === "email" ? (latest.subject ?? t(windowKeys.log.noSubject, "(no subject)")) : "", ago: ago(latest.date, locale) })}
-          </p>
-          <p className="text-sm text-ink-soft">{t(windowKeys.verification.banner.hint, "Google's own word: its state moves and its emails to the gmail, read from the inbox.")}</p>
-        </div>
-        <Badge tone={STATE_TONE[gmb.state]}>{STATE_NAME[gmb.state](t)}</Badge>
+        <p className="min-w-0 flex-1 basis-60 font-medium break-words text-ink">
+          {word === null && t(windowKeys.verification.banner.none, "Nothing from Google yet")}
+          {word != null &&
+            ("who" in word ? (
+              <ViewLink to={{ view: "email", params: { case: word.case_id } }} className="rounded-sm outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                {t(windowKeys.verification.banner.email, "Google wrote: {said} · {ago}", { said: word.summary ?? word.subject ?? t(windowKeys.log.noSubject, "(no subject)"), ago: ago(word.at, locale) })}
+              </ViewLink>
+            ) : (
+              t(windowKeys.verification.banner.state, "{from} → {to} · {ago}", { from: STATE_NAME[word.from](t), to: STATE_NAME[word.to](t), ago: ago(word.at, locale) })
+            ))}
+        </p>
         <Button variant="outline" size={button("sm")} planned={t(windowKeys.verification.read.planned, "Read Google's state now: it is read every 6 h")}>
           <RefreshCw aria-hidden />
           {t(windowKeys.verification.read, "Read Google now")}
@@ -112,33 +104,50 @@ export function VerificationTab({ listed: { gmb, gmail } }: { listed: Listed }) 
   );
 }
 
-/** Each try at verifying it, what stands since a rejected video, and Google's mail, as it was read. */
+/** A try at verifying a GBP, as its mail's reader says it. */
+const TRIES: readonly (MailKind | null)[] = ["video_rejected", "video_in_review", "call_offered", "call_failed"];
+
+/** Each try at verifying it, what stands since a rejected video, and the rest of Google's mail, as it was read. */
 function FromGoogle({ mail: { attempts, cases, lines }, gmail }: { mail: GmbMail; gmail: Gmail | null }) {
   const t = useT();
   const card = "flex flex-col gap-2 rounded-lg border border-border px-4 py-3";
-  const theirs = lines.filter((l) => l.who !== "us");
+  const theirs = lines.filter((l) => l.who !== "us" && !attempts.some((a) => a.message_id === l.id));
+  // newest first: a video's review is over with what came of it
+  const tries = attempts.filter((a, i) => a.outcome !== "in_review" || !attempts.slice(0, i).some((b) => b.method === "video" || b.outcome === "verified"));
+  const { shown } = useCases();
+  const nameless = (shown ?? []).filter((c) => c.gmail_id === gmail?.id && unnamed(c) && !over(c) && TRIES.includes(c.said));
   return (
     <>
       <section className={card}>
         <h3 className="text-sm font-semibold text-ink">{t(windowKeys.verification.attempts, "Attempts")}</h3>
-        {attempts.length === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.verification.attempts.none, "None in Google's mail.")}</p>}
+        {attempts.length === 0 && nameless.length === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.verification.attempts.none, "None in Google's mail.")}</p>}
         <ol className="flex flex-col divide-y divide-border">
-          {attempts.map((a) => (
+          {tries.map((a) => (
             <Attempt key={a.message_id} a={a} />
           ))}
+          {nameless[0] !== undefined && (
+            <li>
+              <ViewLink to={{ view: "email", params: nameless.length === 1 ? { case: nameless[0].id } : {} }} className="flex items-center gap-1 rounded-sm py-2.5 text-sm text-ink outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                {t(windowKeys.verification.attempts.nameless, "{n} of {gmail} name no GBP", { n: nameless.length, gmail: gmail!.gmail })}
+                <ChevronRight aria-hidden className="size-3.5 text-ink-soft" />
+              </ViewLink>
+            </li>
+          )}
         </ol>
       </section>
       {rejected(attempts) && (
         <section className={card}>
-          <h3 className="text-sm font-semibold text-ink">{t(windowKeys.verification.after, "After a rejected video")}</h3>
+          <h3 className="text-sm font-semibold text-ink">{t(windowKeys.verification.after, "Live call asked of support")}</h3>
           <AfterRejected cases={cases} gmail={gmail} />
         </section>
       )}
-      <section className={card}>
-        <h3 className="text-sm font-semibold text-ink">{t(windowKeys.verification.emails, "Google's emails")}</h3>
-        {theirs.length === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.log.noEmails, "No emails with Google: they are read from the gmail's inbox once its IMAP is set.")}</p>}
-        <MailLines lines={theirs} cases={cases} />
-      </section>
+      {(theirs.length > 0 || lines.length === 0) && (
+        <section className={card}>
+          <h3 className="text-sm font-semibold text-ink">{t(windowKeys.verification.emails, "Google's other emails")}</h3>
+          {lines.length === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.log.noEmails, "No emails with Google: they are read from the gmail's inbox once its IMAP is set.")}</p>}
+          <MailLines lines={theirs} cases={cases} />
+        </section>
+      )}
     </>
   );
 }
@@ -157,7 +166,7 @@ function Attempt({ a }: { a: VerificationAttempt }) {
         <ViewLink to={{ view: "email", params: { case: a.case_id } }} className="rounded-sm text-sm text-ink outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
           {METHOD_NAME[a.method](t)} · {formatDateTime(a.at, locale)}
         </ViewLink>
-        <p className="text-xs text-ink-soft">{a.summary}</p>
+        {a.reasons.length === 0 && <p className="text-xs text-ink-soft">{a.summary}</p>}
         {a.reasons.map((r) => (
           <p key={r} className="text-xs break-words text-accent-error">
             “{r}”
@@ -175,8 +184,8 @@ function AfterRejected({ cases, gmail }: { cases: GmbMail["cases"]; gmail: Gmail
   const asking = cases.filter((c) => c.topic === "verification" && c.numbers.length > 0 && !over(c));
   return (
     <>
-      {asking.length === 0 ? <p className="text-sm text-ink-soft">{t(windowKeys.verification.after.none, "No open conversation asks Google for the live call.")}</p> : <CaseLinks cases={asking} />}
-      {gmail !== null && <AutoLink gmail={gmail.id} />}
+      {asking.length === 0 ? <p className="text-sm text-ink-soft">{t(windowKeys.verification.after.none, "No open thread asks for it.")}</p> : <CaseLinks cases={asking} />}
+      {gmail !== null && <AutoOf g={gmail} only="verification" />}
     </>
   );
 }

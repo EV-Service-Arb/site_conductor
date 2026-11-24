@@ -28,6 +28,7 @@ const FILTERS: readonly Filter[] = ["non_five", "unresponded", "new_7d"];
 export function ReviewsTab({ listed }: { listed: Listed }) {
   const mail = useGmbMail(listed.gmb.id);
   const cases = mail.status === "ok" ? mail.data.cases.filter((c) => c.topic === "reviews") : [];
+  const open = cases.filter((c) => !over(c));
   return (
     <>
       {mail.status === "error" && (
@@ -36,7 +37,7 @@ export function ReviewsTab({ listed }: { listed: Listed }) {
         </div>
       )}
       <Reinstatement cases={cases.filter((c) => c.state.is !== "quiet")} />
-      <Archived listed={listed} asked={cases.find((c) => !over(c)) ?? cases[0]} />
+      <Archived listed={listed} asked={open.length === 1 ? open[0] : undefined} />
     </>
   );
 }
@@ -125,7 +126,7 @@ function Tracked({ gmb, track, reloadTrack, asked }: { gmb: number; track: Locat
   const chip = (active: boolean) => cn("flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring", active ? "border-ink bg-ink text-background" : "border-border text-ink hover:bg-hover");
   const dot = track.last_run_status === "ok" ? "bg-positive" : track.last_run_status === "partial" ? "bg-accent-warn" : "bg-accent-error";
   return (
-    <div className="flex flex-col gap-4 p-5">
+    <div className="@container flex flex-col gap-4 p-5">
       {spend.dialog}
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-md border border-border px-2.5 py-1 text-xs text-ink" title={track.target.label}>
@@ -153,7 +154,7 @@ function Tracked({ gmb, track, reloadTrack, asked }: { gmb: number; track: Locat
           {track.scan_cost !== null && <span className="text-ink-soft">{t(windowKeys.reviews.scanCost, "· {n} tokens", { n: track.scan_cost })}</span>}
         </Button>
       </div>
-      <div className="grid grid-cols-[repeat(2,minmax(15rem,1fr))_16rem] items-start gap-4 overflow-x-auto">
+      <div className="grid grid-cols-1 items-start gap-4 @3xl:grid-cols-[repeat(2,minmax(15rem,1fr))_16rem]">
         <section className="flex min-w-0 flex-col gap-2">
           <ColumnHead tone="bg-positive" name={t(windowKeys.reviews.active, "Active")} n={b.snapshotted.length} note={track.listed !== null ? t(windowKeys.reviews.listed, "listed by Google {n}", { n: track.listed }) : undefined} />
           <Group tone="bg-accent-warn" name={t(windowKeys.reviews.notResponded, "Not responded")} n={pending.length}>
@@ -165,8 +166,8 @@ function Tracked({ gmb, track, reloadTrack, asked }: { gmb: number; track: Locat
           <Group tone="bg-ink-faint" name={t(windowKeys.reviews.responded, "Responded")} n={answered.length} />
           <List cards={answered} compact all={all} onAll={() => setAll(true)} gmb={gmb} reload={board.reload} track={reloadTrack} />
         </section>
-        <section className="flex min-w-0 flex-col gap-2">
-          <ColumnHead tone="bg-accent-error" name={t(windowKeys.reviews.needsAction, "Suspended · Reinstating · To remove")} n={b.suspended.length + b.reinstating.length + b.removed.length} note={t(windowKeys.reviews.needsActionNote, "gone from Google, or flagged by us")} />
+        <section className="flex min-w-0 flex-col gap-2 @max-3xl:order-first">
+          <ColumnHead tone="bg-accent-error" name={t(windowKeys.reviews.needsAction, "Suspended · Reinstating · To remove")} n={b.suspended.length + b.reinstating.length + b.removed.length} note={t(windowKeys.reviews.needsActionNote, "missing from Google, or flagged by us")} />
           <Button size="sm" variant="outline" planned={t(windowKeys.reviews.appealAll, "Send an appeal for every suspended review")}>
             {t(windowKeys.reviews.appealAllButton, "Appeal {n} suspended", { n: b.suspended.length })}
           </Button>
@@ -300,8 +301,8 @@ function Card({ card: { review: r, reinstatement }, compact, gmb, reload, track 
         ) : (
           r.capture_pending && <span>{t(windowKeys.reviews.snapshotPending, "snapshot pending")}</span>
         )}
-        {gone && reinstatement === null && r.gone_at !== null && <span>{t(windowKeys.reviews.goneAt, "gone {ago}", { ago: ago(r.gone_at, locale) })}</span>}
-        {reinstatement !== null && <span>{t(windowKeys.reviews.appealSent, "appeal sent {ago}", { ago: ago(reinstatement.requested_at, locale) })}</span>}
+        {gone && reinstatement === null && r.gone_at !== null && <span>{t(windowKeys.reviews.goneAt, "went missing {ago}", { ago: ago(r.gone_at, locale) })}</span>}
+        {reinstatement !== null && <span>{t(windowKeys.reviews.appealSent, "appealed {ago}", { ago: ago(reinstatement.requested_at, locale) })}</span>}
         <span className="flex-1" />
         {!gone && r.reply === null && (
           <Button size="xs" variant="ghost" planned={t(windowKeys.reviews.draft, "Draft a reply with an agent")}>
@@ -314,7 +315,7 @@ function Card({ card: { review: r, reinstatement }, compact, gmb, reload, track 
               {t(windowKeys.reviews.appealButton, "Appeal")}
             </Button>
             <Button size="xs" variant="outline" disabled={busy} onClick={() => void appeal()}>
-              {t(windowKeys.reviews.appealDone, "Appeal sent")}
+              {t(windowKeys.reviews.appealDone, "Mark appealed")}
             </Button>
           </>
         )}
