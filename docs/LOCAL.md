@@ -241,6 +241,11 @@ data, above); review_archive is pointed at it. The
 conductor studies in the CLI's work dir (`PANEL_PLACEMENT_DIR`), so the CLI's viewer opens what it
 studied.
 
+## The assistant
+
+It answers on prod's Claude subscription (`claude_oauth_token` in `../devops`'s sops), or the shell's
+`CLAUDE_CODE_OAUTH_TOKEN`; on neither under `--no-peers`.
+
 ## Browsers
 
 With `MULTILOGIN_TOKEN` or `GOLOGIN_TOKEN` in the shell (a paid plan's: neither runs without

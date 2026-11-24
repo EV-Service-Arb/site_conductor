@@ -467,8 +467,8 @@ REVIEW_ARCHIVE_DATA_DIR="${REVIEW_ARCHIVE_DATA_DIR:-$state/review_archive}"
 copies=("$state/panel.db:panel-data/panel.db" "$state/sites_panel.db:sites-panel-data/sites_panel.db"
 	"$REVIEW_ARCHIVE_DATA_DIR/review_archive.db:review-archive-data/review_archive.db")
 restore=0
+devops="${DEVOPS_DIR:-$(dirname "$service_arb")/devops}"
 if [ "$from_prod" = 1 ]; then
-	devops="${DEVOPS_DIR:-$(dirname "$service_arb")/devops}"
 	# what prod sealed (its leads' PII, its sources' secrets, its sessions) opens under prod's key alone
 	prod_key="$(sops -d --extract '["panel_data_key"]' "$devops/nix/secrets/platform.json")" || die "--from-prod: no panel_data_key in $devops/nix/secrets/platform.json"
 	kept=0
@@ -795,6 +795,14 @@ conductor_config="${SA_CONDUCTOR_CONFIG:-$HOME/.config/sa_conductor.nix}"
 # A key for this machine alone: the 32 bytes 0..31, and its public half for sites_panel.
 assertion_key="local:AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="
 assertion_public="local:A6EHv/POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg="
+# The assistant's Claude: the caller's, else prod's. --no-peers is e2e's and CI's: no subscription spent there.
+claude_token="${CLAUDE_CODE_OAUTH_TOKEN:-}"
+if [ -z "$claude_token" ] && [ "$run_panel" = 1 ] && [ "$no_peers" = 0 ]; then
+	claude_token="$(sops -d --extract '["claude_oauth_token"]' "$devops/nix/secrets/personal.json")" || {
+		warn "no claude_oauth_token in $devops/nix/secrets/personal.json: the assistant answers only on a person's own Claude"
+		claude_token=""
+	}
+fi
 # Whatever the calling shell exports for a deployed conductor must not leak in: concierge's
 # variables would refuse the dev sign-in, a bot token would start the bot.
 panel() {
@@ -815,6 +823,7 @@ panel() {
 		PANEL_BROWSERS_URL="$browsers_origin" \
 		GOLOGIN_TOKEN="${browsers_origin:+${GOLOGIN_TOKEN:-}}" \
 		MULTILOGIN_TOKEN="${browsers_origin:+${MULTILOGIN_TOKEN:-}}" \
+		CLAUDE_CODE_OAUTH_TOKEN="$claude_token" \
 		PANEL_GRAFANA_SERVER="$PANEL_GRAFANA_SERVER" \
 		PANEL_GRAFANA_DIR="$state/grafana" \
 		PANEL_PLAYBOOK_URL="$playbook_origin" \
@@ -1004,7 +1013,7 @@ browsers() {
 		"$state/target/debug/sa_browsers" "$@"
 }
 export -f panel sites_panel review_archive browsers playbook
-export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_dir browsers_origin \
+export state conductor_config spend_flag public_origin role DEV_EMAIL PANEL_WEB_DIR assertion_key assertion_public sites_origin review_archive_origin placement_dir browsers_origin claude_token \
 	PANEL_GRAFANA_SERVER PANEL_BIN SITES_BIN SITES_MFE_DIR REVIEW_ARCHIVE_BIN REVIEW_ARCHIVE_MFE_DIR REVIEW_ARCHIVE_DATA_DIR REVIEW_ARCHIVE_PORT \
 	PANEL_PORT SITES_PORT BROWSERS_PORT root src PLAYBOOK_BIN PLAYBOOK_PORT playbook_origin
 watched() {
