@@ -3639,6 +3639,10 @@
     "en": "Loading…",
     "t": "Загрузка…"
   },
+  "state.network": {
+    "en": "No answer came back. Check the connection and try again.",
+    "t": "Ответ не пришёл. Проверьте подключение и повторите попытку."
+  },
   "state.retry": {
     "en": "Try again",
     "t": "Повторить"

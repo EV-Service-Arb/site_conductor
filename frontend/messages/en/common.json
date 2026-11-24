@@ -948,6 +948,7 @@
   "state.error": "Could not load this. {detail}",
   "state.forbidden": "Your role may not do this.",
   "state.loading": "Loading…",
+  "state.network": "No answer came back. Check the connection and try again.",
   "state.noView": "Nothing is at this address",
   "state.retry": "Try again",
   "state.unavailable.body": "Try again in a minute. You are still signed in.",

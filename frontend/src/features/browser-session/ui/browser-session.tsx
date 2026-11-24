@@ -155,8 +155,6 @@ function Session({ gmail, gmb, browser, reload, aside }: { gmail: Gmail; gmb: nu
       setPhase(stopped ? "off" : "elsewhere");
       if (!(e instanceof Refused)) throw e;
       if (browsersUnconnected(e)) setFailure(t(browserKeys.unconnected, "Browsers not connected"));
-      // the runner full: its own words
-      else if (e.failure.code === "unavailable" && e.failure.error !== "") setFailure(e.failure.error);
       else if (e.failure.code !== "unauthenticated") setFailure(failureText(e.failure, t));
       return;
     }

@@ -9,9 +9,8 @@ export function failureText(failure: Failure, t: T): string {
       return t(state.csrf, "The page is out of date. Reload it and repeat the action.");
     case "forbidden":
       return t(state.forbidden, "Your role may not do this.");
-    case "unavailable":
     case "network":
-      return t(state.unavailable.body, "Try again in a minute. You are still signed in.");
+      return t(state.network, "No answer came back. Check the connection and try again.");
     default:
       return failure.error === "" ? t(state.error, "Could not load this. {detail}", { detail: failure.code }) : failure.error;
   }
