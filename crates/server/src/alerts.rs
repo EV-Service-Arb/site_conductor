@@ -13,10 +13,12 @@ use axum::{
 	routing::{get, post},
 };
 use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
+use futures::{StreamExt, stream::FuturesUnordered};
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Call, Family, NotePage, Rule, Tier};
-use sa_auth::{Own, Service, User};
+use sa_auth::{Actor, Own, Service, User};
 use sa_core::{
+	agent::Outward,
 	alerts::{Cadence, Cadences, Filter, Method as Outlet},
 	feeds,
 	notify::{MAX_NAME, one_line},
@@ -24,6 +26,7 @@ use sa_core::{
 use sa_panel::{
 	Panel, Refused,
 	alerts::{Address, Alert, Destination, Directory, DirectoryError, Feeds, Hours, Hub, Identity, Pressed, Settings, Sought, Told},
+	deliver::Delivered,
 	telegram::Kind,
 };
 use serde::{Deserialize, Serialize};
@@ -234,9 +237,7 @@ pub async fn run(a: Alerting, shutdown: watch::Receiver<bool>) {
 		}),
 		feed(hub, Service::Sites, shutdown.clone()),
 		feed(hub, Service::ReviewArchive, shutdown.clone()),
-		crate::every(DELIVER_EVERY, shutdown.clone(), "alerts: delivery", || async {
-			hub.deliver(Timestamp::now()).await.map(drop)
-		}),
+		deliver(hub, shutdown.clone()),
 		crate::every(RECHECK_EVERY, shutdown.clone(), "alerts: access check", || async {
 			hub.recheck_access(Timestamp::now()).await.map(drop)
 		}),
@@ -421,7 +422,7 @@ async fn press_alert(
 		preferred_name: caller.preferred_name.clone(),
 		permissions: caller.permissions.clone(),
 	};
-	match hub(a)?.hub.press(&who, id, &b.button, Timestamp::now()).await? {
+	match hub(a)?.hub.press(&who, caller.actor.as_ref(), id, &b.button, Timestamp::now()).await? {
 		Pressed::Done { .. } => Ok(Json(one(&panel, &caller, id).await?.into())),
 		Pressed::AlreadyDone => Err(Refused::Conflict("already recorded".into()).into()),
 		Pressed::Gone | Pressed::Unknown => Err(Refused::NotFound.into()),
@@ -569,7 +570,7 @@ pub(crate) struct AddChat {
 /// out there.
 ///
 /// 400 refused (nothing stored), 409 a destination already.
-async fn add_chat(State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddChat>) -> ApiResult<Created<AlertsDto>> {
+async fn add_chat(_: Outward, State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddChat>) -> ApiResult<Created<AlertsDto>> {
 	let a = hub(a)?;
 	let named = b.chat.trim().parse().map_err(|e| Refused::Invalid(format!("not a channel, group or topic: {e}")))?;
 	a.hub.add_chat(caller.user_id, &caller.permissions, display(&caller), named, Timestamp::now()).await??;
@@ -584,7 +585,7 @@ pub(crate) struct AddEmail {
 }
 
 /// Adds the caller's own verified address as a destination; any other is mailed a link that does.
-async fn add_email(State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddEmail>) -> ApiResult<Created<AlertsDto>> {
+async fn add_email(_: Outward, State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddEmail>) -> ApiResult<Created<AlertsDto>> {
 	let a = hub(a)?;
 	let address = b.address.trim().to_lowercase();
 	if caller.email_verified && address == caller.email.to_lowercase() {
@@ -715,7 +716,7 @@ pub(crate) struct AddDiscordChannel {
 /// Adds a Discord channel by its webhook, once a test went out there.
 ///
 /// 400 refused (nothing stored), 409 a destination already.
-async fn add_discord_channel(State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddDiscordChannel>) -> ApiResult<Created<AlertsDto>> {
+async fn add_discord_channel(_: Outward, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddDiscordChannel>) -> ApiResult<Created<AlertsDto>> {
 	let webhook: discord::Webhook = b.url.parse().map_err(invalid)?;
 	let Some(channels) = hub(a.clone())?.hub.outlets.discord_channels else {
 		return Err(Refusal::new(Code::Unavailable, "Discord is not configured"));
@@ -739,7 +740,7 @@ pub(crate) struct AddSlack {
 /// Adds a Slack channel by its incoming webhook, once a test went out there.
 ///
 /// 400 refused (nothing stored), 409 a destination already.
-async fn add_slack(State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddSlack>) -> ApiResult<Created<AlertsDto>> {
+async fn add_slack(_: Outward, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddSlack>) -> ApiResult<Created<AlertsDto>> {
 	let webhook: slack::Webhook = b.url.parse().map_err(invalid)?;
 	let to = Address::Slack { url: webhook.to_string() };
 	Ok(Created(add(a, &caller, &to, "Slack channel").await?))
@@ -759,7 +760,7 @@ pub(crate) struct AddPush {
 
 /// Adds the browser's push subscription, once a test went out there; one the caller has already is
 /// left as they set it.
-async fn add_push(State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddPush>) -> ApiResult<Created<AlertsDto>> {
+async fn add_push(_: Outward, State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddPush>) -> ApiResult<Created<AlertsDto>> {
 	webpush::Subscription::try_new(&b.endpoint, &b.p256dh, &b.auth).map_err(invalid)?;
 	let to = Address::Push {
 		endpoint: b.endpoint,
@@ -793,7 +794,7 @@ pub(crate) struct WebhookDto {
 /// Adds a webhook, once a test went out there.
 ///
 /// 400 refused (nothing stored), 409 a destination already.
-async fn add_webhook(State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddWebhook>) -> ApiResult<Created<WebhookDto>> {
+async fn add_webhook(_: Outward, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddWebhook>) -> ApiResult<Created<WebhookDto>> {
 	let url: url::Url = b.url.trim().parse().map_err(|e| Refused::Invalid(format!("not a URL: {e}")))?;
 	let mut raw = [0; 32];
 	getrandom::fill(&mut raw).map_err(|e| eyre::eyre!("the OS random source failed: {e}"))?;
@@ -835,6 +836,30 @@ async fn unsubscribe_page() -> Response {
 }
 
 // ── the hub's work in `serve` ───────────────────────────────────────────────────────────
+
+/// A pass begins every [`DELIVER_EVERY`], whatever the ones before still wait for: a network that hangs
+/// delays its own messages alone.
+async fn deliver(hub: &Hub<Networks, Concierge, Forward>, mut shutdown: watch::Receiver<bool>) {
+	let mut passes = FuturesUnordered::new();
+	let mut tick = tokio::time::interval(DELIVER_EVERY);
+	tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+	let done = |pass: eyre::Result<Delivered>| {
+		if let Err(e) = pass {
+			crate::report(&e, "alerts: delivery");
+		}
+	};
+	while !*shutdown.borrow() {
+		tokio::select! {
+			_ = tick.tick() => passes.push(hub.deliver(Timestamp::now())),
+			Some(pass) = passes.next() => done(pass),
+			_ = shutdown.changed() => {}
+		}
+	}
+	// a send cut short would go out twice
+	while let Some(pass) = passes.next().await {
+		done(pass);
+	}
+}
 
 /// Follows `service`'s feed: a page every [`FAN_OUT_EVERY`]; while it publishes none, said once
 /// and asked again after [`LOOK_AGAIN`].
@@ -921,7 +946,7 @@ impl Feeds for Forward {
 		Ok(())
 	}
 
-	async fn press(&self, who: &Identity, service: Service, call: &Call, idempotency_key: &str) -> eyre::Result<u16> {
+	async fn press(&self, who: &Identity, actor: Option<&Actor>, service: Service, call: &Call, idempotency_key: &str) -> eyre::Result<u16> {
 		let (method, path) = self.catalog().resolve(&format!("{service}.{}", call.operation), &call.path).map_err(|e| eyre::eyre!(e))?;
 		let mut req = Request::builder().method(method).uri(path).header(
 			HeaderName::from_static("idempotency-key"),
@@ -940,7 +965,7 @@ impl Feeds for Forward {
 			email_verified: who.email_verified,
 			name: who.preferred_name.clone(),
 			permissions: who.permissions.iter().filter(|p| p.starts_with(service.prefix())).collect(),
-			actor: None, // a press in the user's own chat
+			actor: actor.cloned(),
 		};
 		let sent = self.as_user(req.body(body).expect("a request from parts that parsed"), user);
 		let res = tokio::time::timeout(SITES_TIMEOUT, sent)

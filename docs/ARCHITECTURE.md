@@ -1340,8 +1340,8 @@ hours             the person's, in their time zone: quiet hours and snooze hold 
                   it as one message
 read              in the panel, by its link, by a button pressed: read everywhere, and what was still
                   waiting for it is given up
-delivery (0.5 s)  lead messages noted > 1 h ago dropped; > 20 of one rule waiting for one destination go as
-                  one message; claim in one write transaction, most urgent first: ≤ 25 tries of a method
+delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead messages noted > 1 h ago
+                  dropped; > 20 of one rule waiting for one destination go as one message; claim in one write transaction, most urgent first: ≤ 25 tries of a method
                   started in any second (none while it is paused), one per private chat per second, one
                   per any other address per 3 s, none to one with a send in flight; leased 60 s → the
                   user's access checked again → sent | retry | dead
@@ -1359,7 +1359,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dropped; > 20 of one rule waitin
 - **Mail** goes through `SMTP_*`; each carries a one-click unsubscribe (RFC 8058,
   `POST /api/alerts/unsubscribe?token=`, open: the sealed token is its only say; a GET is a page with the
   button, since mail scanners open links). Another address is proved by a link mailed there and opened
-  signed in as who asked.
+  signed in as who asked: at most 5 an hour by one person, 3 a day to one address.
 - **Discord's direct message** needs the bot (`DISCORD_*`) installed to the person's account: OAuth,
   back at `/auth/discord/alerts`.
 - **Push** is to a key made of `PANEL_DATA_KEY`; a browser is one person's, whoever subscribed last.
@@ -1367,7 +1367,7 @@ delivery (0.5 s)  lead messages noted > 1 h ago dropped; > 20 of one rule waitin
   signed `x-signature: t=<unix>,v1=<HMAC-SHA256 of "<t>.<body>">`.
 - **A note's text**: the one for anyone, the one for a private reader, the one for a private reader who
   holds `sa:sites:work:pii:see`, whichever the reader may read when they read it; buttons and links out
-  go to private readers only. A channel gets no access request and no mail of Google's.
+  go to private readers only. A channel gets no access request, and of Google's mail its kind and GBP alone.
 - **Updates by long polling.** One process polls, under a lease in `telegram_poller` (60 s,
   renewed every poll); the offset is stored there after each update, and every update is
   idempotent, so one handled twice across a takeover does nothing twice.

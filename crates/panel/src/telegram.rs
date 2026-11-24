@@ -266,7 +266,7 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 			Access::NoSession => return Ok((Reply::OpenPanel, None)),
 			Access::Unavailable => return Ok((Reply::TryLater, None)),
 		};
-		Ok(match self.press(&identity, sent.note_id, &button, now).await? {
+		Ok(match self.press(&identity, None, sent.note_id, &button, now).await? {
 			Pressed::Done { line, left } => (Reply::Done, Some(Edit { message, line, left })),
 			Pressed::AlreadyDone => (Reply::AlreadyDone, None),
 			Pressed::Gone => (Reply::LeadGone, None),

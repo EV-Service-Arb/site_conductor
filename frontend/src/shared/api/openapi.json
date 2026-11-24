@@ -3272,6 +3272,7 @@
           "unreleased_category": 422,
           "unstudied": 422
         },
+        "x-outward": true,
         "x-permission": "sa:own:credentials"
       }
     },
@@ -3603,6 +3604,7 @@
           "unreleased_category": 422,
           "unstudied": 422
         },
+        "x-outward": true,
         "x-permission": "sa:own:credentials"
       }
     },
@@ -5007,6 +5009,7 @@
           "unreleased_category": 422,
           "unstudied": 422
         },
+        "x-outward": true,
         "x-permission": "sa:own:credentials"
       }
     },
@@ -5358,6 +5361,7 @@
           "unreleased_category": 422,
           "unstudied": 422
         },
+        "x-outward": true,
         "x-permission": "sa:own:credentials"
       }
     },
@@ -5529,6 +5533,7 @@
           "unreleased_category": 422,
           "unstudied": 422
         },
+        "x-outward": true,
         "x-permission": "sa:own:credentials"
       }
     },
@@ -5861,6 +5866,7 @@
           "unreleased_category": 422,
           "unstudied": 422
         },
+        "x-outward": true,
         "x-permission": "sa:own:credentials"
       }
     },

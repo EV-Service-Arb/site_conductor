@@ -96,7 +96,11 @@ impl Networks {
 				let payload = webpush::Payload {
 					title,
 					body: body.text,
-					url: m.links.last().map_or_else(|| "/user/alerts".to_owned(), |(_, url)| url.clone()),
+					// the panel's own: the service worker opens no other origin's
+					url: match m.notes.as_slice() {
+						[one] => format!("/user/alerts?open={one}"),
+						_ => "/user/alerts".to_owned(),
+					},
 					// a digest and a test replace the one before
 					tag: match m.notes.as_slice() {
 						[one] => format!("alert {one}"),

@@ -18,7 +18,7 @@ use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Rule, Tier};
 use sa_core::{
 	mail::{self as rules, Draft as Reply, DraftState, HOLD, Holds, Joining, Kind, MAX_ASKS, MAX_READS, Message, READ_BACK, Reading, Ruled, Sender, State, Topic, Why},
-	notify::{Locale, Note, one_line},
+	notify::{Locale, Note, Rendered, one_line},
 };
 use sqlx::SqliteConnection;
 use uuid::Uuid;
@@ -27,7 +27,7 @@ use zeroize::Zeroizing;
 pub use crate::{smtp::Gmail, store::mail::ReadBy};
 use crate::{
 	Panel, Refused,
-	alerts::{Telling, derived_event_id},
+	alerts::{Body, Telling, derived_event_id},
 	inbox::{Account, Mail},
 	seal::{gmail_imap_aad, gmail_mail_aad, mail_draft_aad},
 	store::{
@@ -744,11 +744,11 @@ impl Panel {
 					continue;
 				}
 				let read = c.google().and_then(|m| m.said.reading.as_ref());
-				let note = Note::GoogleMail {
+				let note = |summary| Note::GoogleMail {
 					state: c.state.clone(),
 					kind: read.map(|r| r.kind),
 					gmb: c.gmb.and_then(|id| all.iter().find(|g| g.id == id)).map(|g| g.name.clone()),
-					summary: read.map(|r| r.summary.clone()).or_else(|| last.subject.clone()),
+					summary,
 					deadline: read.and_then(|r| r.deadline).filter(|d| *d > now),
 				};
 				let gmbs: Vec<i64> = match c.gmb {
@@ -766,7 +766,13 @@ impl Panel {
 						_ => None,
 					},
 					link: Some(format!("/email?case={}", c.id)),
-					..Telling::new(Rule::GoogleMail, event, at, note.render(locale))
+					// what the mail says may be a code to sign in with: its owner's alone
+					body: Body {
+						open: Some(note(None).render(locale)),
+						private: Some(note(read.map(|r| r.summary.clone()).or_else(|| last.subject.clone())).render(locale)),
+						..Body::default()
+					},
+					..Telling::new(Rule::GoogleMail, event, at, Rendered::default())
 				};
 				let mut tx = crate::store::begin_write(&mut conn).await?;
 				queued += self.tell(&mut tx, &telling, now).await?;
