@@ -2,7 +2,7 @@
 //! and what a network's refusal does to its destination.
 
 use std::{
-	collections::{BTreeMap, VecDeque},
+	collections::BTreeMap,
 	sync::{Arc, Mutex},
 };
 
@@ -24,16 +24,16 @@ use sa_panel::{
 use serde_json::json;
 use uuid::Uuid;
 
-/// What went out, and what the next sends answer, in order; then delivered.
+/// What went out, and what the next send to an address answers; then delivered.
 #[derive(Clone, Default)]
 struct Kept {
 	sent: Arc<Mutex<Vec<(Address, Message)>>>,
-	next: Arc<Mutex<VecDeque<Failure>>>,
+	next: Arc<Mutex<Vec<(Address, Failure)>>>,
 }
 
 impl Kept {
-	fn refuse(&self, f: Failure) {
-		self.next.lock().unwrap().push_back(f);
+	fn refuse(&self, to: Address, f: Failure) {
+		self.next.lock().unwrap().push((to, f));
 	}
 
 	/// What went out since asked last.
@@ -44,8 +44,9 @@ impl Kept {
 
 impl Outlets for Kept {
 	async fn send_to(&self, to: &Address, message: &Message) -> Result<String, Failure> {
-		if let Some(f) = self.next.lock().unwrap().pop_front() {
-			return Err(f);
+		let mut next = self.next.lock().unwrap();
+		if let Some(i) = next.iter().position(|(a, _)| a == to) {
+			return Err(next.remove(i).1);
 		}
 		self.sent.lock().unwrap().push((to.clone(), message.clone()));
 		Ok("1".to_owned())
@@ -201,7 +202,7 @@ async fn a_channel_reads_no_contact_details() {
 	let again = s.hub.add(s.user, &operator(), "Olga", &email("olga@x.io"), "x", now).await.unwrap();
 	assert!(matches!(again, Err(Refused::Conflict(_))), "{again:?}");
 	s.networks.taken();
-	s.networks.refuse(Failure::Refused("no such hook".into()));
+	s.networks.refuse(slack("https://hooks.slack.test/b"), Failure::Refused("no such hook".into()));
 	let refused = s.hub.add(s.user, &operator(), "Olga", &slack("https://hooks.slack.test/b"), "x", now).await.unwrap();
 	assert!(matches!(refused, Err(Refused::Invalid(m)) if m.contains("no such hook")), "what a test does not reach is not stored");
 	let stored: Vec<Vec<u8>> = sqlx::query_scalar("SELECT address_sealed FROM alert_destinations").fetch_all(s.panel.store().pool()).await.unwrap();
@@ -272,7 +273,7 @@ async fn a_refusal_is_its_methods_or_its_addresss() {
 	let first = s.add(email("a@x.io"), now).await;
 	let second = s.add(email("b@x.io"), now).await;
 	assert_eq!(s.lead(now).await, 2);
-	s.networks.refuse(Failure::RetryAfter(SignedDuration::from_secs(60)));
+	s.networks.refuse(email("a@x.io"), Failure::RetryAfter(SignedDuration::from_secs(60)));
 	let done = s.hub.deliver(now).await.unwrap();
 	assert_eq!((done.sent, done.retrying), (1, 1));
 	s.lead(later(10)).await;
@@ -283,10 +284,11 @@ async fn a_refusal_is_its_methods_or_its_addresss() {
 	for mail in [first, second] {
 		s.panel.alerts_remove(s.user, mail).await.unwrap();
 	}
-	let hook = s.add(slack("https://hooks.slack.test/a"), later(70)).await;
+	let a = || slack("https://hooks.slack.test/a");
+	let hook = s.add(a(), later(70)).await;
 	s.add(slack("https://hooks.slack.test/b"), later(70)).await;
 	assert_eq!(s.lead(later(70)).await, 2);
-	s.networks.refuse(Failure::RetryAfter(SignedDuration::from_secs(60)));
+	s.networks.refuse(a(), Failure::RetryAfter(SignedDuration::from_secs(60)));
 	let done = s.hub.deliver(later(70)).await.unwrap();
 	assert_eq!((done.sent, done.retrying), (1, 1));
 	assert_eq!(s.lead(later(71)).await, 2);
@@ -295,13 +297,13 @@ async fn a_refusal_is_its_methods_or_its_addresss() {
 
 	s.lead(later(140)).await;
 	assert_eq!(s.lead(later(140)).await, 2);
-	s.networks.refuse(Failure::Gone("no such hook".into()));
+	s.networks.refuse(a(), Failure::Gone("no such hook".into()));
 	let done = s.hub.deliver(later(140)).await.unwrap();
 	assert_eq!((done.sent, done.dead), (1, 1));
 	assert_eq!(s.dead(hook).await.as_deref(), Some("no such hook"));
 	assert_eq!(s.hub.deliver(later(150)).await.unwrap().sent, 1, "the other's second; the dead one's is given up");
 	assert_eq!(s.lead(later(151)).await, 1);
-	s.networks.refuse(Failure::Gone("still not".into()));
+	s.networks.refuse(a(), Failure::Gone("still not".into()));
 	assert!(matches!(s.hub.test(s.user, hook).await.unwrap(), Err(Refused::Invalid(_))));
 	assert!(s.dead(hook).await.is_some());
 	s.hub.test(s.user, hook).await.unwrap().unwrap();

@@ -79,8 +79,9 @@ pub async fn claim_due(conn: &mut SqliteConnection, now: Timestamp, lease_until:
 	type Row = (i64, i64, Uuid, i64, String, String, bool, i32);
 	let rows: Vec<Row> = sqlx::query_as(
 		"WITH busy AS ( \
-		   SELECT DISTINCT o.lane FROM alert_outbox o LEFT JOIN telegram_destinations t ON t.destination_id = o.destination_id \
-		   WHERE (o.attempted_at > iif(t.kind = 'private', $2, $5) AND o.attempted_at <= $1) OR (o.state = 'pending' AND o.leased_until > $1) \
+		   SELECT o.lane FROM alert_outbox o LEFT JOIN telegram_destinations t ON t.destination_id = o.destination_id \
+		   WHERE o.attempted_at > $5 AND o.attempted_at <= $1 AND o.attempted_at > iif(t.kind = 'private', $2, $5) \
+		   UNION SELECT lane FROM alert_outbox WHERE state = 'pending' AND leased_until > $1 \
 		 ), due AS ( \
 		   SELECT o.*, d.method, CASE o.tier WHEN 'urgent' THEN 0 WHEN 'important' THEN 1 ELSE 2 END AS rank \
 		   FROM alert_outbox o JOIN alert_destinations d ON d.id = o.destination_id \

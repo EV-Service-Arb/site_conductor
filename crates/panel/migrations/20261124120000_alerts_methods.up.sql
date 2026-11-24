@@ -146,7 +146,6 @@ INSERT INTO sqlite_sequence (name, seq) SELECT 'alert_outbox', seq FROM sqlite_s
 
 CREATE INDEX alert_outbox_due ON alert_outbox (next_attempt_at, id) WHERE state = 'pending';
 CREATE INDEX alert_outbox_by_attempt ON alert_outbox (attempted_at);
-CREATE INDEX alert_outbox_by_lane ON alert_outbox (lane, attempted_at);
 CREATE INDEX alert_outbox_by_destination ON alert_outbox (destination_id, rule) WHERE state = 'pending';
 CREATE INDEX alert_outbox_by_user ON alert_outbox (user_id, note_id) WHERE state = 'pending';
 
