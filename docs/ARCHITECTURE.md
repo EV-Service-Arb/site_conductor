@@ -1189,7 +1189,7 @@ push (a change, a page, 60 s)
   with the gmail it was under and who did it. A browser run for the gmail alone is the gmail's, in
   the log of each GBP while under it. Its gmail's mail with Google (`email`): `serve` reads each
   set inbox's All Mail, and of its Spam what is proved Google's, over IMAP every 60 s, each past its cursor
-  (account, UIDVALIDITY, last UID), a batch a write with the cursor; a message is logged once, on each GBP whose name (the longest first: one
+  (account, UIDVALIDITY, last UID), a batch a write with the cursor (one failing 15 min says why as its check until it reads again); a message is logged once, on each GBP whose name (the longest first: one
   may begin another) or place id it holds, else whose address's first line, else the gmail's; what is
   about a Business Profile is kept too (Google's mail). Its thread opens in a new tab of the gmail's own running
   browser (`POST /gmails/{id}/browser/thread`); the conductor never reads Gmail on the web. review_archive's events of the GBP (reviews appeared, gone,
@@ -1222,7 +1222,7 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
 - **Whose a message is.** Authentic: its one From is of google.com or a subdomain and Gmail's own first
   `Authentication-Results` passes DMARC for that domain; a look-alike is an impersonation, in a case of its
   own. Ours: what Gmail says the account sent, whatever its From. Google's other mail is in the log alone,
-  unless it answers a case's.
+  unless it answers a case's; a routine notice (a performance report, a new review) in its GBP's lines alone.
 - **Joining.** A reply joins what it answers (Message-IDs), else its Gmail thread's conversation, else
   its case number's; a notice only its number's: Gmail threads the notices of every profile together. A
   person may make two cases of a gmail one (`mail_cases.joined`).
@@ -1234,18 +1234,14 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   any that answers or a balance, mail waits and its case says why. The writer's facts are the case, Google's other
   readings of the GBP, the GBP, and, of a case about reviews, those review_archive sees gone (a full page
   of them is no count); what it lacks is a need, and a draft with one never goes by itself. Where the
-  archive does not track the GBP the list is a need; while it does not answer, the reply waits. Once Google
-  refused, found no data, sees them live or brought back part, the list is the reply, its screenshots a
-  need until some were sent, and an empty list settles the case. A draft lacking something goes with no file
-  only once its person says so.
+  archive does not track the GBP the list is a need; while it does not answer, the reply waits. A draft lacking
+  something goes with no file only once its person says so.
 - **Whose turn.** A deflection, a refusal, a call that failed, or silence past Google's term (48 h where it
   gave none, a week for a video or an appeal; only an inbox read past it is silent) is pressed. What Google
   asks for is its operator's, the reply ready around it. A specialist of Google's is waited for, told of, and
-  pressed once. A closure with nothing given is the operator's. A survey counts for nothing in a conversation,
-  whose topic is its first specific kind's. What a notice says stands until a kind that supersedes it; a
-  verification is over once its GBP is verified, a suspension once it is reinstated, a case once its GBP is in
-  the trash. Of a GBP's open conversations on one topic the latest asks; its older ones and its notices are
-  quiet meanwhile.
+  pressed once. What a notice says stands until a kind that supersedes it; a verification is over once its GBP is
+  verified, a suspension once it is reinstated, a case once its GBP is in the trash. Of a GBP's open
+  conversations on one topic the latest asks, its other cases quiet meanwhile.
 - **A reply** goes as the gmail, to support's one address, to the last message of the case that takes one.
   `sending` is committed before SMTP; one left so is never tried again, nor is another sent to what it answers.
   One goes by itself only while its topic's switch (`verification`, `reviews`; off unless its owner's) is on
