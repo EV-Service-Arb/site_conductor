@@ -11,6 +11,7 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel, Refused,
+	alerts::Sought,
 	gmbs::Existing,
 	import::Export,
 	inbox::{Account, Batch, Cursor, Mail, Mailbox},
@@ -542,6 +543,23 @@ async fn a_turn_to_a_person_is_told_once_to_the_owners_of_the_gbp_else_of_the_gm
 	w.arrives(notice("2026-10-05T11:30:00Z", 9, "Is it still open?", "Plomberie Dupont - Lyon, Est")).await;
 	w.reads("2026-10-05T11:31:00Z", Kind::StillActive, |r| r.deadline = Some(t("2026-10-09T00:00:00Z"))).await;
 	assert_eq!(tell("2026-10-05T11:32:00Z").await, 1);
+	let inbox = async || w.p.alerts_inbox(w.owner, &sa_panel::testing::operator(), &Sought::default()).await.unwrap();
+	let linked: Vec<_> = inbox().await.into_iter().map(|a| a.link.unwrap()).collect();
+	let cases = w.cases("2026-10-05T11:32:00Z").await;
+	assert!(linked.iter().all(|l| cases.iter().any(|c| *l == format!("/email?case={}", c.id))), "{linked:?}");
+
+	w.p.set_mail_auto(w.owner, w.gmail, Topic::Verification, true).await.unwrap().unwrap();
+	w.arrives(support("2026-10-05T11:40:00Z", 1, "[1-1234000056789] Your Request", "Follow the prompts again.")).await;
+	w.reads("2026-10-05T11:41:00Z", Kind::SelfServe, |_| {}).await;
+	let case = w.cases("2026-10-05T11:41:00Z").await.into_iter().find(|c| c.id == case.id).unwrap();
+	w.p.draft_mail(w.owner, case.id, case.last().said.id, written(), false, t("2026-10-05T11:42:00Z")).await.unwrap().unwrap();
+	let before = inbox().await.len();
+	tell("2026-10-05T11:43:00Z").await;
+	tell("2026-10-05T11:44:00Z").await;
+	let after = inbox().await;
+	assert_eq!(after.len(), before + 1, "a held draft, once");
+	assert!(after[0].text.text.contains("a reply goes by itself 2026-10-05 11:57 UTC"), "{}", after[0].text.text);
+	assert_eq!(after[0].link, Some(format!("/email?case={}", case.id)));
 }
 
 #[tokio::test]

@@ -12,7 +12,8 @@ test("a window minimized comes back from the hotbar with what was typed in it, o
   const hotbar = page.getByRole("region", { name: "Hotbar" });
   await page.getByRole("navigation", { name: "Outline" }).getByRole("button", { name: "Trash" }).click();
   await expect(page.getByRole("dialog", { name: "Trash" })).toBeVisible();
-  await page.getByRole("link", { name: "Alerts" }).click();
+  await page.getByRole("button", { name: /^Alerts/ }).click();
+  await page.getByRole("link", { name: "All alerts" }).click();
   await expect(page).toHaveURL(/\/alerts/);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const entry = hotbar.locator('[data-slot="hotbar-action"]', { hasText: "Library" });
