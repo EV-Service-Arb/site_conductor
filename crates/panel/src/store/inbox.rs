@@ -4,7 +4,7 @@ use eyre::WrapErr;
 use sa_core::mail::Named;
 use sqlx::SqliteConnection;
 
-use crate::inbox::Cursor;
+use crate::inbox::{Cursor, Folder};
 
 /// The gmails with an inbox set, not removed.
 pub(crate) async fn followed(conn: &mut SqliteConnection) -> eyre::Result<Vec<i64>> {
@@ -15,9 +15,10 @@ pub(crate) async fn followed(conn: &mut SqliteConnection) -> eyre::Result<Vec<i6
 }
 
 /// The account it was read on, and where.
-pub(crate) async fn cursor(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Option<(String, Cursor)>> {
-	let row: Option<(String, i64, i64)> = sqlx::query_as("SELECT username, uid_validity, last_uid FROM gmail_inbox_cursors WHERE gmail_id = $1")
+pub(crate) async fn cursor(conn: &mut SqliteConnection, gmail: i64, folder: Folder) -> eyre::Result<Option<(String, Cursor)>> {
+	let row: Option<(String, i64, i64)> = sqlx::query_as("SELECT username, uid_validity, last_uid FROM gmail_inbox_cursors WHERE gmail_id = $1 AND spam = $2")
 		.bind(gmail)
+		.bind(folder == Folder::Spam)
 		.fetch_optional(&mut *conn)
 		.await
 		.wrap_err("reading an inbox's cursor")?;
@@ -33,12 +34,13 @@ pub(crate) async fn cursor(conn: &mut SqliteConnection, gmail: i64) -> eyre::Res
 	.transpose()
 }
 
-pub(crate) async fn set_cursor(conn: &mut SqliteConnection, gmail: i64, username: &str, c: Cursor) -> eyre::Result<()> {
+pub(crate) async fn set_cursor(conn: &mut SqliteConnection, gmail: i64, folder: Folder, username: &str, c: Cursor) -> eyre::Result<()> {
 	sqlx::query(
-		"INSERT INTO gmail_inbox_cursors (gmail_id, username, uid_validity, last_uid) VALUES ($1, $2, $3, $4) \
-		 ON CONFLICT (gmail_id) DO UPDATE SET username = excluded.username, uid_validity = excluded.uid_validity, last_uid = excluded.last_uid",
+		"INSERT INTO gmail_inbox_cursors (gmail_id, spam, username, uid_validity, last_uid) VALUES ($1, $2, $3, $4, $5) \
+		 ON CONFLICT (gmail_id, spam) DO UPDATE SET username = excluded.username, uid_validity = excluded.uid_validity, last_uid = excluded.last_uid",
 	)
 	.bind(gmail)
+	.bind(folder == Folder::Spam)
 	.bind(username)
 	.bind(i64::from(c.validity))
 	.bind(i64::from(c.uid))
@@ -58,14 +60,17 @@ pub(crate) async fn logged(conn: &mut SqliteConnection, gmail: i64, message: &st
 		.wrap_err("looking a message up in the log")
 }
 
-/// The gmail's live GBPs, as a message may name them.
-pub(crate) async fn gmbs(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Vec<Named>> {
-	type Row = (i64, Option<String>, Option<String>, Option<String>);
-	let rows: Vec<Row> =
-		sqlx::query_as("SELECT id, name, place_id, address FROM gmbs WHERE gmail_id = $1 AND removed_at IS NULL ORDER BY id")
-			.bind(gmail)
-			.fetch_all(&mut *conn)
-			.await
-			.wrap_err("listing a gmail's GBPs")?;
-	Ok(rows.into_iter().map(|(id, name, place_id, address)| Named { id, name, place_id, address }).collect())
+/// The live GBPs of the gmail's owner, as a message may name them: the gmail's, and their others'.
+pub(crate) async fn gmbs(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<(Vec<Named>, Vec<Named>)> {
+	type Row = (i64, Option<String>, Option<String>, Option<String>, bool);
+	let rows: Vec<Row> = sqlx::query_as(
+		"SELECT b.id, b.name, b.place_id, b.address, b.gmail_id IS g.id FROM gmbs b JOIN gmails g ON g.owner = b.owner WHERE g.id = $1 AND b.removed_at IS NULL ORDER BY b.id",
+	)
+	.bind(gmail)
+	.fetch_all(&mut *conn)
+	.await
+	.wrap_err("listing the GBPs of a gmail's owner")?;
+	let (own, others): (Vec<Row>, Vec<Row>) = rows.into_iter().partition(|(.., own)| *own);
+	let named = |rows: Vec<Row>| rows.into_iter().map(|(id, name, place_id, address, _)| Named { id, name, place_id, address }).collect();
+	Ok((named(own), named(others)))
 }

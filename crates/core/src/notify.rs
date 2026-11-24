@@ -122,7 +122,7 @@ pub enum Note {
 		name: String,
 		need: String,
 	},
-	/// A case of Google's mail turned to a person or to a specialist of Google's, or its reply is about to go.
+	/// A case of Google's mail turned to a person or to a specialist of Google's, is settled, or its reply is about to go.
 	GoogleMail {
 		state: State,
 		/// Google's last word, once read.
@@ -131,6 +131,8 @@ pub enum Note {
 		gmb: Option<String>,
 		summary: Option<String>,
 		deadline: Option<Timestamp>,
+		/// Gmail put it in Spam.
+		spam: bool,
 	},
 }
 impl Note {
@@ -199,6 +201,7 @@ impl Note {
 				gmb,
 				summary,
 				deadline,
+				spam,
 			} => {
 				out.push(&match (state, ru) {
 					(State::ReplyReady, true) => "✉️ Google: ответ готов, отправьте его".to_owned(),
@@ -209,6 +212,20 @@ impl Note {
 					(State::NeedsYou { why: Why::Needs { .. } }, false) => "✉️ Google: the reply needs what only you have".to_owned(),
 					(State::Waiting { until }, true) => format!("✉️ Google: передали специалисту, ответ до {}", minute(*until)),
 					(State::Waiting { until }, false) => format!("✉️ Google: passed on to a specialist, an answer by {}", minute(*until)),
+					(State::Done { .. }, true) => "✉️ Google: решено".to_owned(),
+					(State::Done { .. }, false) => "✉️ Google: settled".to_owned(),
+					(
+						State::NeedsYou {
+							why: Why::Stuck { .. } | Why::Unread { error: None },
+						},
+						true,
+					) => "✉️ Google: почта ждёт, её некому прочитать".to_owned(),
+					(
+						State::NeedsYou {
+							why: Why::Stuck { .. } | Why::Unread { error: None },
+						},
+						false,
+					) => "✉️ Google: mail waits, nothing reads it".to_owned(),
 					(_, true) => "✉️ Google: нужны вы".to_owned(),
 					(_, false) => "✉️ Google needs you".to_owned(),
 				});
@@ -229,6 +246,9 @@ impl Note {
 				}
 				if let Some(at) = deadline {
 					out.push(&if ru { format!("\nДо {}", minute(*at)) } else { format!("\nBy {}", minute(*at)) });
+				}
+				if *spam {
+					out.push(if ru { "\nОно в спаме" } else { "\nIt is in Spam" });
 				}
 			}
 		}
@@ -468,6 +488,7 @@ fn kind_name(kind: Kind, locale: Locale) -> &'static str {
 	let (ru, en) = match kind {
 		Kind::VideoRejected => ("видео отклонено", "video rejected"),
 		Kind::VideoInReview => ("видео на проверке", "video in review"),
+		Kind::CodeFailed => ("код не подошёл", "code failed"),
 		Kind::Verified => ("подтверждён", "verified"),
 		Kind::ReverificationRequired => ("нужно подтвердить снова", "verify again"),
 		Kind::SelfServe => ("предлагают записанное видео", "pointed at the recorded video"),
@@ -479,12 +500,14 @@ fn kind_name(kind: Kind, locale: Locale) -> &'static str {
 		Kind::AppealReceived => ("апелляция получена", "appeal received"),
 		Kind::AppealApproved => ("апелляция одобрена", "appeal approved"),
 		Kind::AppealDenied => ("апелляция отклонена", "appeal denied"),
+		Kind::AppealVerification => ("апелляция ждёт подтверждения", "appeal needs verification"),
 		Kind::ReviewsPaused => ("отзывы приостановлены", "reviews paused"),
 		Kind::ReviewsRestricted => ("отзывы ограничены", "reviews restricted"),
 		Kind::RestrictionLifted => ("ограничение снято", "restriction lifted"),
 		Kind::ReviewRemoved => ("отзыв удалён", "review removed"),
 		Kind::ReinstatementRefused => ("отзывы не вернут", "reviews not reinstated"),
 		Kind::ReinstatementDone => ("отзывы возвращены", "reviews reinstated"),
+		Kind::ReinstatementPartial => ("часть отзывов возвращена", "reviews partly reinstated"),
 		Kind::ReviewsLiveAlready => ("отзывы уже видны", "reviews live already"),
 		Kind::ReviewsNoData => ("нет данных об отзывах", "no data on the reviews"),
 		Kind::StillActive => ("ещё работает?", "still active?"),
@@ -504,6 +527,7 @@ fn kind_name(kind: Kind, locale: Locale) -> &'static str {
 		Kind::Routed => ("передано специалисту", "routed to a specialist"),
 		Kind::Asks => ("Google просит", "Google asks"),
 		Kind::Closed => ("обращение закрыто", "closed"),
+		Kind::DuplicateTicket => ("обращение повторное", "duplicate request"),
 		Kind::Unclear => ("неясно", "unclear"),
 		Kind::Noise => ("рассылка", "noise"),
 		Kind::NotBusiness => ("не о профиле", "not a profile's"),
@@ -610,10 +634,11 @@ mod tests {
 			gmb: Some("Plomberie Dupont".into()),
 			summary: Some("Asks for a photo\nof the signage".into()),
 			deadline: Some("2026-10-10T00:00:00Z".parse().unwrap()),
+			spam: true,
 		};
 		assert_eq!(
 			mail.text(Locale::En),
-			"✉️ Google: a reply goes by itself 2026-10-06 10:15 UTC\nGoogle asks · Plomberie Dupont\nAsks for a photo of the signage\nBy 2026-10-10 00:00 UTC"
+			"✉️ Google: a reply goes by itself 2026-10-06 10:15 UTC\nGoogle asks · Plomberie Dupont\nAsks for a photo of the signage\nBy 2026-10-10 00:00 UTC\nIt is in Spam"
 		);
 		let lacking = |summary: Option<&str>| Note::GoogleMail {
 			state: State::NeedsYou {
@@ -623,6 +648,7 @@ mod tests {
 			gmb: None,
 			summary: summary.map(str::to_owned),
 			deadline: None,
+			spam: false,
 		};
 		assert_eq!(
 			lacking(None).text(Locale::En),

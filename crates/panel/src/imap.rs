@@ -21,7 +21,7 @@ use tokio_rustls::{
 };
 
 use crate::{
-	inbox::{Account, Batch, Cursor, Mail, Mailbox},
+	inbox::{Account, Batch, Cursor, Folder, Mail, Mailbox},
 	store::connections::Inbox,
 };
 
@@ -35,11 +35,12 @@ const READ_WITHIN: Duration = Duration::from_secs(60);
 const BODY_MAX: usize = 128 * 1024;
 /// What a session may answer in all: a batch, and the search of a whole mailbox before it.
 const ANSWERED_MAX: usize = 32 << 20;
-/// Gmail's search for mail with Google: from or to any google.com address, its promotions left out, and what
-/// is not sent yet.
-const WITH_GOOGLE: &str = "{from:google.com to:google.com} -category:promotions -in:drafts";
+/// Gmail's search for mail with Google: from or to any google.com address, its promotions left out but a Business
+/// Profile's, and what is not sent yet.
+const WITH_GOOGLE: &str = "{from:google.com to:google.com} {-category:promotions from:businessprofile-noreply from:googlebusinessprofile-support \
+                           from:googlebusinessprofile-noreply} -in:drafts";
 
-/// Gmail over IMAP: its All Mail searched with Gmail's own syntax, read only.
+/// Gmail over IMAP: its mailboxes searched with Gmail's own syntax, read only.
 pub struct Gmail;
 
 /// Why the inbox did not log in, as its owner reads it; `Err` is ours.
@@ -52,28 +53,32 @@ pub(crate) async fn login(inbox: Inbox<'_>, password: &str) -> eyre::Result<Resu
 }
 
 impl Mailbox for Gmail {
-	async fn read(&self, account: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre::Result<Batch> {
-		match tokio::time::timeout(READ_WITHIN, read(account, after, limit)).await {
+	async fn read(&self, account: Account<'_>, folder: Folder, after: Option<Cursor>, limit: usize) -> eyre::Result<Batch> {
+		match tokio::time::timeout(READ_WITHIN, read(account, folder, after, limit)).await {
 			Ok(r) => r,
 			Err(_) => eyre::bail!("{}:{PORT} did not finish a read within {}s", account.host, READ_WITHIN.as_secs()),
 		}
 	}
 }
 
-async fn read(account: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre::Result<Batch> {
+async fn read(account: Account<'_>, folder: Folder, after: Option<Cursor>, limit: usize) -> eyre::Result<Batch> {
 	let Account { host, username, password } = account;
+	let flag = match folder {
+		Folder::All => "\\All",
+		Folder::Spam => "\\Junk",
+	};
 	let mut s = open(Inbox { host, username }, password).await?.map_err(|why| eyre::eyre!(why))?;
-	let all = s
+	let name = s
 		.ok(r#"LIST "" "*""#, "LIST")
 		.await?
 		.iter()
-		.find_map(all_mail)
-		.ok_or_else(|| eyre::eyre!("{host} lists no \\All mailbox"))?;
-	let examined = s.ok(&format!("EXAMINE {}", quoted(&all)), "EXAMINE").await?;
+		.find_map(|u| flagged(u, flag))
+		.ok_or_else(|| eyre::eyre!("{host} lists no {flag} mailbox: Gmail's settings, Labels, show it in IMAP"))?;
+	let examined = s.ok(&format!("EXAMINE {}", quoted(&name)), "EXAMINE").await?;
 	let validity: u32 = examined
 		.iter()
 		.find_map(|u| u.text.split_once("[UIDVALIDITY ").and_then(|(_, r)| r.split_once(']')))
-		.ok_or_else(|| eyre::eyre!("{host} named no UIDVALIDITY of {all}"))?
+		.ok_or_else(|| eyre::eyre!("{host} named no UIDVALIDITY of {name}"))?
 		.0
 		.parse()
 		.wrap_err("its UIDVALIDITY")?;
@@ -94,7 +99,7 @@ async fn read(account: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre
 			.ok(&format!("UID FETCH {set} (UID X-GM-MSGID X-GM-THRID INTERNALDATE BODY.PEEK[]<0.{BODY_MAX}>)"), "FETCH")
 			.await?;
 		for u in fetched.iter().filter(|u| u.text.contains("X-GM-THRID")) {
-			mails.push(mail(u, &sent, Timestamp::now())?);
+			mails.push(mail(u, &sent, folder == Folder::Spam, Timestamp::now())?);
 		}
 		mails.sort_by_key(|m| m.uid);
 	}
@@ -254,10 +259,10 @@ struct Untagged {
 	literals: Vec<Vec<u8>>,
 }
 
-/// The mailbox a LIST response flags `\\All`: Gmail's All Mail, whatever its language names it.
-fn all_mail(u: &Untagged) -> Option<String> {
+/// The mailbox a LIST response flags `flag`, whatever its language names it.
+fn flagged(u: &Untagged, flag: &str) -> Option<String> {
 	let (flags, rest) = u.text.strip_prefix("LIST (")?.split_once(')')?;
-	if !flags.split_whitespace().any(|f| f.eq_ignore_ascii_case("\\All")) {
+	if !flags.split_whitespace().any(|f| f.eq_ignore_ascii_case(flag)) {
 		return None;
 	}
 	let rest = rest.trim_end();
@@ -268,7 +273,7 @@ fn all_mail(u: &Untagged) -> Option<String> {
 }
 
 /// A message of a FETCH response, `sent` the UIDs of those the account sent: a From alone anyone can write.
-fn mail(u: &Untagged, sent: &[u32], now: Timestamp) -> eyre::Result<Mail> {
+fn mail(u: &Untagged, sent: &[u32], spam: bool, now: Timestamp) -> eyre::Result<Mail> {
 	let text = &u.text;
 	let number = |key: &str| -> eyre::Result<u64> {
 		let mut words = text.split([' ', '(', ')']);
@@ -352,6 +357,7 @@ fn mail(u: &Untagged, sent: &[u32], now: Timestamp) -> eyre::Result<Mail> {
 		sent,
 		text,
 		whole,
+		spam,
 	})
 }
 
@@ -393,7 +399,7 @@ mod tests {
 	fn a_message_is_of_a_day_that_was_and_says_whether_it_was_read_to_its_end() {
 		let now: Timestamp = "2026-10-01T09:00:00Z".parse().unwrap();
 		let head = "From: a@gmail.com\r\nTo: b@x.com\r\nCc: c@google.com\r\n";
-		let read = |date, body: &str| mail(&fetched(date, body), &[7], now);
+		let read = |date, body: &str| mail(&fetched(date, body), &[7], false, now);
 		let whole = read("01-Oct-2026 08:00:00 +0000", &format!("{head}\r\nHello")).unwrap();
 		assert_eq!((whole.to, whole.whole, whole.text.trim()), (vec!["b@x.com".to_owned(), "c@google.com".to_owned()], true, "Hello"));
 		for date in ["30-Dec-9999 00:00:00 +0000", "03-Oct-2026 09:00:00 +0000"] {

@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { type KeyboardEvent, useEffect, useRef } from "react";
 
 import { useGmails } from "@/entities/gmb";
-import { CaseRow, type Goes, type Show, mail, over, shownIn, stuckOf, unnamed, useCases, useGoes } from "@/entities/mail";
+import { CaseRow, type Show, mail, over, shownIn, stuckOf, unnamed, useCases } from "@/entities/mail";
 import { Mend, WhichGbp } from "@/features/answer-mail";
 import { AutoReplies } from "@/features/auto-mail";
 import type { MailCase } from "@/shared/api/schema";
@@ -71,8 +71,7 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
   const t = useT();
   const { case: opened } = sought;
   const read = useCases();
-  const goes = useGoes();
-  const listed = read.shown === null ? [] : shownIn(read.shown, show, goes);
+  const listed = read.shown === null ? [] : shownIn(read.shown, show);
   // where the opened one stood: marked done, it leaves the list, and its neighbours stay next to it
   const stood = useRef(0);
   const here = listed.findIndex((c) => c.id === opened);
@@ -96,7 +95,7 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
           {SHOWS.map((s) => (
             <button key={s} type="button" aria-pressed={s === show} className={CHIP} onClick={() => go(threads(s), "replace")}>
               {SHOW_NAME[s](t)}
-              {read.shown !== null && <span className="text-ink-soft tabular-nums">{shownIn(read.shown, s, goes).length}</span>}
+              {read.shown !== null && <span className="text-ink-soft tabular-nums">{shownIn(read.shown, s).length}</span>}
             </button>
           ))}
         </div>
@@ -109,7 +108,7 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
           ) : read.shown === null ? (
             <Skeleton className="m-3 h-60" />
           ) : (
-            <List cases={listed} read={read.data} all={read.shown.length} show={show} opened={opened} goes={goes} reload={read.reload} />
+            <List cases={listed} read={read.data} all={read.shown.length} show={show} opened={opened} reload={read.reload} />
           )}
         </div>
       </div>
@@ -133,7 +132,7 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
 }
 
 /** `read`: the answer `cases` are of. */
-function List({ cases, read, all, show, opened, goes, reload }: { cases: readonly MailCase[]; read: unknown; all: number; show: Show; opened: number | undefined; goes: Goes; reload: () => void }) {
+function List({ cases, read, all, show, opened, reload }: { cases: readonly MailCase[]; read: unknown; all: number; show: Show; opened: number | undefined; reload: () => void }) {
   const t = useT();
   const gmails = useGmails();
   const box = useRef<HTMLDivElement>(null);
@@ -177,7 +176,7 @@ function List({ cases, read, all, show, opened, goes, reload }: { cases: readonl
           if (whose === undefined) return null;
           return (
             <li key={c.id} className="flex flex-col">
-              <CaseRow c={c} of={whose} goes={goes} current={c.id === opened} to={threads(show, c.id)} />
+              <CaseRow c={c} of={whose} current={c.id === opened} to={threads(show, c.id)} />
               {unnamed(c) && !over(c) && (
                 <WhichGbp
                   c={c}

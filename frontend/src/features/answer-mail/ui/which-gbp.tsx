@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { useNow } from "@/entities/alerts";
 import { STATE_NAME, under, useGmails } from "@/entities/gmb";
-import { editCase, mail, settledText, standing, subjectOf, useGoes } from "@/entities/mail";
+import { editCase, mail, settledText, standing, subjectOf } from "@/entities/mail";
 import type { Gmb, MailCase } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
@@ -16,7 +16,6 @@ export function WhichGbp({ c, onChanged, className }: { c: MailCase; onChanged: 
   const t = useT();
   const locale = useLocale();
   const now = useNow(60_000);
-  const goes = useGoes();
   const control = useControlSize();
   const gmails = useGmails();
   const push = useUndo();
@@ -29,7 +28,7 @@ export function WhichGbp({ c, onChanged, className }: { c: MailCase; onChanged: 
     setBusy(true);
     try {
       const { case: named } = await set(gbp.id);
-      toast(t(mail.which.named, "{subject}: {gbp}", { subject: subjectOf(c, t), gbp: gbp.name }), { description: named.state.is === "done" ? settledText(named, gbp.name, t) : standing(named, goes, t, locale, now).text });
+      toast(t(mail.which.named, "{subject}: {gbp}", { subject: subjectOf(c, t), gbp: gbp.name }), { description: named.state.is === "done" ? settledText(named.state.by, t, locale, now) : standing(named, t, locale, now).text });
       push({ label: t(mail.which.label, "{subject} given its GBP", { subject: subjectOf(c, t) }), undo: async () => void (await set(null)), redo: async () => void (await set(gbp.id)) });
     } catch (e) {
       notifyFailure(e, t);

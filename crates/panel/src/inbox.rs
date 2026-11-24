@@ -26,9 +26,16 @@ pub(crate) type Reads = Arc<Mutex<HashMap<i64, (String, Timestamp)>>>;
 
 /// A mailbox the follower reads.
 pub trait Mailbox: Sync {
-	/// Its UIDVALIDITY and its mail with Google past `after` (another UIDVALIDITY's: from the first),
+	/// `folder`'s UIDVALIDITY and its mail with Google past `after` (another UIDVALIDITY's: from the first),
 	/// at most `limit`.
-	fn read(&self, account: Account<'_>, after: Option<Cursor>, limit: usize) -> impl Future<Output = eyre::Result<Batch>> + Send;
+	fn read(&self, account: Account<'_>, folder: Folder, after: Option<Cursor>, limit: usize) -> impl Future<Output = eyre::Result<Batch>> + Send;
+}
+
+/// A mailbox of Gmail's; All Mail holds no spam.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Folder {
+	All,
+	Spam,
 }
 
 /// Where a follower stands in a mailbox: its UIDVALIDITY, the last UID taken.
@@ -81,6 +88,8 @@ pub struct Mail {
 	pub text: String,
 	/// It was read to its end.
 	pub whole: bool,
+	/// Gmail has it in Spam.
+	pub spam: bool,
 }
 
 impl Panel {
@@ -90,45 +99,63 @@ impl Panel {
 		db::followed(&mut conn).await
 	}
 
-	/// A batch of gmail `gmail`'s mail with Google past its cursor, logged with the cursor moved in one
-	/// write; `true` a full one, more may follow. Nothing while its inbox is unset or the cursor moved
-	/// meanwhile.
+	/// A batch of gmail `gmail`'s mail with Google past its cursors, in each of its mailboxes; `true` a full
+	/// one, more may follow. Nothing while its inbox is unset.
 	pub async fn follow_inbox(&self, gmail: i64, mailbox: &impl Mailbox, now: Timestamp) -> eyre::Result<bool> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for an inbox")?;
 		let Some((imap, sealed)) = connections::imap(&mut conn, gmail).await? else {
 			return Ok(false);
 		};
-		let before = db::cursor(&mut conn, gmail).await?;
 		drop(conn);
 		let password = self.unseal(&gmail_imap_aad(gmail), &sealed)?;
-		// another account set on the gmail starts over
-		let after = before.as_ref().filter(|(u, _)| *u == imap.username).map(|(_, c)| *c);
 		let account = Account {
 			host: &imap.host,
 			username: &imap.username,
 			password: &password,
 		};
-		let batch = mailbox.read(account, after, BATCH).await?;
-		let read = || {
+		let mut more = false;
+		for folder in [Folder::All, Folder::Spam] {
+			match self.follow_folder(gmail, mailbox, account, folder, now).await? {
+				Some(full) => more |= full,
+				None => return Ok(false),
+			}
+		}
+		if !more {
 			let was = (imap.username.clone(), now);
 			self.inboxes_read.lock().expect("never poisoned: no panic while held").insert(gmail, was);
-		};
+		}
+		Ok(more)
+	}
+
+	/// A batch of one mailbox logged, with its cursor moved in one write; `None`, another took it or the inbox was
+	/// set anew meanwhile.
+	async fn follow_folder(&self, gmail: i64, mailbox: &impl Mailbox, account: Account<'_>, folder: Folder, now: Timestamp) -> eyre::Result<Option<bool>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a mailbox")?;
+		let before = db::cursor(&mut conn, gmail, folder).await?;
+		drop(conn);
+		// another account set on the gmail starts over
+		let after = before.as_ref().filter(|(u, _)| u == account.username).map(|(_, c)| *c);
+		let batch = mailbox.read(account, folder, after, BATCH).await?;
 		if batch.mails.is_empty() && after.is_some_and(|c| c.validity == batch.validity) {
-			read();
-			return Ok(false);
+			return Ok(Some(false));
 		}
 		let mut tx = self.store.begin_write().await?;
 		let set = connections::imap(&mut tx, gmail).await?.map(|(i, _)| i.username);
-		if set.as_ref() != Some(&imap.username) || db::cursor(&mut tx, gmail).await? != before {
-			return Ok(false);
+		if set.as_deref() != Some(account.username) || db::cursor(&mut tx, gmail, folder).await? != before {
+			return Ok(None);
 		}
-		let gmbs = db::gmbs(&mut tx, gmail).await?;
+		let (own, others) = db::gmbs(&mut tx, gmail).await?;
 		let mut cases = mail_db::holds(&mut tx, gmail).await?;
-		for m in &batch.mails {
+		// in Spam, only what is proved Google's is mail with it
+		for m in batch.mails.iter().filter(|m| !m.spam || m.authentic) {
 			let message = m.message.to_string();
 			let read = m.subject.iter().chain([&m.text]).map(String::as_str).collect::<Vec<_>>().join("\n");
-			let named: Vec<i64> = sa_core::mail::named(&read, &gmbs).into_iter().collect();
-			self.keep_mail(&mut tx, gmail, m, &named, &mut cases, now).await?;
+			let named: Vec<i64> = sa_core::mail::named(&read, &own).into_iter().collect();
+			let about = match named.is_empty() {
+				true => sa_core::mail::named(&read, &others).into_iter().collect(),
+				false => named.clone(),
+			};
+			self.keep_mail(&mut tx, gmail, m, &about, &mut cases, now).await?;
 			if db::logged(&mut tx, gmail, &message).await? {
 				continue;
 			}
@@ -160,12 +187,9 @@ impl Panel {
 			// a mailbox new to the follower, nothing in it yet: UIDs start at 1
 			(None, _) => 0,
 		};
-		db::set_cursor(&mut tx, gmail, &imap.username, Cursor { validity: batch.validity, uid }).await?;
-		tx.commit().await.wrap_err("committing an inbox's batch")?;
-		let more = batch.mails.len() == BATCH;
-		if !more {
-			read();
-		}
-		Ok(more)
+		let at = Cursor { validity: batch.validity, uid };
+		db::set_cursor(&mut tx, gmail, folder, account.username, at).await?;
+		tx.commit().await.wrap_err("committing a mailbox's batch")?;
+		Ok(Some(batch.mails.len() == BATCH))
 	}
 }

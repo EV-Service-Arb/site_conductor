@@ -14,7 +14,10 @@ use uuid::Uuid;
 use super::{connections::Sealed, from_db, to_db};
 
 const MAIL: &str = "SELECT m.id, m.case_id, m.gmail_id, m.message, m.thread, m.at, m.sent, m.from_address, m.reply_to, m.recipients, m.subject, m.message_id, m.refs, \
-	m.authentic, m.repliable, m.gmb_id, m.listing, m.reading, m.read_by, m.attempts, m.read_error FROM mails m";
+	m.authentic, m.repliable, m.gmb_id, m.listing, m.reading, m.read_by, m.attempts, m.read_error, m.spam FROM mails m";
+
+/// The cases that are one with case $1.
+const WITH_IT: &str = "SELECT o.id FROM mail_cases o JOIN mail_cases c ON coalesce(o.joined, o.id) = coalesce(c.joined, c.id) WHERE c.id = $1";
 
 const DRAFT: &str = "SELECT d.id, d.case_id, d.answers, d.body_sealed, d.data_key_fp, d.needs, d.state, d.send_at, d.created_at, d.sent_at, d.error FROM mail_drafts d";
 
@@ -48,6 +51,7 @@ pub(crate) struct NewMail<'a> {
 	pub repliable: bool,
 	pub gmb: Option<i64>,
 	pub listing: Option<&'a str>,
+	pub spam: bool,
 	pub text: &'a Sealed,
 }
 
@@ -70,10 +74,11 @@ pub(crate) struct MailRow {
 	pub repliable: bool,
 	pub gmb_id: Option<i64>,
 	pub listing: Option<String>,
-	reading: Option<Json<Reading>>,
+	reading: Option<String>,
 	read_by: Option<String>,
 	pub attempts: i64,
 	pub read_error: Option<String>,
+	pub spam: bool,
 }
 impl MailRow {
 	pub(crate) fn at(&self) -> eyre::Result<Timestamp> {
@@ -88,8 +93,9 @@ impl MailRow {
 		&self.refs.0
 	}
 
-	pub(crate) fn reading(&self) -> Option<&Reading> {
-		self.reading.as_ref().map(|r| &r.0)
+	/// `Err`: another build's, of a kind this one does not know.
+	pub(crate) fn reading(&self) -> Result<Option<Reading>, serde_json::Error> {
+		self.reading.as_deref().map(serde_json::from_str).transpose()
 	}
 
 	pub(crate) fn read_by(&self) -> eyre::Result<Option<ReadBy>> {
@@ -105,6 +111,8 @@ pub(crate) struct CaseRow {
 	pub gmb_id: Option<i64>,
 	topic: Option<String>,
 	pub done_mail: Option<i64>,
+	/// The case it is part of.
+	pub joined: Option<i64>,
 }
 impl CaseRow {
 	pub(crate) fn numbers(&self) -> &BTreeSet<String> {
@@ -192,7 +200,15 @@ pub(crate) async fn holds(conn: &mut SqliteConnection, gmail: i64) -> eyre::Resu
 	Ok(held)
 }
 
-pub(crate) async fn kept(conn: &mut SqliteConnection, gmail: i64, message: &str) -> eyre::Result<bool> {
+/// Whether it is kept already; where Gmail has it now kept with it.
+pub(crate) async fn kept(conn: &mut SqliteConnection, gmail: i64, message: &str, spam: bool) -> eyre::Result<bool> {
+	sqlx::query("UPDATE mails SET spam = $3 WHERE gmail_id = $1 AND message = $2 AND spam != $3")
+		.bind(gmail)
+		.bind(message)
+		.bind(spam)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("keeping where a message is")?;
 	sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM mails WHERE gmail_id = $1 AND message = $2)")
 		.bind(gmail)
 		.bind(message)
@@ -223,7 +239,7 @@ pub(crate) async fn set_numbers(conn: &mut SqliteConnection, case: i64, numbers:
 pub(crate) async fn add(conn: &mut SqliteConnection, m: &NewMail<'_>) -> eyre::Result<i64> {
 	sqlx::query_scalar(
 		"INSERT INTO mails (case_id, gmail_id, message, thread, at, sent, from_address, reply_to, recipients, subject, message_id, refs, authentic, repliable, gmb_id, \
-		 listing, text_sealed, data_key_fp) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING id",
+		 listing, text_sealed, data_key_fp, spam) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19) RETURNING id",
 	)
 	.bind(m.case)
 	.bind(m.gmail)
@@ -243,14 +259,15 @@ pub(crate) async fn add(conn: &mut SqliteConnection, m: &NewMail<'_>) -> eyre::R
 	.bind(m.listing)
 	.bind(&m.text.blob)
 	.bind(&m.text.data_key_fp)
+	.bind(m.spam)
 	.fetch_one(&mut *conn)
 	.await
 	.wrap_err("keeping a message")
 }
 
-/// The case's drafts not handed to SMTP: another message came.
+/// The drafts not handed to SMTP of the case, whatever is joined with it: another message came.
 pub(crate) async fn supersede(conn: &mut SqliteConnection, case: i64) -> eyre::Result<()> {
-	sqlx::query("UPDATE mail_drafts SET state = 'superseded' WHERE case_id = $1 AND state IN ('proposed', 'held', 'failed')")
+	sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE mail_drafts SET state = 'superseded' WHERE case_id IN ({WITH_IT}) AND state IN ('proposed', 'held', 'failed')")))
 		.bind(case)
 		.execute(&mut *conn)
 		.await
@@ -258,9 +275,9 @@ pub(crate) async fn supersede(conn: &mut SqliteConnection, case: i64) -> eyre::R
 	Ok(())
 }
 
-/// The case's draft going by itself waits for a person.
+/// The draft going by itself of the case, whatever is joined with it, waits for a person.
 pub(crate) async fn unhold(conn: &mut SqliteConnection, case: i64) -> eyre::Result<()> {
-	sqlx::query("UPDATE mail_drafts SET state = 'proposed' WHERE case_id = $1 AND state = 'held'")
+	sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE mail_drafts SET state = 'proposed' WHERE case_id IN ({WITH_IT}) AND state = 'held'")))
 		.bind(case)
 		.execute(&mut *conn)
 		.await
@@ -279,10 +296,9 @@ pub(crate) async fn let_go(conn: &mut SqliteConnection, gmail: i64) -> eyre::Res
 	Ok(())
 }
 
-/// Whether a reply to the case's message `answers` was handed to SMTP.
-pub(crate) async fn handed(conn: &mut SqliteConnection, case: i64, answers: i64) -> eyre::Result<bool> {
-	sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM mail_drafts WHERE case_id = $1 AND answers = $2 AND state IN ('sending', 'sent'))")
-		.bind(case)
+/// Whether a reply to message `answers` was handed to SMTP.
+pub(crate) async fn handed(conn: &mut SqliteConnection, answers: i64) -> eyre::Result<bool> {
+	sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM mail_drafts WHERE answers = $1 AND state IN ('sending', 'sent'))")
 		.bind(answers)
 		.fetch_one(&mut *conn)
 		.await
@@ -292,7 +308,7 @@ pub(crate) async fn handed(conn: &mut SqliteConnection, case: i64, answers: i64)
 /// The cases of the owner's gmails not removed, oldest first.
 pub(crate) async fn cases(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<CaseRow>> {
 	sqlx::query_as(
-		"SELECT c.id, c.gmail_id, c.numbers, c.gmb_id, c.topic, c.done_mail FROM mail_cases c JOIN gmails g ON g.id = c.gmail_id \
+		"SELECT c.id, c.gmail_id, c.numbers, c.gmb_id, c.topic, c.done_mail, c.joined FROM mail_cases c JOIN gmails g ON g.id = c.gmail_id \
 		 WHERE g.owner = $1 AND g.removed_at IS NULL ORDER BY c.id",
 	)
 	.bind(owner)
@@ -417,6 +433,17 @@ pub(crate) async fn edit_case(conn: &mut SqliteConnection, case: i64, gmb: Optio
 		.execute(&mut *conn)
 		.await
 		.wrap_err("editing a case")?;
+	Ok(())
+}
+
+/// Made part of case `to`, with what is part of it; `None`, one by itself again.
+pub(crate) async fn join(conn: &mut SqliteConnection, case: i64, to: Option<i64>) -> eyre::Result<()> {
+	sqlx::query("UPDATE mail_cases SET joined = $2 WHERE id = $1 OR ($2 IS NOT NULL AND joined = $1)")
+		.bind(case)
+		.bind(to)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("joining a case")?;
 	Ok(())
 }
 

@@ -5,7 +5,7 @@ import { useResource } from "@evinvest/api/react";
 
 import { useScope, useSelection } from "@/entities/gmb";
 import { api } from "@/shared/api";
-import type { MailCase, MailStanding, MailWhy } from "@/shared/api/schema";
+import type { MailCase, MailSettled, MailStanding, MailWhy } from "@/shared/api/schema";
 import type { Locale, T } from "@/shared/i18n";
 import { age, when } from "@/shared/lib/time";
 
@@ -17,26 +17,14 @@ export type Show = "needs_you" | "waiting" | "all";
 /** Whom a case waits on: the operator, or Google or the panel; neither, it is in All alone. */
 const STANDS: Record<MailStanding, Exclude<Show, "all"> | null> = { needs_you: "needs_you", reply_ready: "needs_you", sending: "waiting", reply_due: "waiting", waiting: "waiting", done: null, quiet: null };
 
-const held = (c: MailCase) => c.state.is === "sending" && c.draft?.state === "held";
-
-/** Whether a held reply goes by itself. */
-export type Goes = (c: MailCase) => boolean;
-
-export function useGoes(): Goes {
-  const auto = useResource(api, "/mail/auto");
-  return (c) => {
-    if (!held(c)) return false;
-    // not known yet: it may, and Stop is shown
-    if (auto.status !== "ok") return true;
-    return auto.data.by_itself && auto.data.on.some((x) => x.gmail_id === c.gmail_id && x.topic === c.topic);
-  };
-}
+/** Whether a reply goes by itself unless stopped. */
+export const goes = (c: MailCase) => c.state.is === "sending" && c.draft?.state === "held";
 
 /** Neither read nor answered until the model is back: one cause of them all. */
 export const stuckOf = (c: MailCase): string | null => (c.state.is === "needs_you" && c.state.why.code === "stuck" ? c.state.why.error : null);
 
 /** What is to be done first: a reply that goes unless stopped, Google's dates, what only a person can do, a reply to check, what waits for the model. */
-function rank(c: MailCase, goes: Goes): number {
+function rank(c: MailCase): number {
   if (goes(c)) return 0;
   if (deadlineOf(c) !== null) return 1;
   if (c.state.is !== "needs_you") return 4;
@@ -47,11 +35,11 @@ function rank(c: MailCase, goes: Goes): number {
   return why.code === "kind" && KIND_TONE[why.kind] !== undefined ? 2 : 3;
 }
 
-export function shownIn(cases: readonly MailCase[], show: Show, goes: Goes): MailCase[] {
+export function shownIn(cases: readonly MailCase[], show: Show): MailCase[] {
   if (show === "all") return [...cases];
-  const of = cases.filter((c) => (held(c) ? "needs_you" : STANDS[c.state.is]) === show);
+  const of = cases.filter((c) => (goes(c) ? "needs_you" : STANDS[c.state.is]) === show);
   const until = (c: MailCase) => Date.parse(deadlineOf(c) ?? (c.state.is === "waiting" ? c.state.until : c.last.at));
-  return of.sort((a, b) => (show === "needs_you" ? rank(a, goes) - rank(b, goes) : 0) || until(a) - until(b));
+  return of.sort((a, b) => (show === "needs_you" ? rank(a) - rank(b) : 0) || until(a) - until(b));
 }
 
 export function deadlineOf(c: MailCase): string | null {
@@ -77,7 +65,7 @@ export function useGmbMail(gmb: number) {
 const DAY_MS = 24 * 3600 * 1000;
 
 /** How a case stands, in a chip's words. */
-export function standing(c: MailCase, goes: Goes, t: T, locale: Locale, now: Date): { text: string; tone: Tone } {
+export function standing(c: MailCase, t: T, locale: Locale, now: Date): { text: string; tone: Tone } {
   const since = age(c.last.at, locale);
   if (c.state.is === "sending" && goes(c)) return { text: Date.parse(c.state.at) > now.getTime() ? t(mail.state.held, "goes at {at}", { at: when(c.state.at, locale, now) }) : t(mail.held.due, "due"), tone: "info" };
   const deadline = deadlineOf(c);
@@ -97,7 +85,7 @@ export function standing(c: MailCase, goes: Goes, t: T, locale: Locale, now: Dat
     case "reply_ready":
       return ready;
     case "sending":
-      return held(c) ? ready : { text: t(mail.state.sending, "sending"), tone: "info" };
+      return { text: t(mail.state.sending, "sending"), tone: "info" };
     case "reply_due":
       return { text: t(mail.state.reply_due, "reply due · {since}", { since }), tone: "neutral" };
     case "waiting":
@@ -120,7 +108,7 @@ function chip(c: MailCase, why: MailWhy, t: T): string {
     case "needs":
       return t(mail.needs.needs, "needs {n} from you", { n: why.needs.length });
     case "asked_often":
-      return t(mail.needs.asked_often, "nothing new");
+      return t(mail.needs.asked_often, "asked {n}×, nothing new", { n: why.asked });
     case "unanswered":
       return t(mail.needs.unanswered, "no answer");
     case "no_reply":
@@ -148,7 +136,7 @@ export function whyText(c: MailCase, why: MailWhy, t: T, locale: Locale, now: Da
     case "needs":
       return t(mail.why.needs, "Needs from you: {what}", { what: why.needs.join(", ") });
     case "asked_often":
-      return t(mail.why.asked_often, "Google answers nothing new, however often it was asked.");
+      return t(mail.why.asked_often, "Asked {n} times, and Google answers nothing new: the next is yours to send.", { n: why.asked });
     case "unanswered":
       return c.said === "routed" && c.last.who === "us" ? t(mail.why.silent, "Google's specialist stayed silent past the time given, and when asked again.") : t(mail.why.unanswered, "Google went silent, and nothing here takes a reply.");
     case "no_reply":
@@ -166,10 +154,18 @@ export function whyText(c: MailCase, why: MailWhy, t: T, locale: Locale, now: Da
   }
 }
 
-/** What made a case done that nobody marked so. */
-export function settledText(c: MailCase, gbp: string | null, t: T): string {
-  const here = c.said === "closed" || (c.said !== null && KIND_TONE[c.said] === "positive");
-  return here || gbp === null ? t(mail.settled.here, "Settled by what Google last said here.") : t(mail.settled.later, "Settled by later mail of {gbp}, or by its being verified.", { gbp });
+/** What settled a case. */
+export function settledText(by: MailSettled, t: T, locale: Locale, now: Date): string {
+  switch (by.is) {
+    case "hand":
+      return t(mail.settled.hand, "Marked done.");
+    case "here":
+      return t(mail.settled.here, "Settled by what Google said here.");
+    case "elsewhere": {
+      const what = { kind: KIND_NAME[by.kind](t), at: when(by.at, locale, now) };
+      return by.case_id === null ? t(mail.settled.move, "Settled by the GBP's move here: {kind}, {at}.", what) : t(mail.settled.later, "Settled by other mail of the GBP: {kind}, {at}.", what);
+    }
+  }
 }
 
 /** A case's subject, without the numbers it is told by elsewhere. */

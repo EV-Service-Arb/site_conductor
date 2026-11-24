@@ -660,6 +660,7 @@ POST   /mail/cases/{id}/draft               slow
 POST   /mail/drafts/{id}/send               fresh, slow
 PUT    /mail/drafts/{id}
 DELETE /mail/drafts/{id}
+POST   /mail/drafts/{id}/restore
 GET    /mail/auto
 PUT    /mail/auto                           fresh
 GET    /gmbs/{id}/mail

@@ -24,6 +24,7 @@ use zeroize::Zeroizing;
 pub use crate::store::connections::{Business, Checked, Connection, Imap, MapsKey};
 use crate::{
 	Panel, Refused, business, imap,
+	inbox::Folder,
 	seal::{BUSINESS_STATE_AAD, gmail_business_grant_aad, gmail_business_secret_aad, gmail_imap_aad, gmail_maps_key_aad},
 	store::{
 		browsers as browsers_db,
@@ -118,7 +119,7 @@ impl Panel {
 			return Ok(Err(Refused::Conflict("that inbox is another gmail's already: an inbox is one gmail's".to_owned())));
 		}
 		// its cases are the account's before: none is answered from another unasked
-		if inbox_db::cursor(&mut tx, id).await?.is_some_and(|(before, _)| before != inbox.username) {
+		if inbox_db::cursor(&mut tx, id, Folder::All).await?.is_some_and(|(before, _)| before != inbox.username) {
 			mail_db::let_go(&mut tx, id).await?;
 		}
 		db::set_imap(&mut tx, id, inbox, &sealed, now).await?;

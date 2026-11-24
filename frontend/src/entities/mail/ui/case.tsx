@@ -9,7 +9,7 @@ import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { type At, ViewLink } from "@/shared/lib/location";
 
-import { type Goes, over, standing, subjectOf, useGoes, whyText } from "../model/cases";
+import { over, standing, subjectOf, whyText } from "../model/cases";
 import { mail } from "../model/i18n";
 import { KIND_NAME, KIND_TONE, TOPIC_NAME, TOPIC_TONE, WHO_NAME } from "../model/names";
 
@@ -21,10 +21,10 @@ export function TopicBadge({ topic }: { topic: MailTopic }) {
 const INK = { neutral: "text-ink-soft", primary: "text-primary-ink", positive: "text-positive", info: "text-accent-info", warn: "text-accent-warn", error: "text-accent-error" };
 
 /** Whose turn a case is, and since or until when. */
-export function Standing({ c, goes }: { c: MailCase; goes: Goes }) {
+export function Standing({ c }: { c: MailCase }) {
   const t = useT();
   const locale = useLocale();
-  const { text, tone } = standing(c, goes, t, locale, useNow(30_000));
+  const { text, tone } = standing(c, t, locale, useNow(30_000));
   return <span className={cn("shrink-0 text-xs whitespace-nowrap tabular-nums", INK[tone], tone === "error" && "font-medium")}>{text}</span>;
 }
 
@@ -41,12 +41,12 @@ function useGist(c: MailCase): string | null {
 const told = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 /** A case in a list: whose it is (its GBP, else its gmail), whose turn it is, what it is about and why. */
-export function CaseRow({ c, of, goes, current, to }: { c: MailCase; of: string; goes: Goes; current: boolean; to: At }) {
+export function CaseRow({ c, of, current, to }: { c: MailCase; of: string; current: boolean; to: At }) {
   const t = useT();
   const gist = useGist(c);
   const subject = subjectOf(c, t);
   const who = c.last.who === "us" || c.last.who === "unproven" ? WHO_NAME[c.last.who](t) : null;
-  const line = [gist === c.last.summary && who, gist !== null && told(gist) !== told(subject) && gist].filter(Boolean).join(" · ");
+  const line = [c.last.spam && t(mail.spam, "in Spam"), gist === c.last.summary && who, gist !== null && told(gist) !== told(subject) && gist].filter(Boolean).join(" · ");
   const ink = over(c) ? "text-ink-mid" : "text-ink";
   return (
     <ViewLink
@@ -57,7 +57,7 @@ export function CaseRow({ c, of, goes, current, to }: { c: MailCase; of: string;
     >
       <span className="flex min-w-0 items-center gap-2">
         <span className={cn("min-w-0 flex-1 truncate text-sm", ink, !over(c) && "font-medium")}>{of}</span>
-        <Standing c={c} goes={goes} />
+        <Standing c={c} />
       </span>
       <span className="flex min-w-0 items-center gap-2">
         <TopicBadge topic={c.topic} />
@@ -71,7 +71,6 @@ export function CaseRow({ c, of, goes, current, to }: { c: MailCase; of: string;
 /** Cases in a GBP's window: what was last said in each, how it stands, and a link to it. */
 export function CaseLinks({ cases }: { cases: readonly MailCase[] }) {
   const t = useT();
-  const goes = useGoes();
   return (
     <ul className="flex flex-col divide-y divide-border">
       {cases.map((c) => (
@@ -80,7 +79,7 @@ export function CaseLinks({ cases }: { cases: readonly MailCase[] }) {
             <span className="flex min-w-0 flex-1 flex-col gap-1">
               <span className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
                 {c.said === null ? <TopicBadge topic={c.topic} /> : <Badge tone={KIND_TONE[c.said] ?? "neutral"}>{KIND_NAME[c.said](t)}</Badge>}
-                <Standing c={c} goes={goes} />
+                <Standing c={c} />
               </span>
               <span className="truncate text-sm text-ink">{c.last.summary ?? subjectOf(c, t)}</span>
             </span>
@@ -95,7 +94,6 @@ export function CaseLinks({ cases }: { cases: readonly MailCase[] }) {
 /** Messages in a GBP's window, each with its kind and a link to its case; the latest of one of `cases` with how it stands. */
 export function MailLines({ lines, cases }: { lines: readonly MailLine[]; cases: readonly MailCase[] }) {
   const t = useT();
-  const goes = useGoes();
   const locale = useLocale();
   return (
     <ol className="flex flex-col divide-y divide-border">
@@ -110,7 +108,7 @@ export function MailLines({ lines, cases }: { lines: readonly MailLine[]; cases:
                   <time dateTime={l.at} className="flex-1 font-mono text-xs whitespace-nowrap text-ink-soft tabular-nums">
                     {formatDateTime(l.at, locale)}
                   </time>
-                  {c !== undefined && !over(c) && <Standing c={c} goes={goes} />}
+                  {c !== undefined && !over(c) && <Standing c={c} />}
                 </span>
                 <span className="truncate text-sm text-ink">{l.summary ?? l.subject ?? t(mail.noSubject, "(no subject)")}</span>
                 {l.reasons.map((r) => (

@@ -2066,7 +2066,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Corrects a case's GBP or topic, or marks it done: its draft is let go; one going by itself waits for its person. */
+        /**
+         * Corrects a case's GBP or topic, makes it part of another, whose the answer then is, or marks it done; a draft going by itself waits for its person.
+         * @description 400 two gmails' cases, or one not proved Google's, are not one.
+         */
         patch: operations["edit_mail_case"];
         trace?: never;
     };
@@ -2081,7 +2084,7 @@ export interface paths {
         put?: never;
         /**
          * Writes a reply to the case now, in place of the one there; nothing is sent.
-         * @description 400 nothing in the case takes a reply; 409 its last message is answered, or the case changed meanwhile; 503 no Claude to write it, or it or the review archive does not answer.
+         * @description 400 nothing in the case takes a reply, or both an instruction and a body; 409 its last message is answered, or the case changed meanwhile; 503 no Claude to write it, or it or the review archive does not answer.
          */
         post: operations["draft_mail"];
         delete?: never;
@@ -2108,6 +2111,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mail/drafts/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Brings a dismissed draft back, for its person to send. 409 another message came, or another reply was written. */
+        post: operations["restore_mail_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/mail/drafts/{id}/send": {
         parameters: {
             query?: never;
@@ -2120,7 +2140,7 @@ export interface paths {
         /**
          * Sends a draft to Google as the case's gmail, once: the recipient is the case's (`recipient`).
          * @description 400 nothing in the case takes a reply, or a file is not base64; 409 another message came since it was
-         *     written, or it was sent; 413 its files; 503 not sent, or it may have gone out: check the thread.
+         *     written, it was sent, or it lacks something; 413 its files; 503 not sent, or it may have gone out: check the thread.
          */
         post: operations["send_mail_draft"];
         delete?: never;
@@ -4371,7 +4391,7 @@ export interface components {
             asks: string[];
             /** @description Whether a person said so of them, over its mail. */
             by_hand: components["schemas"]["MailByHand"];
-            /** @description RFC 3339; Google's, still running. */
+            /** @description RFC 3339; Google's, past too, until it is answered. */
             deadline: string | null;
             /** @description Its draft, until it is answered; what it lacks in `draft.needs`. */
             draft: components["schemas"]["MailDraft"] | null;
@@ -4384,12 +4404,16 @@ export interface components {
             gmb_id: number | null;
             /** Format: int64 */
             id: number;
+            /** @description The cases a person made part of it. */
+            joined: number[];
             last: components["schemas"]["MailLine"];
             /** @description Google's case numbers. */
             numbers: string[];
             /** @description What Google's last word was read as; `null`: none, or not read. */
             said: components["schemas"]["MailKind"] | null;
             state: components["schemas"]["MailState"];
+            /** @description Why none of the caller's mail is read or answered now. */
+            stuck: string | null;
             /** @description Google's latest, else ours. */
             subject: string | null;
             /** @description Gmail's thread of its last message: `POST /gmails/{id}/browser/thread` opens it. */
@@ -4424,6 +4448,12 @@ export interface components {
              */
             gmb?: number | null;
             /**
+             * Format: int64
+             * @description The case of the same gmail it is part of: one conversation under two numbers; `null`: one by itself again.
+             * @default null
+             */
+            join?: number | null;
+            /**
              * @description As `gmb`.
              * @default null
              */
@@ -4435,7 +4465,8 @@ export interface components {
         };
         /** @description A reply written to a case. */
         MailDraft: {
-            body: string;
+            /** @description `null`: it does not open, `error` says why. */
+            body: string | null;
             /** @description RFC 3339. */
             created_at: string;
             /** @description Why it did not go, or why nothing was written. */
@@ -4451,6 +4482,8 @@ export interface components {
             state: components["schemas"]["MailDraftState"];
         };
         MailDraftAsk: {
+            /** @description The reply as the operator begins it, empty too: the model writes none. */
+            body?: string | null;
             /** @description What to say, or to say otherwise. */
             instruction?: string | null;
         };
@@ -4489,18 +4522,26 @@ export interface components {
          *
          *     - `video_rejected`: The recorded verification video did not pass.
          *     - `video_in_review`: The recorded verification video is being reviewed.
+         *     - `code_failed`: A code by phone, text, email or postcard did not verify.
          *     - `verified`: The profile is verified.
          *     - `reverification_required`: The profile has to be verified again.
-         *     - `self_serve`: Support points back at the recorded video or the on-screen prompts.
+         *     - `self_serve`: Support points back at the recorded video or the on-screen prompts, and takes nothing by reply.
          *     - `call_offered`: The live verification call is enabled.
          *     - `call_failed`: A live verification call was held and did not verify.
          *     - `options_exhausted`: No way to verify is left on the profile.
+         *     - `suspended`: The profile is suspended or disabled: off Maps, or out of our control.
          *     - `account_restricted`: The account, not one profile, is restricted.
+         *     - `appeal_received`: An appeal of a suspension or a restriction was received, or is being reviewed.
+         *     - `appeal_approved`: The appeal was granted: the profile is reinstated.
+         *     - `appeal_denied`: The appeal was refused.
+         *     - `appeal_verification`: The appeal goes on only once the profile is verified further.
          *     - `reviews_paused`: New reviews are paused: a spike of spam.
          *     - `reviews_restricted`: Fake or incentivised reviews were found, the profile's reviews restricted.
+         *     - `restriction_lifted`: New reviews are taken again, or the profile's restriction is over.
          *     - `review_removed`: A review was removed.
          *     - `reinstatement_refused`: Support will not bring the reviews back.
-         *     - `reinstatement_done`: Support brought all or part of the reviews back.
+         *     - `reinstatement_done`: Support brought the reviews back.
+         *     - `reinstatement_partial`: Support brought part of the reviews back, or those only that it can.
          *     - `reviews_live_already`: Support sees the reviews live already.
          *     - `reviews_no_data`: Support has no record of the reviews.
          *     - `still_active`: Is the business still open: inactivity, removed or revoked unless answered.
@@ -4514,18 +4555,20 @@ export interface components {
          *     - `edit_rejected`: An edit of ours was not accepted.
          *     - `changed_by_google`: Google changed the profile.
          *     - `content_removed`: A photo, post or other content was removed.
-         *     - `duplicate`: The profile is marked as another's duplicate.
+         *     - `policy_warning`: The profile breaks a policy, and is restricted or removed unless mended.
+         *     - `duplicate`: The profile, not a request, is another's duplicate.
          *     - `acknowledged`: A request was received, nothing more.
          *     - `routed`: Handed to a specialist or another team, who answers.
          *     - `asks`: Asks for documents, photos, changes or answers before going on: which profile, which reviews.
-         *     - `closed`: The case is closed: it accepts no reply, or a survey follows it.
+         *     - `closed`: The case is closed now, whatever was settled: one closed later unless answered asks.
+         *     - `duplicate_ticket`: The request, not the profile, is a duplicate: another one open carries it.
          *     - `unclear`: About a profile, what it says cannot be told.
-         *     - `noise`: Performance, promotions, surveys, new reviews, posts.
+         *     - `noise`: Performance, promotions, a survey alone, new reviews, posts.
          *     - `not_business`: Not about a Business Profile.
          *     - `impersonation`: Not from Google.
          * @enum {string}
          */
-        MailKind: "suspended" | "appeal_received" | "appeal_approved" | "appeal_denied" | "restriction_lifted" | "policy_warning" | "video_rejected" | "video_in_review" | "verified" | "reverification_required" | "self_serve" | "call_offered" | "call_failed" | "options_exhausted" | "account_restricted" | "reviews_paused" | "reviews_restricted" | "review_removed" | "reinstatement_refused" | "reinstatement_done" | "reviews_live_already" | "reviews_no_data" | "still_active" | "invited" | "access_granted" | "access_lost" | "others_access" | "ownership_requested" | "management_requested" | "edit_suggested" | "edit_rejected" | "changed_by_google" | "content_removed" | "duplicate" | "acknowledged" | "routed" | "asks" | "closed" | "unclear" | "noise" | "not_business" | "impersonation";
+        MailKind: "video_rejected" | "video_in_review" | "code_failed" | "verified" | "reverification_required" | "self_serve" | "call_offered" | "call_failed" | "options_exhausted" | "suspended" | "account_restricted" | "appeal_received" | "appeal_approved" | "appeal_denied" | "appeal_verification" | "reviews_paused" | "reviews_restricted" | "restriction_lifted" | "review_removed" | "reinstatement_refused" | "reinstatement_done" | "reinstatement_partial" | "reviews_live_already" | "reviews_no_data" | "still_active" | "invited" | "access_granted" | "access_lost" | "others_access" | "ownership_requested" | "management_requested" | "edit_suggested" | "edit_rejected" | "changed_by_google" | "content_removed" | "policy_warning" | "duplicate" | "acknowledged" | "routed" | "asks" | "closed" | "duplicate_ticket" | "unclear" | "noise" | "not_business" | "impersonation";
         /** @description A message, in a line. */
         MailLine: {
             /** @description RFC 3339. */
@@ -4538,6 +4581,8 @@ export interface components {
             kind: components["schemas"]["MailKind"] | null;
             /** @description Why, in Google's words. */
             reasons: string[];
+            /** @description Gmail has it in Spam. */
+            spam: boolean;
             subject: string | null;
             summary: string | null;
             who: components["schemas"]["MailWho"];
@@ -4563,9 +4608,13 @@ export interface components {
             /** @description It takes a reply. */
             repliable: boolean;
             sent: boolean;
+            /** @description Gmail has it in Spam. */
+            spam: boolean;
             subject: string | null;
-            /** @description Its own words, quotes dropped. */
-            text: string;
+            /** @description Its own words, quotes dropped; `null`: they do not open. */
+            text: string | null;
+            /** @description Why they do not. */
+            text_error: string | null;
             to: string[];
         };
         /**
@@ -4618,12 +4667,36 @@ export interface components {
             /** @description Of a kind that is of any topic. */
             topic?: components["schemas"]["MailTopic"] | null;
         };
+        /** @description What is said of a GBP. */
+        MailSaid: {
+            /** Format: date-time */
+            at: string;
+            /**
+             * Format: int64
+             * @description Whose reading it is; `null`: the GBP's move.
+             */
+            case_id: number | null;
+            kind: components["schemas"]["MailKind"];
+        };
         MailSend: {
+            /** @description It goes with no file although the draft lacks something (`needs`). */
+            as_is: boolean;
             /** @description What goes, as the operator leaves it. */
             body: string;
             /** @description At most the case's `files_max` in all; never stored. */
             files: components["schemas"]["MailFile"][];
         };
+        /** @description What settled a case. */
+        MailSettled: {
+            /** @constant */
+            is: "hand";
+        } | {
+            /** @constant */
+            is: "here";
+        } | ({
+            /** @constant */
+            is: "elsewhere";
+        } & components["schemas"]["MailSaid"]);
         /**
          * @description A case's state, by its name.
          *
@@ -4656,8 +4729,7 @@ export interface components {
             /** Format: date-time */
             until: string;
         } | {
-            /** @description A person marked it so. */
-            by_hand: boolean;
+            by: components["schemas"]["MailSettled"];
             /** @constant */
             is: "done";
         } | {
@@ -4690,6 +4762,8 @@ export interface components {
             code: "needs";
             needs: string[];
         } | {
+            /** Format: uint */
+            asked: number;
             /** @constant */
             code: "asked_often";
         } | {
@@ -6132,8 +6206,11 @@ export interface components {
             reasons: string[];
             summary: string;
         };
-        /** @enum {string} */
-        VerificationMethod: "video" | "call" | "unknown";
+        /**
+         * @description - `code`: By phone, text, email or postcard.
+         * @enum {string}
+         */
+        VerificationMethod: "video" | "call" | "unknown" | "code";
         /** @enum {string} */
         VerificationOutcome: "in_review" | "rejected" | "offered" | "failed" | "verified";
         Viewport: {
@@ -6439,7 +6516,9 @@ export type MailMessage = components['schemas']['MailMessage'];
 export type MailReader = components['schemas']['MailReader'];
 export type MailReading = components['schemas']['MailReading'];
 export type MailReadingEdit = components['schemas']['MailReadingEdit'];
+export type MailSaid = components['schemas']['MailSaid'];
 export type MailSend = components['schemas']['MailSend'];
+export type MailSettled = components['schemas']['MailSettled'];
 export type MailStanding = components['schemas']['MailStanding'];
 export type MailState = components['schemas']['MailState'];
 export type MailTopic = components['schemas']['MailTopic'];
@@ -25632,6 +25711,136 @@ export interface operations {
             };
         };
     };
+    restore_mail_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /mail/cases/{id}`. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailCaseDetail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     send_mail_draft: {
         parameters: {
             query?: never;
@@ -30085,7 +30294,7 @@ export const kitHappeningValues: ReadonlyArray<FlattenedDeepRequired<components>
 export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitTarget"]> = ["google", "drafts", "one_tap"];
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
 export const mailDraftStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailDraftState"]> = ["sent", "dismissed", "proposed", "held", "sending", "superseded", "failed"];
-export const mailKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailKind"]> = ["suspended", "appeal_received", "appeal_approved", "appeal_denied", "restriction_lifted", "policy_warning", "video_rejected", "video_in_review", "verified", "reverification_required", "self_serve", "call_offered", "call_failed", "options_exhausted", "account_restricted", "reviews_paused", "reviews_restricted", "review_removed", "reinstatement_refused", "reinstatement_done", "reviews_live_already", "reviews_no_data", "still_active", "invited", "access_granted", "access_lost", "others_access", "ownership_requested", "management_requested", "edit_suggested", "edit_rejected", "changed_by_google", "content_removed", "duplicate", "acknowledged", "routed", "asks", "closed", "unclear", "noise", "not_business", "impersonation"];
+export const mailKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailKind"]> = ["video_rejected", "video_in_review", "code_failed", "verified", "reverification_required", "self_serve", "call_offered", "call_failed", "options_exhausted", "suspended", "account_restricted", "appeal_received", "appeal_approved", "appeal_denied", "appeal_verification", "reviews_paused", "reviews_restricted", "restriction_lifted", "review_removed", "reinstatement_refused", "reinstatement_done", "reinstatement_partial", "reviews_live_already", "reviews_no_data", "still_active", "invited", "access_granted", "access_lost", "others_access", "ownership_requested", "management_requested", "edit_suggested", "edit_rejected", "changed_by_google", "content_removed", "policy_warning", "duplicate", "acknowledged", "routed", "asks", "closed", "duplicate_ticket", "unclear", "noise", "not_business", "impersonation"];
 export const mailReaderValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailReader"]> = ["rule", "model", "person"];
 export const mailStandingValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailStanding"]> = ["needs_you", "done", "reply_ready", "sending", "reply_due", "waiting", "quiet"];
 export const mailTopicValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailTopic"]> = ["verification", "suspension", "reviews", "activity", "access", "profile", "other"];
@@ -30110,7 +30319,7 @@ export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas
 export const tierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tier"]> = ["info", "important", "urgent"];
 export const toldStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ToldState"]> = ["pending", "sent", "dead", "dropped"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
-export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["video", "call", "unknown"];
+export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["video", "call", "unknown", "code"];
 export const verificationOutcomeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationOutcome"]> = ["in_review", "rejected", "offered", "failed", "verified"];
 export const whyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Why"]> = ["edit", "adopt", "update", "revert"];
 export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];

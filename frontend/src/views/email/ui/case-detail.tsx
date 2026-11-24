@@ -7,10 +7,10 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { useNow } from "@/entities/alerts";
 import { pageOf, under, useGmails } from "@/entities/gmb";
-import { KINDS, KIND_NAME, Standing, TOPIC_NAME, TopicBadge, WHO_NAME, correctMail, deadlineOf, editCase, mail, settledText, subjectOf, unnamed, useGoes, useOpenThread, whyText } from "@/entities/mail";
+import { KINDS, KIND_NAME, Standing, TOPIC_NAME, TopicBadge, WHO_NAME, correctMail, deadlineOf, editCase, goes, mail, settledText, subjectOf, unnamed, useOpenThread, whyText } from "@/entities/mail";
 import { Held, Mend, Reply, WhichGbp } from "@/features/answer-mail";
 import { api } from "@/shared/api";
-import { type Gmails, type Gmb, type MailCaseDetail, type MailKind, type MailMessage, type MailTopic, mailTopicValues } from "@/shared/api/schema";
+import { type Gmails, type Gmb, type MailCase, type MailCaseDetail, type MailKind, type MailMessage, type MailTopic, mailTopicValues } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { ViewLink } from "@/shared/lib/location";
@@ -42,7 +42,8 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
   const thread = useOpenThread();
   const [correcting, setCorrecting] = useState(false);
   const push = useUndo();
-  const goes = useGoes();
+  const locale = useLocale();
+  const now = useNow(60_000);
   const box = useRef<HTMLElement>(null);
   const next = useRef<string | null>(null);
   // an act took what had the focus off the page: what stands in its place has it
@@ -75,7 +76,8 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
   // removed with its cases, here or in another tab: the read that follows answers 404
   if (gmail === undefined) return <Skeleton className="m-5 h-60" />;
   const isDone = c.state.is === "done";
-  const byHand = c.state.is === "done" && c.state.by_hand;
+  const by = c.state.is === "done" ? c.state.by : null;
+  const byHand = by?.is === "hand";
   const reply = { detail, gmail: gmail.gmail, onChanged: answered };
   return (
     <article ref={box} tabIndex={-1} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 outline-none @3xl:px-7">
@@ -83,7 +85,7 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
         <h2 className="text-lg font-semibold break-words text-ink">{subjectOf(c, t)}</h2>
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-soft">
           <TopicBadge topic={c.topic} />
-          <Standing c={c} goes={goes} />
+          <Standing c={c} />
           {gbp !== undefined ? <GbpLink gbp={gbp} /> : unnamed(c) ? <WhichGbp c={c} onChanged={named} className="max-w-60" /> : null}
           <span className="min-w-0 truncate">{gmail.gmail}</span>
           {c.numbers.length > 0 && <span className="font-mono text-xs">{c.numbers.join(" · ")}</span>}
@@ -94,7 +96,7 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
             {t(mail.thread.open, "Open thread")}
           </Button>
           {(!isDone || byHand) && (
-            <Button variant="outline" size={button("sm")} className="@max-lg:[&>svg]:hidden" onClick={() => void done(!isDone)} title={isDone ? undefined : t(mail.done.means, "Until Google writes again; its draft is let go")}>
+            <Button variant="outline" size={button("sm")} className="@max-lg:[&>svg]:hidden" onClick={() => void done(!isDone)} title={isDone ? undefined : t(mail.done.means, "Until Google writes again")}>
               {isDone ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
               {isDone ? t(mail.reopen, "Reopen") : t(mail.done, "Mark done")}
             </Button>
@@ -112,7 +114,19 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
         </Note>
       )}
       <Why detail={detail} />
-      {isDone && !byHand && <p className="text-sm text-ink-soft">{settledText(c, gbp?.name ?? null, t)}</p>}
+      {by !== null && !byHand && (
+        <p className="text-sm text-ink-soft">
+          {settledText(by, t, locale, now)}
+          {by.is === "elsewhere" && by.case_id !== null && (
+            <>
+              {" "}
+              <ViewLink to={{ view: "email", params: { show: "all", case: by.case_id } }} className="rounded-sm text-ink underline outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                {t(mail.settled.open, "Open it")}
+              </ViewLink>
+            </>
+          )}
+        </p>
+      )}
       {c.draft !== null && goes(c) && <Held draft={c.draft} {...reply} />}
       <Timeline messages={messages} reload={reload} />
       {c.asks.length > 0 && c.last.who !== "us" && (c.draft === null || c.draft.needs.length === 0) && (
@@ -222,6 +236,7 @@ function Correct({ detail: { case: c }, gbps, reload }: { detail: MailCaseDetail
   };
   return (
     <div className="grid grid-cols-1 gap-3 rounded-lg border border-border p-4 @2xl:grid-cols-2">
+      <Join c={c} reload={reload} />
       <div className="flex min-w-0 flex-col gap-1">
         <label htmlFor={`${id}-gbp`} className="text-xs text-ink-soft">
           {t(mail.correct.gbp, "GBP")}
@@ -251,6 +266,63 @@ function Correct({ detail: { case: c }, gbps, reload }: { detail: MailCaseDetail
             </NativeSelectOption>
           ))}
         </NativeSelect>
+      </div>
+    </div>
+  );
+}
+
+/** The thread it is one with: the same matter under another of Google's numbers. */
+function Join({ c, reload }: { c: MailCase; reload: () => void }) {
+  const t = useT();
+  const locale = useLocale();
+  const now = useNow(60_000);
+  const id = useId();
+  const size = useControlSize() === "lg" ? "lg" : "sm";
+  const push = useUndo();
+  const [busy, setBusy] = useState(false);
+  const read = useResource(api, "/mail/cases");
+  if (read.status !== "ok") return null;
+  const others = read.data.cases.filter((x) => x.gmail_id === c.gmail_id && x.id !== c.id && x.last.who !== "unproven");
+  const act = async (write: () => Promise<unknown>) => {
+    setBusy(true);
+    try {
+      await write();
+    } catch (e) {
+      notifyFailure(e, t);
+    } finally {
+      setBusy(false);
+      reload();
+    }
+  };
+  const join = (to: number) =>
+    act(async () => {
+      const set = (to: number | null) => editCase(c.id, { join: to }).finally(reload);
+      await set(to);
+      push({ label: t(mail.join.label, "{subject} made one with another", { subject: subjectOf(c, t) }), undo: async () => void (await set(null)), redo: async () => void (await set(to)) });
+    });
+  const apart = () =>
+    act(async () => {
+      for (const part of c.joined) await editCase(part, { join: null });
+    });
+  return (
+    <div className="flex min-w-0 flex-col gap-1 @2xl:col-span-2">
+      <label htmlFor={id} className="text-xs text-ink-soft">
+        {t(mail.join, "One with")}
+      </label>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <NativeSelect id={id} size={size} wrapperClassName="min-w-0 flex-1" disabled={busy || others.length === 0} value="" onChange={(e) => void join(Number(e.target.value))}>
+          <NativeSelectOption value="">{t(mail.join.none, "Another thread on the same matter")}</NativeSelectOption>
+          {others.map((x) => (
+            <NativeSelectOption key={x.id} value={x.id}>
+              {[when(x.last.at, locale, now), subjectOf(x, t), ...x.numbers].join(" · ")}
+            </NativeSelectOption>
+          ))}
+        </NativeSelect>
+        {c.joined.length > 0 && (
+          <Button variant="outline" size={size} disabled={busy} onClick={() => void apart()}>
+            {t(mail.join.apart, "Take {n, plural, one {its joined thread} other {its # joined threads}} apart", { n: c.joined.length })}
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -286,13 +358,18 @@ function Message({ m, opened, reload }: { m: MailMessage; opened: boolean; reloa
           {when(m.at, locale, now)}
         </time>
         <span className="shrink-0 text-ink">{who}</span>
+        {m.spam && <Badge tone="warn">{t(mail.spam, "in Spam")}</Badge>}
         {!m.sent && <Badge tone="neutral">{m.reading === null ? t(mail.message.unread, "Not read") : KIND_NAME[m.reading.kind](t)}</Badge>}
-        <span className="min-w-0 flex-1 basis-40 truncate text-ink-soft">{m.reading?.summary ?? m.text.replace(/\s+/g, " ")}</span>
+        <span className="min-w-0 flex-1 basis-40 truncate text-ink-soft">{m.reading?.summary ?? m.text?.replace(/\s+/g, " ")}</span>
       </button>
       {open && (
         <div className="flex flex-col gap-2 pt-1 pb-3">
           <p className="text-xs break-all text-ink-soft">{[m.from, m.to.join(", ")].filter((x) => x !== null && x !== "").join(" → ")}</p>
-          <p className="rounded-lg border border-border px-3 py-2 text-sm break-words whitespace-pre-wrap text-ink">{m.text === "" ? t(mail.message.empty, "No text of its own.") : m.text}</p>
+          {m.text_error !== null ? (
+            <p className="text-sm break-words text-accent-error">{t(mail.message.sealed, "Its text does not open: {why}", { why: m.text_error })}</p>
+          ) : (
+            <p className="rounded-lg border border-border px-3 py-2 text-sm break-words whitespace-pre-wrap text-ink">{m.text === "" ? t(mail.message.empty, "No text of its own.") : m.text}</p>
+          )}
           {!m.sent && <Read m={m} reload={reload} />}
         </div>
       )}

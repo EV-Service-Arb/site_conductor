@@ -8,7 +8,7 @@ use sa_core::{gbp::Country, prices::Spender};
 use sa_panel::{
 	gmbs::{Event, EventKind, Existing},
 	import::Export,
-	inbox::{Account, BATCH, Batch, Cursor, Mail, Mailbox},
+	inbox::{Account, BATCH, Batch, Cursor, Folder, Mail, Mailbox},
 	seal::{DataKey, gmail_imap_aad},
 	testing::{TestDb, panel_with},
 	tokens::User,
@@ -26,13 +26,13 @@ struct Inbox {
 }
 
 impl Mailbox for Inbox {
-	async fn read(&self, account: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre::Result<Batch> {
+	async fn read(&self, account: Account<'_>, folder: Folder, after: Option<Cursor>, limit: usize) -> eyre::Result<Batch> {
 		assert_eq!((account.username, account.password), ("a@gmail.com", "app-password"), "read with the gmail's own credentials");
 		let validity = *self.validity.lock().unwrap();
 		let from = after.filter(|c| c.validity == validity).map_or(0, |c| c.uid);
 		Ok(Batch {
 			validity,
-			mails: self.mails.iter().filter(|m| m.uid > from).take(limit).cloned().collect(),
+			mails: self.mails.iter().filter(|m| m.spam == (folder == Folder::Spam) && m.uid > from).take(limit).cloned().collect(),
 		})
 	}
 }
@@ -54,6 +54,7 @@ fn mail(uid: u32, subject: &str, text: &str) -> Mail {
 		sent: false,
 		text: text.to_owned(),
 		whole: true,
+		spam: false,
 	}
 }
 

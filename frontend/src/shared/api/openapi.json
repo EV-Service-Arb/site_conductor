@@ -24674,7 +24674,8 @@
         "tags": [
           "mail"
         ],
-        "summary": "Corrects a case's GBP or topic, or marks it done: its draft is let go; one going by itself waits for its person.",
+        "summary": "Corrects a case's GBP or topic, makes it part of another, whose the answer then is, or marks it done; a draft going by itself waits for its person.",
+        "description": "400 two gmails' cases, or one not proved Google's, are not one.",
         "operationId": "edit_mail_case",
         "parameters": [
           {
@@ -24858,7 +24859,7 @@
           "mail"
         ],
         "summary": "Writes a reply to the case now, in place of the one there; nothing is sent.",
-        "description": "400 nothing in the case takes a reply; 409 its last message is answered, or the case changed meanwhile; 503 no Claude to write it, or it or the review archive does not answer.",
+        "description": "400 nothing in the case takes a reply, or both an instruction and a body; 409 its last message is answered, or the case changed meanwhile; 503 no Claude to write it, or it or the review archive does not answer.",
         "operationId": "draft_mail",
         "parameters": [
           {
@@ -25384,13 +25385,185 @@
         }
       }
     },
+    "/mail/drafts/{id}/restore": {
+      "post": {
+        "tags": [
+          "mail"
+        ],
+        "summary": "Brings a dismissed draft back, for its person to send. 409 another message came, or another reply was written.",
+        "operationId": "restore_mail_draft",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "style": "simple"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "`GET /mail/cases/{id}`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailCaseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-outward": true
+      }
+    },
     "/mail/drafts/{id}/send": {
       "post": {
         "tags": [
           "mail"
         ],
         "summary": "Sends a draft to Google as the case's gmail, once: the recipient is the case's (`recipient`).",
-        "description": "400 nothing in the case takes a reply, or a file is not base64; 409 another message came since it was\nwritten, or it was sent; 413 its files; 503 not sent, or it may have gone out: check the thread.",
+        "description": "400 nothing in the case takes a reply, or a file is not base64; 409 another message came since it was\nwritten, it was sent, or it lacks something; 413 its files; 503 not sent, or it may have gone out: check the thread.",
         "operationId": "send_mail_draft",
         "parameters": [
           {
@@ -36213,7 +36386,7 @@
             ]
           },
           "deadline": {
-            "description": "RFC 3339; Google's, still running.",
+            "description": "RFC 3339; Google's, past too, until it is answered.",
             "type": [
               "string",
               "null"
@@ -36246,6 +36419,14 @@
             "type": "integer",
             "format": "int64"
           },
+          "joined": {
+            "description": "The cases a person made part of it.",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
           "last": {
             "$ref": "#/components/schemas/MailLine"
           },
@@ -36269,6 +36450,13 @@
           },
           "state": {
             "$ref": "#/components/schemas/MailState"
+          },
+          "stuck": {
+            "description": "Why none of the caller's mail is read or answered now.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "subject": {
             "description": "Google's latest, else ours.",
@@ -36299,7 +36487,9 @@
           "last",
           "said",
           "asks",
-          "draft"
+          "draft",
+          "joined",
+          "stuck"
         ]
       },
       "MailCaseDetail": {
@@ -36377,6 +36567,15 @@
             "format": "int64",
             "default": null
           },
+          "join": {
+            "description": "The case of the same gmail it is part of: one conversation under two numbers; `null`: one by itself again.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64",
+            "default": null
+          },
           "topic": {
             "description": "As `gmb`.",
             "anyOf": [
@@ -36412,7 +36611,11 @@
         "type": "object",
         "properties": {
           "body": {
-            "type": "string"
+            "description": "`null`: it does not open, `error` says why.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "created_at": {
             "description": "RFC 3339.",
@@ -36468,6 +36671,13 @@
       "MailDraftAsk": {
         "type": "object",
         "properties": {
+          "body": {
+            "description": "The reply as the operator begins it, empty too: the model writes none.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "instruction": {
             "description": "What to say, or to say otherwise.",
             "type": [
@@ -36572,29 +36782,31 @@
         ]
       },
       "MailKind": {
-        "description": "What a message of Google's says.\n\n- `video_rejected`: The recorded verification video did not pass.\n- `video_in_review`: The recorded verification video is being reviewed.\n- `verified`: The profile is verified.\n- `reverification_required`: The profile has to be verified again.\n- `self_serve`: Support points back at the recorded video or the on-screen prompts.\n- `call_offered`: The live verification call is enabled.\n- `call_failed`: A live verification call was held and did not verify.\n- `options_exhausted`: No way to verify is left on the profile.\n- `account_restricted`: The account, not one profile, is restricted.\n- `reviews_paused`: New reviews are paused: a spike of spam.\n- `reviews_restricted`: Fake or incentivised reviews were found, the profile's reviews restricted.\n- `review_removed`: A review was removed.\n- `reinstatement_refused`: Support will not bring the reviews back.\n- `reinstatement_done`: Support brought all or part of the reviews back.\n- `reviews_live_already`: Support sees the reviews live already.\n- `reviews_no_data`: Support has no record of the reviews.\n- `still_active`: Is the business still open: inactivity, removed or revoked unless answered.\n- `invited`: Someone invited this account to manage a profile.\n- `access_granted`: This account was given access to a profile.\n- `access_lost`: This account can no longer manage a profile.\n- `others_access`: Someone else was given access to a profile.\n- `ownership_requested`: Someone asks for a profile's ownership.\n- `management_requested`: Someone asks to manage a profile.\n- `edit_suggested`: Someone suggested an edit: does this look right to you?\n- `edit_rejected`: An edit of ours was not accepted.\n- `changed_by_google`: Google changed the profile.\n- `content_removed`: A photo, post or other content was removed.\n- `duplicate`: The profile is marked as another's duplicate.\n- `acknowledged`: A request was received, nothing more.\n- `routed`: Handed to a specialist or another team, who answers.\n- `asks`: Asks for documents, photos, changes or answers before going on: which profile, which reviews.\n- `closed`: The case is closed: it accepts no reply, or a survey follows it.\n- `unclear`: About a profile, what it says cannot be told.\n- `noise`: Performance, promotions, surveys, new reviews, posts.\n- `not_business`: Not about a Business Profile.\n- `impersonation`: Not from Google.",
+        "description": "What a message of Google's says.\n\n- `video_rejected`: The recorded verification video did not pass.\n- `video_in_review`: The recorded verification video is being reviewed.\n- `code_failed`: A code by phone, text, email or postcard did not verify.\n- `verified`: The profile is verified.\n- `reverification_required`: The profile has to be verified again.\n- `self_serve`: Support points back at the recorded video or the on-screen prompts, and takes nothing by reply.\n- `call_offered`: The live verification call is enabled.\n- `call_failed`: A live verification call was held and did not verify.\n- `options_exhausted`: No way to verify is left on the profile.\n- `suspended`: The profile is suspended or disabled: off Maps, or out of our control.\n- `account_restricted`: The account, not one profile, is restricted.\n- `appeal_received`: An appeal of a suspension or a restriction was received, or is being reviewed.\n- `appeal_approved`: The appeal was granted: the profile is reinstated.\n- `appeal_denied`: The appeal was refused.\n- `appeal_verification`: The appeal goes on only once the profile is verified further.\n- `reviews_paused`: New reviews are paused: a spike of spam.\n- `reviews_restricted`: Fake or incentivised reviews were found, the profile's reviews restricted.\n- `restriction_lifted`: New reviews are taken again, or the profile's restriction is over.\n- `review_removed`: A review was removed.\n- `reinstatement_refused`: Support will not bring the reviews back.\n- `reinstatement_done`: Support brought the reviews back.\n- `reinstatement_partial`: Support brought part of the reviews back, or those only that it can.\n- `reviews_live_already`: Support sees the reviews live already.\n- `reviews_no_data`: Support has no record of the reviews.\n- `still_active`: Is the business still open: inactivity, removed or revoked unless answered.\n- `invited`: Someone invited this account to manage a profile.\n- `access_granted`: This account was given access to a profile.\n- `access_lost`: This account can no longer manage a profile.\n- `others_access`: Someone else was given access to a profile.\n- `ownership_requested`: Someone asks for a profile's ownership.\n- `management_requested`: Someone asks to manage a profile.\n- `edit_suggested`: Someone suggested an edit: does this look right to you?\n- `edit_rejected`: An edit of ours was not accepted.\n- `changed_by_google`: Google changed the profile.\n- `content_removed`: A photo, post or other content was removed.\n- `policy_warning`: The profile breaks a policy, and is restricted or removed unless mended.\n- `duplicate`: The profile, not a request, is another's duplicate.\n- `acknowledged`: A request was received, nothing more.\n- `routed`: Handed to a specialist or another team, who answers.\n- `asks`: Asks for documents, photos, changes or answers before going on: which profile, which reviews.\n- `closed`: The case is closed now, whatever was settled: one closed later unless answered asks.\n- `duplicate_ticket`: The request, not the profile, is a duplicate: another one open carries it.\n- `unclear`: About a profile, what it says cannot be told.\n- `noise`: Performance, promotions, a survey alone, new reviews, posts.\n- `not_business`: Not about a Business Profile.\n- `impersonation`: Not from Google.",
         "type": "string",
         "enum": [
-          "suspended",
-          "appeal_received",
-          "appeal_approved",
-          "appeal_denied",
-          "restriction_lifted",
-          "policy_warning",
           "video_rejected",
           "video_in_review",
+          "code_failed",
           "verified",
           "reverification_required",
           "self_serve",
           "call_offered",
           "call_failed",
           "options_exhausted",
+          "suspended",
           "account_restricted",
+          "appeal_received",
+          "appeal_approved",
+          "appeal_denied",
+          "appeal_verification",
           "reviews_paused",
           "reviews_restricted",
+          "restriction_lifted",
           "review_removed",
           "reinstatement_refused",
           "reinstatement_done",
+          "reinstatement_partial",
           "reviews_live_already",
           "reviews_no_data",
           "still_active",
@@ -36608,11 +36820,13 @@
           "edit_rejected",
           "changed_by_google",
           "content_removed",
+          "policy_warning",
           "duplicate",
           "acknowledged",
           "routed",
           "asks",
           "closed",
+          "duplicate_ticket",
           "unclear",
           "noise",
           "not_business",
@@ -36653,6 +36867,10 @@
               "type": "string"
             }
           },
+          "spam": {
+            "description": "Gmail has it in Spam.",
+            "type": "boolean"
+          },
           "subject": {
             "type": [
               "string",
@@ -36677,7 +36895,8 @@
           "subject",
           "kind",
           "summary",
-          "reasons"
+          "reasons",
+          "spam"
         ]
       },
       "MailMessage": {
@@ -36751,6 +36970,10 @@
           "sent": {
             "type": "boolean"
           },
+          "spam": {
+            "description": "Gmail has it in Spam.",
+            "type": "boolean"
+          },
           "subject": {
             "type": [
               "string",
@@ -36758,8 +36981,18 @@
             ]
           },
           "text": {
-            "description": "Its own words, quotes dropped.",
-            "type": "string"
+            "description": "Its own words, quotes dropped; `null`: they do not open.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text_error": {
+            "description": "Why they do not.",
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "to": {
             "type": "array",
@@ -36776,6 +37009,8 @@
           "to",
           "subject",
           "text",
+          "text_error",
+          "spam",
           "authentic",
           "repliable",
           "gmb_id",
@@ -36910,9 +37145,39 @@
         },
         "additionalProperties": false
       },
+      "MailSaid": {
+        "description": "What is said of a GBP.",
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "case_id": {
+            "description": "Whose reading it is; `null`: the GBP's move.",
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int64"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MailKind"
+          }
+        },
+        "required": [
+          "kind",
+          "at",
+          "case_id"
+        ]
+      },
       "MailSend": {
         "type": "object",
         "properties": {
+          "as_is": {
+            "description": "It goes with no file although the draft lacks something (`needs`).",
+            "type": "boolean"
+          },
           "body": {
             "description": "What goes, as the operator leaves it.",
             "type": "string"
@@ -36928,7 +37193,57 @@
         "additionalProperties": false,
         "required": [
           "body",
-          "files"
+          "files",
+          "as_is"
+        ]
+      },
+      "MailSettled": {
+        "description": "What settled a case.",
+        "oneOf": [
+          {
+            "description": "A person, by hand.",
+            "type": "object",
+            "properties": {
+              "is": {
+                "type": "string",
+                "const": "hand"
+              }
+            },
+            "required": [
+              "is"
+            ]
+          },
+          {
+            "description": "What Google said in it.",
+            "type": "object",
+            "properties": {
+              "is": {
+                "type": "string",
+                "const": "here"
+              }
+            },
+            "required": [
+              "is"
+            ]
+          },
+          {
+            "description": "What is said of its GBP elsewhere.",
+            "type": "object",
+            "properties": {
+              "is": {
+                "type": "string",
+                "const": "elsewhere"
+              }
+            },
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MailSaid"
+              }
+            ],
+            "required": [
+              "is"
+            ]
+          }
         ]
       },
       "MailStanding": {
@@ -37027,9 +37342,8 @@
           {
             "type": "object",
             "properties": {
-              "by_hand": {
-                "description": "A person marked it so.",
-                "type": "boolean"
+              "by": {
+                "$ref": "#/components/schemas/MailSettled"
               },
               "is": {
                 "type": "string",
@@ -37038,7 +37352,7 @@
             },
             "required": [
               "is",
-              "by_hand"
+              "by"
             ]
           },
           {
@@ -37137,16 +37451,22 @@
             ]
           },
           {
-            "description": "Google answers nothing new, however often asked.",
+            "description": "Google answers nothing new, asked that often.",
             "type": "object",
             "properties": {
+              "asked": {
+                "type": "integer",
+                "format": "uint",
+                "minimum": 0
+              },
               "code": {
                 "type": "string",
                 "const": "asked_often"
               }
             },
             "required": [
-              "code"
+              "code",
+              "asked"
             ]
           },
           {
@@ -41316,11 +41636,13 @@
         ]
       },
       "VerificationMethod": {
+        "description": "- `code`: By phone, text, email or postcard.",
         "type": "string",
         "enum": [
           "video",
           "call",
-          "unknown"
+          "unknown",
+          "code"
         ]
       },
       "VerificationOutcome": {

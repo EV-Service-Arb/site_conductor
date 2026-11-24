@@ -1,11 +1,11 @@
 "use client";
 
-import { Button, ConfirmDialog, Input, Spinner, Textarea, cn, useBinding } from "@evinvest/uikit";
-import { Paperclip, PenLine, Send, X } from "lucide-react";
+import { Button, ConfirmDialog, Input, Spinner, Textarea, cn, useBinding, useUndo } from "@evinvest/uikit";
+import { Paperclip, PenLine, RotateCcw, Send, X } from "lucide-react";
 import { type ReactNode, useId, useRef, useState } from "react";
 
 import { useNow } from "@/entities/alerts";
-import { dismissDraft, keepDraft, mail, sendDraft, stuckOf, writeDraft } from "@/entities/mail";
+import { beginDraft, dismissDraft, keepDraft, mail, restoreDraft, sendDraft, subjectOf, writeDraft } from "@/entities/mail";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import type { MailCaseDetail, MailDraft, MailFile } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
@@ -42,7 +42,7 @@ function useAct(onChanged: () => void) {
 
 /** The case's reply, written, edited and sent by its operator; `null` where nothing takes one. */
 export function Reply({ detail, gmail, onChanged }: Props) {
-  const { draft } = detail.case;
+  const { draft, state } = detail.case;
   const none = detail.recipient === null ? null : <Write detail={detail} onChanged={onChanged} />;
   if (draft === null) return none;
   switch (draft.state) {
@@ -50,9 +50,9 @@ export function Reply({ detail, gmail, onChanged }: Props) {
     case "held":
     case "proposed":
     case "failed":
-      // nothing was written: there is nothing to edit
-      if (draft.body === "") return none;
-      return <Editor key={draft.id} draft={draft} detail={detail} gmail={gmail} onChanged={onChanged} />;
+      // nothing to edit: none was written, it does not open, or its thread is done without it
+      if (draft.body === null || (draft.state === "failed" && draft.body === "") || state.is === "done") return none;
+      return <Editor key={draft.id} draft={draft} written={draft.body} detail={detail} gmail={gmail} onChanged={onChanged} />;
     case "sending":
     case "sent":
       return <HandedOver draft={draft} detail={detail} />;
@@ -84,8 +84,8 @@ function Write({ detail, onChanged, over = false, onDone }: { detail: MailCaseDe
   const { busy, act } = useAct(onChanged);
   const held = useTokens();
   const spend = useSpendConfirm();
-  const runs = useDraftCost(detail.messages.map((m) => m.text));
-  const stuck = stuckOf(detail.case) ?? (runs !== null && !runs.own && held.status === "ok" && held.data.balance <= 0 ? t(mail.write.broke, "No tokens left") : null);
+  const runs = useDraftCost(detail.messages.flatMap((m) => m.text ?? []));
+  const stuck = detail.case.stuck ?? (runs !== null && !runs.own && held.status === "ok" && held.data.balance <= 0 ? t(mail.write.broke, "No tokens left") : null);
   const write = () =>
     act(async () => {
       await writeDraft(detail.case.id, instruction.trim() === "" ? null : instruction.trim());
@@ -113,7 +113,24 @@ function Write({ detail, onChanged, over = false, onDone }: { detail: MailCaseDe
     </form>
   );
   if (over) return form;
-  return <Box title={t(mail.reply, "Reply")}>{form}</Box>;
+  const { draft } = detail.case;
+  const dismissed = draft?.state === "dismissed" && draft.error === null ? draft : null;
+  return (
+    <Box title={t(mail.reply, "Reply")}>
+      {form}
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => void act(() => beginDraft(detail.case.id))}>
+          {t(mail.write.own.self, "Write it yourself")}
+        </Button>
+        {dismissed !== null && (
+          <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => void act(() => restoreDraft(dismissed.id))}>
+            <RotateCcw aria-hidden />
+            {t(mail.draft.restore, "Bring the dismissed draft back")}
+          </Button>
+        )}
+      </div>
+    </Box>
+  );
 }
 
 /** Each reply's files, by the message it answers: kept while another thread is read, gone with the tab. */
@@ -128,15 +145,16 @@ function useFiles(answers: number) {
   return [files, keep] as const;
 }
 
-function Editor({ draft, detail, gmail, onChanged }: Props & { draft: MailDraft }) {
+/** `written`: its text. */
+function Editor({ draft, written, detail, gmail, onChanged }: Props & { draft: MailDraft; written: string }) {
   const t = useT();
   const button = useButtonSize();
   const { recipient, files_max: max } = detail;
   const { busy, act } = useAct(onChanged);
-  const [body, setBody] = useState(draft.body);
+  const push = useUndo();
+  const [body, setBody] = useState(written);
   const [files, setFiles] = useFiles(detail.case.last.id);
   const [confirming, setConfirming] = useState(false);
-  const [dismissing, setDismissing] = useState(false);
   const [rewriting, setRewriting] = useState(false);
   const size = files.reduce((n, f) => n + f.size, 0);
   const refused =
@@ -144,22 +162,28 @@ function Editor({ draft, detail, gmail, onChanged }: Props & { draft: MailDraft 
   useBinding({ on: { key: "Enter" }, id: "mail-send", run: { label: t(mail.send.key, "Send the reply"), run: refused === null && !busy ? () => setConfirming(true) : null } });
   // the button that took the focus is not to be disabled under its press: no `act`
   const keep = () => {
-    if (body.trim() !== "" && body !== draft.body)
+    if (body.trim() !== "" && body !== written)
       keepDraft(draft.id, body)
         .catch((e: unknown) => notifyFailure(e, t))
         .finally(onChanged);
   };
+  const n = files.length;
+  const lacking = n === 0 && draft.needs.length > 0;
   const send = () =>
     act(async () => {
-      await sendDraft(draft.id, body, await Promise.all(files.map(encoded)));
+      await sendDraft(draft.id, body, await Promise.all(files.map(encoded)), lacking);
       setFiles([]);
     });
   const dismiss = () =>
     act(async () => {
-      await dismissDraft(draft.id);
-      setFiles([]);
+      const again = () => dismissDraft(draft.id);
+      await again();
+      push({
+        label: t(mail.draft.dismissed, "{subject}: draft dismissed", { subject: subjectOf(detail.case, t) }),
+        undo: async () => void (await restoreDraft(draft.id).finally(onChanged)),
+        redo: async () => void (await again().finally(onChanged)),
+      });
     });
-  const n = files.length;
   return (
     <Box title={t(mail.draft, "Draft")} note={recipient !== null && t(mail.draft.route, "{gmail} → {to}", { gmail, to: recipient })}>
       <Textarea rows={Math.min(14, Math.max(4, body.split("\n").length + 1))} value={body} onChange={(e) => setBody(e.target.value)} onBlur={keep} aria-label={t(mail.draft.text, "The reply's text")} className="text-sm" />
@@ -184,7 +208,7 @@ function Editor({ draft, detail, gmail, onChanged }: Props & { draft: MailDraft 
             {t(mail.write.again, "Rewrite")}
           </Button>
         )}
-        <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => setDismissing(true)}>
+        <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => void dismiss()}>
           {t(mail.draft.dismiss, "Dismiss draft")}
         </Button>
       </div>
@@ -194,21 +218,18 @@ function Editor({ draft, detail, gmail, onChanged }: Props & { draft: MailDraft 
           open={confirming}
           onOpenChange={setConfirming}
           title={t(mail.send.confirm, "Send the reply to {to}?", { to: recipient })}
-          description={`${n === 0 ? t(mail.send.confirm.bare, "From {gmail}, with no files.", { gmail }) : t(mail.send.confirm.with, "From {gmail}, with {files}.", { gmail, files: files.map((f) => f.name).join(", ") })} ${t(mail.send.confirm.final, "It cannot be taken back.")}`}
-          confirmLabel={n === 0 ? t(mail.send, "Send") : t(mail.send.n, "Send · {n, plural, one {# file} other {# files}}", { n })}
+          description={[
+            n === 0 ? t(mail.send.confirm.bare, "From {gmail}, with no files.", { gmail }) : t(mail.send.confirm.with, "From {gmail}, with {files}.", { gmail, files: files.map((f) => f.name).join(", ") }),
+            lacking && t(mail.send.confirm.lacking, "Still asked for, unless the text answers it: {needs}.", { needs: draft.needs.join("; ") }),
+            t(mail.send.confirm.final, "It cannot be taken back."),
+          ]
+            .filter(Boolean)
+            .join(" ")}
+          confirmLabel={lacking ? t(mail.send.asIs, "Send as it is") : n === 0 ? t(mail.send, "Send") : t(mail.send.n, "Send · {n, plural, one {# file} other {# files}}", { n })}
           labels={{ cancel: t(mail.cancel, "Cancel") }}
           onConfirm={send}
         />
       )}
-      <ConfirmDialog
-        open={dismissing}
-        onOpenChange={setDismissing}
-        title={t(mail.draft.dismiss.confirm, "Dismiss this draft?")}
-        description={t(mail.draft.dismiss.body, "Its text is gone for good.")}
-        confirmLabel={t(mail.draft.dismiss, "Dismiss draft")}
-        labels={{ cancel: t(mail.cancel, "Cancel") }}
-        onConfirm={dismiss}
-      />
     </Box>
   );
 }
@@ -279,11 +300,12 @@ export function Held({ draft, detail, gmail, onChanged }: Props & { draft: MailD
   const button = useButtonSize();
   const now = useNow(1000);
   const { busy, act } = useAct(onChanged);
-  if (draft.send_at === null) throw new Error(`draft ${draft.id} is held until no moment`);
-  const left = Math.ceil((Date.parse(draft.send_at) - now.getTime()) / 1000);
-  const stop = () => act(() => keepDraft(draft.id, draft.body));
+  const { send_at: at, body } = draft;
+  if (at === null || body === null) throw new Error(`draft ${draft.id} is held until no moment, or does not open`);
+  const left = Math.ceil((Date.parse(at) - now.getTime()) / 1000);
+  const stop = () => act(() => keepDraft(draft.id, body));
   return (
-    <Box title={t(mail.held, "Goes by itself at {at}", { at: when(draft.send_at, locale, now) })} note={detail.recipient !== null && t(mail.draft.route, "{gmail} → {to}", { gmail, to: detail.recipient })}>
+    <Box title={t(mail.held, "Goes by itself at {at}", { at: when(at, locale, now) })} note={detail.recipient !== null && t(mail.draft.route, "{gmail} → {to}", { gmail, to: detail.recipient })}>
       <div className="flex flex-wrap items-center gap-3">
         <Button size={button("sm")} variant="destructive" disabled={busy} onClick={() => void stop()}>
           {t(mail.held.stop, "Stop, keep it for me")}
@@ -292,7 +314,7 @@ export function Held({ draft, detail, gmail, onChanged }: Props & { draft: MailD
           {left > 0 ? t(mail.held.left, "in {left}", { left: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}` }) : t(mail.held.due, "due")}
         </span>
       </div>
-      <Text>{draft.body}</Text>
+      <Text>{body}</Text>
     </Box>
   );
 }
@@ -313,7 +335,7 @@ function HandedOver({ draft, detail }: { draft: MailDraft; detail: MailCaseDetai
         : t(mail.sending, "Being sent to {to}", { to });
   return (
     <Box title={title} note={draft.error}>
-      <Text>{draft.body}</Text>
+      {draft.body !== null && <Text>{draft.body}</Text>}
     </Box>
   );
 }

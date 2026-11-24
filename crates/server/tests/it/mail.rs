@@ -19,7 +19,7 @@ use sa_panel::{
 	Panel,
 	gmbs::Existing,
 	import::Export,
-	inbox::{Account, Batch, Cursor, Mail, Mailbox},
+	inbox::{Account, Batch, Cursor, Folder, Mail, Mailbox},
 	seal::{DataKey, gmail_imap_aad},
 	testing::{Outbox, TestDb, operator, panel_sending, priced},
 	tokens::User,
@@ -85,11 +85,11 @@ fn reading(kind: &str) -> Value {
 struct Inbox(Mutex<Vec<Mail>>);
 
 impl Mailbox for Inbox {
-	async fn read(&self, _: Account<'_>, after: Option<Cursor>, limit: usize) -> eyre::Result<Batch> {
+	async fn read(&self, _: Account<'_>, folder: Folder, after: Option<Cursor>, limit: usize) -> eyre::Result<Batch> {
 		let mails = self.0.lock().unwrap();
 		Ok(Batch {
 			validity: 7,
-			mails: mails.iter().filter(|m| m.uid > after.map_or(0, |c| c.uid)).take(limit).cloned().collect(),
+			mails: mails.iter().filter(|m| folder == Folder::All && m.uid > after.map_or(0, |c| c.uid)).take(limit).cloned().collect(),
 		})
 	}
 }
@@ -233,6 +233,7 @@ impl World {
 				sent: false,
 				text: text.to_owned(),
 				whole: true,
+				spam: false,
 			});
 		}
 		self.p.follow_inbox(self.gmail, &self.inbox, Timestamp::now()).await.unwrap();
@@ -256,8 +257,8 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	asks["asks"] = json!(["a photo of the signage"]);
 	let mut w = World::new(
 		vec![
-			asks,
 			reading("video_rejected"),
+			asks,
 			json!({ "body": "The recorded video does not work for this profile: enable the live call.", "needs": ["a photo of the signage"], "nothing": null }),
 			json!({ "body": "La photo est jointe. Activez l'appel.", "needs": [], "nothing": null }),
 		],
@@ -350,7 +351,7 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	let draft = drafted["case"]["draft"]["id"].as_i64().unwrap();
 	let (status, edited) = w.call(Method::PUT, &format!("/mail/drafts/{draft}"), Some(json!({ "body": "La photo est jointe." }))).await;
 	assert_eq!((status, &edited["case"]["draft"]["body"]), (200, &json!("La photo est jointe.")));
-	let send = |base64: &str| json!({ "body": "La photo est jointe. Activez l'appel.", "files": [{ "name": "sign.jpg", "type": "image/jpeg", "base64": base64 }] });
+	let send = |base64: &str| json!({ "body": "La photo est jointe. Activez l'appel.", "files": [{ "name": "sign.jpg", "type": "image/jpeg", "base64": base64 }], "as_is": false });
 	let (status, _) = w.call(Method::POST, &format!("/mail/drafts/{draft}/send"), Some(send("not base64"))).await;
 	assert_eq!(status, 400);
 	let (status, sent) = w.call(Method::POST, &format!("/mail/drafts/{draft}/send"), Some(send("AQID"))).await;
@@ -373,8 +374,9 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 		(Method::PATCH, format!("/mail/messages/{}", detail["messages"][0]["id"]), Some(json!({ "kind": "closed" }))),
 		(Method::POST, format!("/mail/cases/{id}/draft"), Some(json!({ "instruction": null }))),
 		(Method::PUT, format!("/mail/drafts/{draft}"), Some(json!({ "body": "x" }))),
-		(Method::POST, format!("/mail/drafts/{draft}/send"), Some(json!({ "body": "x", "files": [] }))),
+		(Method::POST, format!("/mail/drafts/{draft}/send"), Some(json!({ "body": "x", "files": [], "as_is": false }))),
 		(Method::DELETE, format!("/mail/drafts/{draft}"), None),
+		(Method::POST, format!("/mail/drafts/{draft}/restore"), None),
 		(Method::PUT, "/mail/auto".to_owned(), Some(json!({ "gmail": w.gmail, "topic": "reviews", "on": true }))),
 		(Method::GET, format!("/gmbs/{}/mail", w.gmb), None),
 	] {
@@ -385,7 +387,7 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	assert_eq!(theirs["cases"], json!([]));
 
 	let (status, marked) = w.call(Method::PATCH, &format!("/mail/cases/{id}"), Some(json!({ "done": true }))).await;
-	assert_eq!((status, &marked["case"]["state"]), (200, &json!({ "is": "done", "by_hand": true })));
+	assert_eq!((status, &marked["case"]["state"]), (200, &json!({ "is": "done", "by": { "is": "hand" } })));
 	let (_, named) = w.call(Method::PATCH, &format!("/mail/cases/{id}"), Some(json!({ "gmb": w.gmb, "done": false }))).await;
 	assert_eq!(named["case"]["by_hand"], json!({ "gmb": true, "topic": false }));
 	let (status, corrected) = w
@@ -406,7 +408,7 @@ fn review(author: &str, captured: bool) -> GoneReview {
 	GoneReview {
 		review_id: author.to_lowercase(),
 		author: author.to_owned(),
-		author_url: None,
+		author_url: Some(format!("https://maps.example/{}", author.split(' ').next().unwrap())),
 		rating: Some(5),
 		text: Some("Fuite\nréparée".to_owned()),
 		published_raw: Some("2 weeks ago".to_owned()),
@@ -438,7 +440,10 @@ async fn missing_reviews_are_the_archives_for_the_writer_and_the_operator() {
 			reply("The reason for each is needed.", &[]),
 			of("reviews_no_data"),
 			reply("Reinstate the 2 reviews gone since 2026-11-20.", &[]),
+			of("reviews_no_data"),
+			reply("Reinstate them: Claire Morel.", &[]),
 			of("reviews_live_already"),
+			of("reinstatement_partial"),
 			of("reinstatement_done"),
 		],
 		true,
@@ -465,7 +470,7 @@ async fn missing_reviews_are_the_archives_for_the_writer_and_the_operator() {
 	assert!(context.contains("as our archive of it saw them (2):"), "{context}");
 	assert!(!context.contains("</email> The"), "an email ends where we end it: {context}");
 	assert!(
-		context.contains("- Claire Morel (5 stars, posted about 2026-11-04, first seen 2026-11-05, gone since 2026-11-20, a screenshot held): Fuite réparée"),
+		context.contains("- Claire Morel (5 stars, posted about 2026-11-04, first seen 2026-11-05, gone since 2026-11-20, a screenshot held, author's profile https://maps.example/Claire): Fuite réparée"),
 		"{context}"
 	);
 	assert!(context.contains("no screenshot, its reinstatement asked of Google on 2026-11-21"), "{context}");
@@ -478,7 +483,7 @@ async fn missing_reviews_are_the_archives_for_the_writer_and_the_operator() {
 	assert_eq!((&asked["gone"]["state"], &asked["gone"]["more"]), (&json!("read"), &json!(false)));
 	assert_eq!(asked["gone"]["reviews"][1]["author"], "Hugo Blanc");
 
-	*w.archive.lock().unwrap() = Some((0..GONE_MAX).map(|n| review(&format!("Client {n}"), true)).collect());
+	*w.archive.lock().unwrap() = Some((0..GONE_MAX).map(|n| review(&format!("Client {n}"), false)).collect());
 	w.arrives(7, SUPPORT, subject, "We cannot bring them back.").await;
 	w.worker.read_and_write().await.unwrap();
 	assert!(last(&w).contains("(at least 100):"), "a full page is no count");
@@ -500,15 +505,27 @@ async fn missing_reviews_are_the_archives_for_the_writer_and_the_operator() {
 		"it never goes by itself without them"
 	);
 
+	*w.archive.lock().unwrap() = Some(vec![review("Claire Morel", true), review("Hugo Blanc", false)]);
+	w.arrives(6, SUPPORT, subject, "Our records still show none.").await;
+	w.worker.read_and_write().await.unwrap();
+	assert!(last(&w).contains("author's profile https://maps.example/Claire"), "{}", last(&w));
+	assert_eq!(
+		detail(&mut w).await["case"]["state"]["why"],
+		json!({ "code": "needs", "needs": ["the screenshots the archive holds, of the reviews by Claire Morel"] }),
+		"the list is the reply, its screenshots its operator's to attach"
+	);
+
+	*w.archive.lock().unwrap() = Some(vec![]);
+	let done = json!({ "is": "done", "by": { "is": "here" } });
 	w.arrives(5, SUPPORT, subject, "They are live on the profile.").await;
 	w.worker.read_and_write().await.unwrap();
-	assert_eq!(
-		detail(&mut w).await["case"]["state"],
-		json!({ "is": "needs_you", "why": { "code": "kind", "kind": "reviews_live_already" } })
-	);
-	w.arrives(4, SUPPORT, subject, "We reinstated them.").await;
+	assert_eq!(detail(&mut w).await["case"]["state"], done, "nothing is missing: no reply is asked of the model");
+	w.arrives(4, SUPPORT, subject, "We brought back those we can.").await;
 	w.worker.read_and_write().await.unwrap();
-	assert_eq!(detail(&mut w).await["case"]["state"], json!({ "is": "done", "by_hand": false }));
+	assert_eq!(detail(&mut w).await["case"]["state"]["is"], "waiting", "what came back is seen within its term");
+	w.arrives(3, SUPPORT, subject, "We reinstated them.").await;
+	w.worker.read_and_write().await.unwrap();
+	assert_eq!(detail(&mut w).await["case"]["state"], json!({ "is": "done", "by": { "is": "here" } }));
 	assert!(w.outbox.sent.lock().unwrap().is_empty());
 }
 
@@ -530,6 +547,16 @@ async fn a_reply_is_not_written_where_none_goes_nor_while_the_archive_fails() {
 	let notice = w.cases().await.remove(0);
 	let (status, refused) = w.call(Method::POST, &format!("/mail/cases/{}/draft", notice["id"]), Some(json!({ "instruction": null }))).await;
 	assert_eq!((status, &refused["error"]), (400, &json!("nothing in it takes a reply")));
+	let draft = format!("/mail/cases/{}/draft", case["id"]);
+	let (status, own) = w.call(Method::POST, &draft, Some(json!({ "body": "" }))).await;
+	assert_eq!((status, &own["case"]["state"]["is"], &own["case"]["draft"]["body"]), (200, &json!("reply_ready"), &json!("")), "{own}");
+	let (status, _) = w.call(Method::POST, &draft, Some(json!({ "body": "Ours.", "instruction": "shorter" }))).await;
+	assert_eq!(status, 400);
+	let id = own["case"]["draft"]["id"].as_i64().unwrap();
+	let (status, _) = w.call(Method::DELETE, &format!("/mail/drafts/{id}"), None).await;
+	assert_eq!(status, 204);
+	let (status, back) = w.call(Method::POST, &format!("/mail/drafts/{id}/restore"), None).await;
+	assert_eq!((status, &back["case"]["state"]["is"]), (200, &json!("reply_ready")), "{back}");
 	assert_eq!(w.asked.lock().unwrap().len(), 2, "nothing but the two readings");
 }
 
@@ -565,13 +592,13 @@ async fn an_answer_out_of_bounds_is_its_mails_alone() {
 	}
 	w.worker.read_and_write().await.unwrap();
 	let codes: Vec<Value> = w.cases().await.iter().map(|c| c["state"]["why"]["code"].clone()).collect();
-	assert_eq!(codes, ["unread", "unread", "kind"], "the next is read all the same, and nothing is stuck");
+	assert_eq!(codes, ["kind", "unread", "unread"], "the next is read all the same, and nothing is stuck");
 }
 
 #[tokio::test]
 async fn an_agent_sends_only_what_its_person_agreed_to() {
 	for (operation, body) in [
-		("send_mail_draft", json!({ "body": "x", "files": [] })),
+		("send_mail_draft", json!({ "body": "x", "files": [], "as_is": false })),
 		("edit_mail_draft", json!({ "body": "x" })),
 		("edit_mail_case", json!({ "done": false })),
 		("correct_mail", json!({ "kind": "self_serve" })),
