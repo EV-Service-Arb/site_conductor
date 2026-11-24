@@ -6,6 +6,7 @@ use jiff::{SignedDuration, Timestamp};
 use sa_core::{
 	gbp::Country,
 	mail::{Kind, Method, Outcome, Reading, State, Topic, Why, attempt},
+	notify::Locale,
 	prices::Spender,
 };
 use sa_panel::{
@@ -497,6 +498,49 @@ async fn a_draft_left_sending_is_never_tried_again_and_one_refused_may_be() {
 	let again = w.drafts(&w.only("2026-10-01T10:00:00Z").await, &[], true, "2026-10-01T10:01:00Z").await;
 	assert_ne!(again, draft, "a rewrite is another draft");
 	assert_eq!(w.only("2026-10-01T10:02:00Z").await.state, State::ReplyReady);
+}
+
+#[tokio::test]
+async fn a_turn_to_a_person_is_told_once_to_the_owners_of_the_gbp_else_of_the_gmails() {
+	let w = World::new().await;
+	let now = t("2026-10-05T10:00:00Z");
+	let pool = w.db.pool().await;
+	w.p.alerts_access_seen(w.owner, &sa_panel::testing::operator(), "owner", now).await.unwrap();
+	sqlx::query("INSERT INTO alert_destinations (id, user_id, method, created_at) VALUES (1, $1, 'telegram', 0)")
+		.bind(w.owner)
+		.execute(&pool)
+		.await
+		.unwrap();
+	sqlx::query("INSERT INTO telegram_destinations (destination_id, kind, chat_id) VALUES (1, 'private', 42)")
+		.execute(&pool)
+		.await
+		.unwrap();
+	let tell = async |at: &str| w.p.tell_mail(Locale::En, &"https://sa.evinvest.ltd/".parse().unwrap(), t(at)).await.unwrap();
+	w.arrives(notice("2026-09-20T09:00:00Z", 7, REJECTED, &rejected(" for Plomberie Dupont - Lyon", "15"))).await;
+	w.reads("2026-10-05T10:00:00Z", Kind::VideoRejected, |_| {}).await;
+	assert_eq!(tell("2026-10-05T10:00:00Z").await, 0, "old news is not told");
+	w.arrives(support("2026-10-05T09:00:00Z", 1, "[1-1234000056789] Your Request", "Follow the prompts.")).await;
+	assert_eq!(tell("2026-10-05T10:00:00Z").await, 0, "not read yet");
+	w.reads("2026-10-05T10:00:00Z", Kind::SelfServe, |_| {}).await;
+	assert_eq!(tell("2026-10-05T10:00:00Z").await, 0, "a reply is being written");
+	let case = w.cases("2026-10-05T10:00:00Z").await.remove(1);
+	assert_eq!(case.gmb, None, "it names none: the gmail's owners are told");
+	let written = || Written::Reply {
+		body: "x".into(),
+		needs: vec![],
+	};
+	w.p.draft_mail(w.owner, case.id, case.last().said.id, written(), false, now).await.unwrap().unwrap();
+	assert_eq!(tell("2026-10-05T10:01:00Z").await, 1);
+	assert_eq!(tell("2026-10-05T10:02:00Z").await, 0, "once");
+	w.p.draft_mail(w.owner, case.id, case.last().said.id, written(), true, now).await.unwrap().unwrap();
+	assert_eq!(tell("2026-10-05T10:03:00Z").await, 0, "nor again for a rewrite");
+	w.arrives(notice("2026-10-05T11:00:00Z", 8, "your profile has been suspended", "Plomberie Dupont - Lyon, Est is suspended")).await;
+	w.reads("2026-10-05T11:01:00Z", Kind::Suspended, |_| {}).await;
+	assert_eq!(tell("2026-10-05T11:02:00Z").await, 0, "its owner's access is an hour old");
+	w.p.alerts_access_seen(w.owner, &sa_panel::testing::operator(), "owner", t("2026-10-05T11:02:00Z")).await.unwrap();
+	w.arrives(notice("2026-10-05T11:30:00Z", 9, "Is it still open?", "Plomberie Dupont - Lyon, Est")).await;
+	w.reads("2026-10-05T11:31:00Z", Kind::StillActive, |r| r.deadline = Some(t("2026-10-09T00:00:00Z"))).await;
+	assert_eq!(tell("2026-10-05T11:32:00Z").await, 1);
 }
 
 #[tokio::test]

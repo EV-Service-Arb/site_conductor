@@ -20,6 +20,7 @@ mod ingest;
 mod kit;
 mod library;
 mod live;
+mod mail;
 mod mcp;
 mod meters;
 mod operations;
