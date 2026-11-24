@@ -202,7 +202,8 @@ POST /auth/logout    CSRF; every session of the user is closed
   (id, email and name from `users`) holding the actor's permissions `lent`: all but those
   `sa_auth` derives `bound` (`sa:own:*`, held through `sa:everyone` only). `/me`'s `acting` and
   the assertion's `actor` name the actor; every service, Grafana viewer and live socket follows
-  the subject, who pays for what is done in their account. `GetMe` stays the actor's; one without
+  the subject, who pays for what is done in their account; a note on a GBP alone is the actor's own
+  (Tokens and GBPs). `GetMe` stays the actor's; one without
   `act_as` ends acting.
 - **`return_to`** is a path on this origin: it starts with `/`, the next character is not `/`,
   it has no `\`, only visible ASCII, ≤ 512 bytes. Anything else is the 400 sign-in page.
@@ -288,7 +289,9 @@ second block below to it.
   browser), with their switches, each row, pin and card with what needs the operator, from the
   services' tags on the GMBs (review_archive `/me/gmbs`, sites `/gmbs`). `/` is the map of them:
   one Google map per page session, kept while the page is away (each built is a billed load), its
-  viewport splitting the outline's list; placing a GMB's point is a mode of it.
+  viewport splitting the outline's list; placing a GMB's point is a mode of it. A right click on it,
+  out of any mode, starts a draft there (the overlay's `mark`): a name and a note, its trade the shown
+  study's, its country and its spot's label the shown area's, if the point is in it.
 - **The pages.** `/sites` mounts `<mfe-sites-panel api="/api/sites" base="/sites" csrf-cookie>`
   from `/mfe/sites/`; `/reviews/archive` mounts
   `<mfe-review-archive-dashboard grafana="/grafana/" ui>` from `/mfe/review_archive/`, `ui` its
@@ -594,6 +597,8 @@ PUT    /gmbs/{id}/state
 POST   /gmbs/{id}/sync
 GET    /gmbs/{id}/photos/{photo}
 GET    /gmbs/{id}/log
+GET    /gmbs/{id}/note
+PUT    /gmbs/{id}/note
 DELETE /gmbs/{id}
 PUT    /gmbs/{enabled,trade,brand}
 PUT    /gmbs/{id}/spots
@@ -1096,7 +1101,7 @@ priced in money, so an account overshoots by its hours behind.
   `never_purge` (an admin's say; unsaid, on under dev sign-in); `never_purge` turned off counts
   the kept days from then, so nothing goes the moment it may. The owner may purge one at once: a
   gmail with every GBP of it in the trash. Purged is gone for good: its gmail's connections
-  deleted, its row kept.
+  and the notes on it deleted, its row kept.
 
 ```text
 follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=500 (Conductor)
@@ -1145,6 +1150,10 @@ push (a change, a page, 60 s)
   first line it holds, else the gmail's. Its thread opens in a new tab of the gmail's own running
   browser (`POST /gmails/{id}/browser/thread`); the conductor never reads Gmail on the web. review_archive's events of the GBP (reviews appeared, gone,
   back, appeals, failed scans) are its own (`/me/gmbs/{gmb}/events`): the page merges both by time.
+- **A note on a GBP** is a person's own (`gmb_notes`, one a person and GBP, plain text, at most 4000
+  characters), in any state: only whoever wrote it reads it, `GET /gmbs/{id}/note` its one read, no
+  log its record. Acting as another, the actor's own, never the subject's. It is deleted with its
+  GBP's purge, and with its writer.
 - **The review kit** is below.
 - **A GBP's country** (FR, US, CA, GB: `sa_core::gbp::Country`, the one country → review
   language table) follows the point's rule: Google's (its address), else set by hand

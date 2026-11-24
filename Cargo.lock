@@ -2395,7 +2395,7 @@ dependencies = [
 [[package]]
 name = "gmaps_optimal_placement"
 version = "0.1.0"
-source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#e43ef56f140fd5c745666637bcc29ac9aee7ea5c"
+source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#9371c31374f064fa4d3cdf7e1c68b9644326c37c"
 dependencies = [
  "eyre",
  "gmaps_optimal_placement_core",
@@ -2410,7 +2410,7 @@ dependencies = [
 [[package]]
 name = "gmaps_optimal_placement_core"
 version = "0.1.0"
-source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#e43ef56f140fd5c745666637bcc29ac9aee7ea5c"
+source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#9371c31374f064fa4d3cdf7e1c68b9644326c37c"
 dependencies = [
  "evalexpr",
  "eyre",
@@ -2428,7 +2428,7 @@ dependencies = [
 [[package]]
 name = "gmaps_optimal_placement_overlay"
 version = "0.1.0"
-source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#e43ef56f140fd5c745666637bcc29ac9aee7ea5c"
+source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#9371c31374f064fa4d3cdf7e1c68b9644326c37c"
 dependencies = [
  "gmaps_optimal_placement_core",
  "js-sys",
@@ -2441,7 +2441,7 @@ dependencies = [
 [[package]]
 name = "gmaps_optimal_placement_sources"
 version = "0.1.0"
-source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#e43ef56f140fd5c745666637bcc29ac9aee7ea5c"
+source = "git+https://github.com/EV-Service-Arb/gmaps_optimal_placement?branch=main#9371c31374f064fa4d3cdf7e1c68b9644326c37c"
 dependencies = [
  "csv",
  "eyre",

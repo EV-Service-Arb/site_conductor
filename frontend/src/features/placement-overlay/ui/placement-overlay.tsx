@@ -6,7 +6,7 @@ import { useT, placement as placementKeys } from "@/shared/i18n";
 
 import type { Overlay } from "@/shared/placement_overlay/placement_overlay";
 
-import { type Legend, type Payload, type Query, attach, landed, useAreaPayload, useMapView, usePlacement, usePublishedPayload, useStudied } from "../model/placement";
+import { type Legend, type Payload, type Query, attach, landed, tiersShown, useAreaPayload, useMapView, usePlacement, usePublishedPayload, useStudied } from "../model/placement";
 
 /** gmaps_optimal_placement's drawing on `map`, as the panel's URL state says: the picked category's study over the picked area; and its legend. */
 export function PlacementOverlay({ map }: { map: google.maps.Map }) {
@@ -35,11 +35,11 @@ export function PlacementOverlay({ map }: { map: google.maps.Map }) {
     live?.heat(heat);
   }, [live, heat, data]);
   const traded = data?.trade != null;
-  const tuning = JSON.stringify({ lambda_m: view.pressure, tiers: view.tiers });
+  const tuning = JSON.stringify({ tiers: tiersShown(view, data) });
   useEffect(() => {
     if (traded) live?.tune(JSON.parse(tuning) as Parameters<Overlay["tune"]>[0]);
   }, [live, traded, tuning, data]);
-  const pressure = view.pressure !== null && traded;
+  const pressure = view.pressure && traded;
   useEffect(() => {
     live?.pressure(pressure);
   }, [live, pressure]);

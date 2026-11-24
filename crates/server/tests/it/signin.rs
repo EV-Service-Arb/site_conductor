@@ -968,6 +968,8 @@ async fn no_permission_opens_no_section() {
 			"/gmbs/{id}/sync",
 			"/gmbs/{id}/photos/{photo}",
 			"/gmbs/{id}/log",
+			"/gmbs/{id}/note",
+			"/gmbs/{id}/note",
 			"/gmails/{id}/connections",
 			"/gmails/{id}/imap",
 			"/gmails/{id}/maps_key",

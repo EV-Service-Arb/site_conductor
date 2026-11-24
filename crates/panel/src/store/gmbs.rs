@@ -558,6 +558,29 @@ pub async fn set_fields(conn: &mut SqliteConnection, id: i64, e: &crate::gmbs::E
 	Ok(())
 }
 
+/// `user`'s own note on GBP `gmb`.
+pub async fn note(conn: &mut SqliteConnection, user: Uuid, gmb: i64) -> eyre::Result<Option<String>> {
+	sqlx::query_scalar("SELECT note FROM gmb_notes WHERE user_id = $1 AND gmb_id = $2")
+		.bind(user)
+		.bind(gmb)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("reading a note on a GBP")
+}
+
+/// `user`'s own note on GBP `gmb`; `None` takes it away.
+pub async fn set_note(conn: &mut SqliteConnection, user: Uuid, gmb: i64, note: Option<&str>) -> eyre::Result<()> {
+	let write = match note {
+		None => sqlx::query("DELETE FROM gmb_notes WHERE user_id = $1 AND gmb_id = $2").bind(user).bind(gmb),
+		Some(note) => sqlx::query("INSERT INTO gmb_notes (user_id, gmb_id, note) VALUES ($1, $2, $3) ON CONFLICT (user_id, gmb_id) DO UPDATE SET note = excluded.note")
+			.bind(user)
+			.bind(gmb)
+			.bind(note),
+	};
+	write.execute(&mut *conn).await.wrap_err("writing a note on a GBP")?;
+	Ok(())
+}
+
 /// GBP `id` in `to`; the schema checks the move against [`State::next`] again. Out of a draft,
 /// its first spot stays its point, the others go.
 pub async fn set_state(conn: &mut SqliteConnection, id: i64, to: State) -> eyre::Result<()> {

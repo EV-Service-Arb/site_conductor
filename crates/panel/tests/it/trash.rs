@@ -71,6 +71,10 @@ async fn connections(db: &TestDb, gmail: i64) -> (i64, i64) {
 	(count("gmail_imap").fetch_one(&pool).await.unwrap(), count("gmail_maps_keys").fetch_one(&pool).await.unwrap())
 }
 
+async fn notes(db: &TestDb) -> i64 {
+	sqlx::query_scalar("SELECT COUNT(*) FROM gmb_notes").fetch_one(&db.pool().await).await.unwrap()
+}
+
 async fn connect(db: &TestDb, gmail: i64) {
 	let pool = db.pool().await;
 	let fp = vec![0u8; 32];
@@ -159,15 +163,17 @@ async fn the_purge_ends_a_restore_once_the_kept_days_pass() {
 	let gmail = p.add_gmail(owner, "a@gmail.com", now()).await.unwrap().unwrap();
 	let one = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, ONE, "One"), now()).await.unwrap().unwrap();
 	connect(&db, gmail.id).await;
+	p.set_gmb_note(owner, owner, one.id, Some("the corner shop")).await.unwrap().unwrap();
 	p.remove_gmail(owner, gmail.id, now()).await.unwrap().unwrap();
 	p.set_trash_settings(owner, 7, None, now()).await.unwrap().unwrap();
 
 	p.purge(now() + days(6), false).await.unwrap();
 	assert_eq!(listed(&p.trash(owner, false).await.unwrap()), (vec![(gmail.id, 1)], vec![]));
+	assert_eq!(notes(&db).await, 1, "the trash keeps its note");
 
 	p.purge(now() + days(7), false).await.unwrap();
 	assert_eq!(listed(&p.trash(owner, false).await.unwrap()), (vec![], vec![]), "gone for good");
-	assert_eq!(connections(&db, gmail.id).await, (0, 0));
+	assert_eq!((connections(&db, gmail.id).await, notes(&db).await), ((0, 0), 0));
 	assert!(matches!(p.restore_gmail(owner, gmail.id).await.unwrap(), Err(Refused::NotFound)));
 	assert!(matches!(p.restore_gmb(owner, one.id).await.unwrap(), Err(Refused::NotFound)));
 	let snapshot = p.snapshot(now()).await.unwrap().unwrap();
@@ -215,6 +221,9 @@ async fn an_erase_is_gone_for_good_at_once() {
 	let loose = p.add_gmb(Some(Spender::new(owner)), existing(trade, gmail.id, LOOSE, "Loose"), now()).await.unwrap().unwrap();
 	let two = p.add_gmb(Some(Spender::new(owner)), existing(trade, other.id, TWO, "Two"), now()).await.unwrap().unwrap();
 	connect(&db, gmail.id).await;
+	for b in [one.id, loose.id, two.id] {
+		p.set_gmb_note(owner, owner, b, Some("the corner shop")).await.unwrap().unwrap();
+	}
 	p.set_trash_settings(owner, 1, Some(true), now()).await.unwrap().unwrap();
 	p.remove_gmb(owner, loose.id, now()).await.unwrap().unwrap();
 	p.remove_gmb(owner, two.id, now()).await.unwrap().unwrap();
@@ -224,10 +233,11 @@ async fn an_erase_is_gone_for_good_at_once() {
 	p.erase_gmb(owner, two.id, later).await.unwrap().unwrap();
 	assert_eq!(listed(&p.trash(owner, false).await.unwrap()), (vec![(gmail.id, 1)], vec![loose.id]));
 	assert!(matches!(p.restore_gmb(owner, two.id).await.unwrap(), Err(Refused::NotFound)));
+	assert_eq!(notes(&db).await, 2, "its note goes with it");
 
 	p.erase_gmail(owner, gmail.id, later).await.unwrap().unwrap();
 	assert_eq!(listed(&p.trash(owner, false).await.unwrap()), (vec![], vec![]), "a GBP whose gmail cannot come back goes with it");
-	assert_eq!(connections(&db, gmail.id).await, (0, 0));
+	assert_eq!((connections(&db, gmail.id).await, notes(&db).await), ((0, 0), 0));
 	assert!(matches!(p.restore_gmb(owner, one.id).await.unwrap(), Err(Refused::NotFound)));
 	assert!(matches!(p.erase_gmail(owner, gmail.id, later).await.unwrap(), Err(Refused::NotFound)));
 	assert!(matches!(p.erase_gmb(owner, one.id, later).await.unwrap(), Err(Refused::NotFound)));

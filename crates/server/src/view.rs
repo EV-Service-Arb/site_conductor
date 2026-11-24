@@ -2,8 +2,6 @@
 //! nested under their pages (`ev_lib::views`). The front end's routes, query keys and nav letters,
 //! the assistant's `open`, and which path is the page (`web.rs`) all read it.
 
-use std::collections::BTreeMap;
-
 use ev_lib::{api::JsonSchema, views::Views};
 use sa_auth::{Members, Own, Sources, Tokens};
 use sa_core::gbp::Country;
@@ -59,14 +57,14 @@ pub enum View {
 		heat: Option<String>,
 		/// The area a study is framed by; empty, one being drawn.
 		area: Option<String>,
-		/// The pressure field, at this radius in metres.
-		pressure: Option<f64>,
+		/// The pressure field drawn.
+		pressure: bool,
 		/// The competitors drawn.
 		competitors: bool,
 		/// Imputed demand left out.
 		hide_imputed: bool,
-		/// Tiers whose weight or visibility was moved off the study's own.
-		tiers: Option<BTreeMap<String, Tier>>,
+		/// The tiers of competitors shown, by name; without it, every one.
+		tiers_shown: Option<Vec<String>>,
 		/// The heat's opacity, 0 to 1.
 		opacity: Option<f64>,
 	},
@@ -209,12 +207,6 @@ pub struct Add {
 	gmail: Option<i64>,
 	/// A gcid.
 	trade: Option<String>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema, PartialEq, Serialize)]
-pub struct Tier {
-	weight: f64,
-	show: bool,
 }
 
 /// What a GBP needs of the operator, most pressing first.

@@ -345,7 +345,7 @@ async fn blocking<T: Send + 'static>(
 	let dir = p.dir.clone();
 	let done = tokio::task::spawn_blocking(move || {
 		let work = Work::at(dir, Box::new(held)).since(since.map(SystemTime::from));
-		then(&gmaps_optimal_placement::load(&def, Vec::new())?, &work)
+		then(&gmaps_optimal_placement::load(&def)?, &work)
 	})
 	.await
 	.unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()));

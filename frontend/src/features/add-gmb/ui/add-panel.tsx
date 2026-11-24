@@ -9,10 +9,8 @@ import {
   TradePicker,
   gmbs,
   closeWindow,
-  openWindow,
   setOnMap,
   trades,
-  useGmails,
 } from "@/entities/gmb";
 import { api, ok } from "@/shared/api";
 import { type Country, type Place, type Spot, type State, countryValues } from "@/shared/api/schema";
@@ -21,6 +19,7 @@ import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
 import { add as addKeys } from "../model/i18n";
+import { useLanded } from "../model/use-landed";
 import { GmailSelect } from "./gmail-select";
 import { PlaceSearch } from "./place-search";
 import { SpotsEditor, spotKey } from "./spots-editor";
@@ -45,7 +44,7 @@ export function AddPanel({ at, page }: { at: Adding; page: boolean }) {
   const button = useButtonSize();
   const size = useControlSize();
   const id = useId();
-  const gmails = useGmails();
+  const landed = useLanded();
   const [state, setState] = useState<State>("draft");
   const [trade, setTrade] = useState<string | null>(scopedTrade ?? null);
   const [name, setName] = useState("");
@@ -88,10 +87,8 @@ export function AddPanel({ at, page }: { at: Adding; page: boolean }) {
               ...(draft ? { spots } : first !== undefined && { location: { lat: first.lat, lng: first.lng } }),
             },
           }));
-      gmails.reload();
       closeWindow({ kind: "add", at });
-      if (added.location === null) setOnMap({ placing: added.id });
-      else openWindow({ kind: "gbp", gmb: added.id, tab: added.tabs[0]!.tab });
+      landed(added);
     } catch (e) {
       notifyFailure(e, t);
     } finally {
