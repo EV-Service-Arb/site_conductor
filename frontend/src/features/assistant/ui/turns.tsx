@@ -9,7 +9,7 @@ import type { Action, Cost } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 
 import { type AssistantTurn, type UserTurn } from "@/entities/assistant";
-import { ConnectClaudeDialog } from "@/features/connect-claude";
+import { ConnectModelDialog } from "@/features/connect-model";
 import { useMe } from "@/entities/session";
 import { api } from "@/shared/api";
 
@@ -176,6 +176,7 @@ export function AssistantTurnView({
       <Work turn={turn} />
       {turn.text !== "" && <RichText text={turn.text} sources={turn.sources} writing={turn.state === "writing"} />}
       {turn.state === "stopped" && <p className="text-body-s text-ink-soft italic">{t(assistant.stopped, "Stopped")}</p>}
+      {turn.connect && <Connect offer={null} />}
       {turn.actions.length > 0 && (
         <div data-enter="stagger" className="flex flex-col gap-1.5">
           {turn.actions.map((a, i) => (
@@ -204,7 +205,7 @@ export function AssistantTurnView({
                 {f === "up" ? <ThumbsUp className={cn(turn.feedback === f && "fill-current text-ink")} /> : <ThumbsDown className={cn(turn.feedback === f && "fill-current text-ink")} />}
               </IconButton>
             ))}
-          {turn.cost !== null && <CostChip cost={turn.cost} />}
+          {turn.cost !== null && turn.cost.tokens.output > 0 && <CostChip cost={turn.cost} />}
           <span className="ml-1.5 self-center text-caption text-ink-faint opacity-0 transition-opacity group-hover/turn:opacity-100">
             <When at={turn.ended ?? turn.at} />
           </span>
@@ -214,44 +215,58 @@ export function AssistantTurnView({
   );
 }
 
-/** What an answer cost, and on whose Claude: on the panel's, the hover offers the reader's own. */
+/** What an answer cost, and on whose model: on the panel's, the hover offers the reader's own. */
 function CostChip({ cost }: { cost: Cost }) {
   const t = useT();
   const locale = useLocale();
-  const [connecting, setConnecting] = useState(false);
   const n = new Intl.NumberFormat(locale, { notation: "compact" });
-  const used = { input: n.format(cost.tokens.input + cost.tokens.cache_write + cost.tokens.cache_read), output: n.format(cost.tokens.output) };
+  const usd = new Intl.NumberFormat(locale, { style: "currency", currency: "USD", maximumFractionDigits: 3 });
+  // what came before the model was told ran on Claude
+  const used = {
+    input: n.format(cost.tokens.input + cost.tokens.cache_write + cost.tokens.cache_read),
+    output: n.format(cost.tokens.output),
+    model: cost.model ?? "Claude",
+  };
   const ours = cost.bill === "ours";
-  const connectable = api.mayCall("post", "/me/claude/connect", useMe().permissions);
+  const listed = cost.usd_micros === null ? t(assistant.cost.unknown, "not known") : usd.format(cost.usd_micros / 1_000_000);
+  return (
+    <HoverCard>
+      <HoverCardTrigger asChild>
+        <button type="button" className="ml-1.5 self-center rounded-chip px-1.5 py-0.5 text-caption text-ink-soft outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
+          {ours ? t(assistant.cost.charged, "{n} tokens", { n: cost.charged }) : t(assistant.cost.theirs, "your {model}", used)}
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent align="start" className="flex w-72 flex-col gap-2.5 text-body-s">
+        {ours ? (
+          <>
+            <p className="text-ink-mid">
+              {t(assistant.cost.ours, "Ran on the panel's {model}: {input} in, {output} out model tokens, {n} of your tokens.", { ...used, n: cost.charged })}
+            </p>
+            <Connect offer={t(assistant.cost.free, "Connect your own model and it costs nothing here.")} />
+          </>
+        ) : (
+          <>
+            <p className="text-ink-mid">{t(assistant.cost.onTheirs, "Ran on your {model}: {input} in, {output} out model tokens, nothing charged here.", used)}</p>
+            <p className="text-ink-soft">{t(assistant.cost.listed, "Its provider lists them at: {usd}. A subscription pays nothing per answer.", { usd: listed })}</p>
+          </>
+        )}
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+/** What connects the reader's own model, if they may. */
+function Connect({ offer }: { offer: string | null }) {
+  const t = useT();
+  const [connecting, setConnecting] = useState(false);
+  if (!api.mayCall("post", "/me/claude/connect", useMe().permissions)) return null;
   return (
     <>
-      <HoverCard>
-        <HoverCardTrigger asChild>
-          <button type="button" className="ml-1.5 self-center rounded-chip px-1.5 py-0.5 text-caption text-ink-soft outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring">
-            {ours ? t(assistant.cost.charged, "{n} tokens", { n: cost.charged }) : t(assistant.cost.theirs, "your Claude")}
-          </button>
-        </HoverCardTrigger>
-        <HoverCardContent align="start" className="flex w-72 flex-col gap-2.5 text-body-s">
-          {ours ? (
-            <>
-              <p className="text-ink-mid">
-                {t(assistant.cost.ours, "Ran on the panel's Claude: {input} in, {output} out model tokens, {n} of your tokens.", { ...used, n: cost.charged })}
-              </p>
-              {connectable && (
-                <>
-                  <p className="text-ink-mid">{t(assistant.cost.free, "Connect your own Claude and it costs nothing here.")}</p>
-                  <Button size="sm" className="self-start" onClick={() => setConnecting(true)}>
-                    {t(assistant.cost.connect, "Connect your Claude")}
-                  </Button>
-                </>
-              )}
-            </>
-          ) : (
-            <p className="text-ink-mid">{t(assistant.cost.onTheirs, "Ran on your Claude: {input} in, {output} out model tokens, nothing charged here.", used)}</p>
-          )}
-        </HoverCardContent>
-      </HoverCard>
-      <ConnectClaudeDialog open={connecting} onOpenChange={setConnecting} />
+      {offer !== null && <p className="text-ink-mid">{offer}</p>}
+      <Button size="sm" className="self-start" onClick={() => setConnecting(true)}>
+        {t(assistant.cost.connect, "Connect your own model")}
+      </Button>
+      <ConnectModelDialog open={connecting} onOpenChange={setConnecting} />
     </>
   );
 }

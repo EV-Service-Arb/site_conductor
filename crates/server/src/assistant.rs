@@ -143,21 +143,29 @@ pub enum Turn {
 		feedback: Option<Feedback>,
 		/// What it cost, as it grows; `null` on answers from before it was told.
 		cost: Option<Cost>,
+		/// It stopped for what connecting a model of one's own, or again, helps.
+		#[serde(default)]
+		connect: bool,
 	},
 }
 
-/// What an answer cost: the model's tokens, on whose Claude, and the tokens it charged its asker.
+/// What an answer cost: the model's tokens, on whose account, and the tokens it charged its asker.
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Cost {
-	/// `ours`: the panel's Claude, charged; `theirs`: the asker's own, free here.
+	/// `ours`: the panel's, charged; `theirs`: the asker's own, free here.
 	pub bill: sa_core::usage::Bill,
+	/// The model that answered; `null`: none yet, or an answer from before it was told.
+	pub model: Option<String>,
 	pub tokens: Used,
+	/// What the tokens list for at the provider, in millionths of a dollar: not what is charged here. `null`: not known.
+	pub usd_micros: Option<i64>,
+	/// Of the asker's tokens.
 	pub charged: i64,
 }
 
-/// The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]).
-#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+/// The model's tokens, by how its provider bills them ([`sa_core::prices::ModelTokens`]).
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 #[schemars(rename = "ModelUsed")]
 pub struct Used {
@@ -168,16 +176,11 @@ pub struct Used {
 }
 
 impl Used {
-	pub(crate) fn add(&mut self, used: &[(sa_core::prices::ModelTokens, i64)]) {
-		use sa_core::prices::ModelTokens as T;
-		for &(tokens, n) in used {
-			*match tokens {
-				T::Input => &mut self.input,
-				T::CacheWrite => &mut self.cache_write,
-				T::CacheRead => &mut self.cache_read,
-				T::Output => &mut self.output,
-			} += n;
-		}
+	pub(crate) fn add(&mut self, [input, cache_write, cache_read, output]: [i64; 4]) {
+		self.input += input;
+		self.cache_write += cache_write;
+		self.cache_read += cache_read;
+		self.output += output;
 	}
 }
 
@@ -264,7 +267,7 @@ pub enum Target {
 	/// A view, by its URL on this origin.
 	Href(String),
 	/// An operation of `/api/v1/openapi.json`, by its id, with its arguments.
-	Call(sa_sandbox::Call),
+	Call(Box<sa_sandbox::Call>),
 	/// A binding of the page's keymap, by its id.
 	Binding(String),
 }

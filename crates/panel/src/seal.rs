@@ -187,6 +187,11 @@ pub fn user_claude_aad(user: uuid::Uuid) -> Vec<u8> {
 	[b"sa-panel/user-claude/v1/".as_slice(), user.as_bytes()].concat()
 }
 
+/// Associated data of a person's own OpenAI key.
+pub fn user_openai_aad(user: uuid::Uuid) -> Vec<u8> {
+	[b"sa-panel/user-openai/v1/".as_slice(), user.as_bytes()].concat()
+}
+
 /// Associated data of a gmail's browser's proxy.
 pub fn gmail_browser_aad(gmail_id: i64) -> Vec<u8> {
 	[b"sa-panel/gmail-browser/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()

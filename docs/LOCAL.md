@@ -245,7 +245,9 @@ studied.
 
 It answers on the login this device's running claudes follow (`ask_llm dev claude-account running`), or
 the shell's `CLAUDE_CODE_OAUTH_TOKEN`; under `--no-peers` only on the latter. The login's token lives hours
-and is read as the conductor starts: refused, restart the stack. Google's mail is read on it too.
+and is read as the conductor starts: refused, restart the stack. Google's mail is read on it too. `PANEL_OPENAI_KEY`
+in the shell is asked when it does not answer (real money); `ANTHROPIC_BASE_URL` and `PANEL_OPENAI_BASE_URL` point
+both at a stand-in.
 
 ## Browsers
 

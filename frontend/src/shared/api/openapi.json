@@ -2467,7 +2467,7 @@
       },
       "Cost": {
         "additionalProperties": false,
-        "description": "What an answer cost: the model's tokens, on whose Claude, and the tokens it charged its asker.",
+        "description": "What an answer cost: the model's tokens, on whose account, and the tokens it charged its asker.",
         "properties": {
           "bill": {
             "allOf": [
@@ -2475,14 +2475,75 @@
                 "$ref": "#/components/schemas/Bill"
               }
             ],
-            "description": "`ours`: the panel's Claude, charged; `theirs`: the asker's own, free here."
+            "description": "`ours`: the panel's, charged; `theirs`: the asker's own, free here."
           },
           "charged": {
+            "description": "Of the asker's tokens.",
             "format": "int64",
             "type": "integer"
           },
+          "model": {
+            "description": "The model that answered; `null`: none yet, or an answer from before it was told.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "tokens": {
             "$ref": "#/components/schemas/ModelUsed"
+          },
+          "usd_micros": {
+            "description": "What the tokens list for at the provider, in millionths of a dollar: not what is charged here. `null`: not known.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "bill",
+          "model",
+          "tokens",
+          "usd_micros",
+          "charged"
+        ],
+        "type": "object"
+      },
+      "CostInput": {
+        "additionalProperties": false,
+        "description": "What an answer cost: the model's tokens, on whose account, and the tokens it charged its asker.",
+        "properties": {
+          "bill": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Bill"
+              }
+            ],
+            "description": "`ours`: the panel's, charged; `theirs`: the asker's own, free here."
+          },
+          "charged": {
+            "description": "Of the asker's tokens.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "model": {
+            "description": "The model that answered; `null`: none yet, or an answer from before it was told.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tokens": {
+            "$ref": "#/components/schemas/ModelUsed"
+          },
+          "usd_micros": {
+            "description": "What the tokens list for at the provider, in millionths of a dollar: not what is charged here. `null`: not known.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
           }
         },
         "required": [
@@ -7240,7 +7301,7 @@
       },
       "ModelUsed": {
         "additionalProperties": false,
-        "description": "The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]).",
+        "description": "The model's tokens, by how its provider bills them ([`sa_core::prices::ModelTokens`]).",
         "properties": {
           "cache_read": {
             "format": "int64",
@@ -7657,6 +7718,44 @@
         ],
         "type": "string"
       },
+      "OpenAi": {
+        "description": "A person's OpenAI key: its last four alone.",
+        "properties": {
+          "checked": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Checked"
+              }
+            ],
+            "description": "The last time OpenAI took it or refused it."
+          },
+          "last4": {
+            "type": "string"
+          },
+          "set_at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "last4",
+          "set_at",
+          "checked"
+        ],
+        "type": "object"
+      },
+      "OpenAiKey": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "type": "object"
+      },
       "OpenApi": {
         "description": "An OpenAPI 3.1 document.",
         "type": "object"
@@ -7967,7 +8066,11 @@
           "claude.input",
           "claude.cache_write",
           "claude.cache_read",
-          "claude.output"
+          "claude.output",
+          "openai.input",
+          "openai.cache_write",
+          "openai.cache_read",
+          "openai.output"
         ],
         "type": "string"
       },
@@ -8850,6 +8953,22 @@
                 "format": "double",
                 "type": "number"
               },
+              "openai.cache_read": {
+                "format": "double",
+                "type": "number"
+              },
+              "openai.cache_write": {
+                "format": "double",
+                "type": "number"
+              },
+              "openai.input": {
+                "format": "double",
+                "type": "number"
+              },
+              "openai.output": {
+                "format": "double",
+                "type": "number"
+              },
               "phone.running": {
                 "format": "double",
                 "type": "number"
@@ -8957,6 +9076,22 @@
                 "type": "number"
               },
               "map.map": {
+                "format": "double",
+                "type": "number"
+              },
+              "openai.cache_read": {
+                "format": "double",
+                "type": "number"
+              },
+              "openai.cache_write": {
+                "format": "double",
+                "type": "number"
+              },
+              "openai.input": {
+                "format": "double",
+                "type": "number"
+              },
+              "openai.output": {
                 "format": "double",
                 "type": "number"
               },
@@ -9894,6 +10029,22 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "openai.cache_read": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "openai.cache_write": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "openai.input": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "openai.output": {
+                "format": "int64",
+                "type": "integer"
+              },
               "phone.running": {
                 "format": "int64",
                 "type": "integer"
@@ -10290,6 +10441,11 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "connect": {
+                "default": false,
+                "description": "It stopped for what connecting a model of one's own, or again, helps.",
+                "type": "boolean"
+              },
               "cost": {
                 "anyOf": [
                   {
@@ -10366,7 +10522,8 @@
               "actions",
               "state",
               "feedback",
-              "cost"
+              "cost",
+              "connect"
             ],
             "type": "object"
           }
@@ -10428,10 +10585,15 @@
                 "format": "int64",
                 "type": "integer"
               },
+              "connect": {
+                "default": false,
+                "description": "It stopped for what connecting a model of one's own, or again, helps.",
+                "type": "boolean"
+              },
               "cost": {
                 "anyOf": [
                   {
-                    "$ref": "#/components/schemas/Cost"
+                    "$ref": "#/components/schemas/CostInput"
                   },
                   {
                     "type": "null"
@@ -10820,7 +10982,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -10860,7 +11022,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Asks the admins for a need, made now (201); the one standing (200) if asked within 24 h, nobody told again.",
@@ -10979,7 +11141,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -11019,7 +11181,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's standing access requests; those whose need they now hold are dropped.",
@@ -11149,7 +11311,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -11189,7 +11351,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a managing gmail to a person.",
@@ -11313,7 +11475,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -11353,7 +11515,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Writes review_archive's people, gmails, GMBs, tokens and kick-backs, as its `scripts/export_members.sql` prints them, and opens tokens and GMBs. A fresh install imports an empty export.",
@@ -11473,7 +11635,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -11513,7 +11675,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Every vendor meter this period, summed over the accounts and on each: the vendor's own count at its last reading, ours since, what is left of the free units and when buying stops; and each account's spend against its allowance.",
@@ -11652,7 +11814,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -11692,7 +11854,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Holds account `name` to the body: what the guard reads once it is published beside the export, within a minute. Refused for an account without an export, or a hold short of a slice or past a sane amount.",
@@ -11838,7 +12000,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -11878,7 +12040,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Each account's days in a window, by slice and SKU, and its latest month's tiers: what the sa-meters dashboard draws the bill from.",
@@ -12024,7 +12186,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -12064,7 +12226,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The vendors' readings of their meters in a window, oldest first: what the sa-meters dashboard reads.",
@@ -12184,7 +12346,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -12224,7 +12386,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Every user's balance, renewed.",
@@ -12370,7 +12532,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -12410,7 +12572,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Everyone's ledger and grants in a window, oldest first: what Grafana's sa-tokens dashboard reads.",
@@ -12530,7 +12692,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -12570,7 +12732,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Every item of the price catalog (`sa_core::prices`): its cost in tokens, the multiplier over it and the price they make.",
@@ -12700,7 +12862,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -12740,7 +12902,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Multiplies the items given, 0 or more, and costs them, 0 tokens or more per `per` units, both to three decimals; the others stay.",
@@ -12883,7 +13045,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -12923,7 +13085,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets a user's balance, adds to it, or grants tokens owed until they claim them.",
@@ -13069,7 +13231,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -13109,7 +13271,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "What our tools spent on vendors per UTC day, item, bill and source, in units and each use at its unit's cost when it was done: what Grafana's sa-tokens dashboard reads.",
@@ -13229,7 +13391,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -13269,7 +13431,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "How the caller's alerts are set: their destinations, each rule's tier, their hours.",
@@ -13390,7 +13552,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -13430,7 +13592,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Removes a destination.",
@@ -13569,7 +13731,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -13609,7 +13771,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets what a destination is told, when, and of what. 400 a rule not open to the caller.",
@@ -13733,7 +13895,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -13773,7 +13935,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sends a test message to a destination; one that arrives revives it. 400 with what its network said.",
@@ -13903,7 +14065,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -13943,7 +14105,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a Discord channel by its webhook, once a test went out there.",
@@ -14074,7 +14236,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -14114,7 +14276,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds the caller's own verified address as a destination; any other is mailed a link that does.",
@@ -14245,7 +14407,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -14285,7 +14447,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds the address the mailed token proves. 400 another's token, or one out of date.",
@@ -14415,7 +14577,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -14455,7 +14617,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets the caller's hours.",
@@ -14487,34 +14649,6 @@
         "operationId": "alert_inbox",
         "parameters": [
           {
-            "description": "Older than this one.",
-            "in": "query",
-            "name": "before",
-            "schema": {
-              "description": "Older than this one.",
-              "format": "int64",
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "style": "form"
-          },
-          {
-            "description": "About this GBP.",
-            "in": "query",
-            "name": "gmb",
-            "schema": {
-              "description": "About this GBP.",
-              "format": "int64",
-              "type": [
-                "integer",
-                "null"
-              ]
-            },
-            "style": "form"
-          },
-          {
             "in": "query",
             "name": "tier",
             "schema": {
@@ -14535,6 +14669,34 @@
             "schema": {
               "default": false,
               "type": "boolean"
+            },
+            "style": "form"
+          },
+          {
+            "description": "About this GBP.",
+            "in": "query",
+            "name": "gmb",
+            "schema": {
+              "description": "About this GBP.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "style": "form"
+          },
+          {
+            "description": "Older than this one.",
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "description": "Older than this one.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "style": "form"
           }
@@ -14628,7 +14790,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -14668,7 +14830,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's alerts, newest first, 50 at a time.",
@@ -14790,7 +14952,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -14830,7 +14992,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Marks alerts read: what was still waiting to go out of them is given up.",
@@ -14961,7 +15123,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -15001,7 +15163,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "One of the caller's alerts, and where it went.",
@@ -15128,7 +15290,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -15168,7 +15330,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "An alert's photo.",
@@ -15310,7 +15472,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -15350,7 +15512,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Presses an alert's button, as under its message: the buttons left.",
@@ -15479,7 +15641,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -15519,7 +15681,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds the browser's push subscription, once a test went out there; one the caller has already is left as they set it.",
@@ -15661,7 +15823,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -15701,7 +15863,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets how much a rule's notes matter to the caller. 400 a rule not open to them.",
@@ -15831,7 +15993,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -15871,7 +16033,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a Slack channel by its incoming webhook, once a test went out there.",
@@ -16003,7 +16165,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -16043,7 +16205,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a channel, group or forum topic the caller administers as a destination, once a test went out there.",
@@ -16165,7 +16327,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -16205,7 +16367,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A link that makes the caller's own Telegram chat with the bot their private destination.",
@@ -16336,7 +16498,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -16376,7 +16538,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a webhook, once a test went out there.",
@@ -16497,7 +16659,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -16537,7 +16699,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Every area, everyone's.",
@@ -16665,7 +16827,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -16705,7 +16867,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The area `slug`.",
@@ -16845,7 +17007,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -16885,7 +17047,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Draws the area `slug`, a circle; its country its city's, else its centre's (Places, paid by the caller); over what it was if the caller drew it.",
@@ -17005,7 +17167,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -17045,7 +17207,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Deletes the caller's archived chats; one shared with them they leave.",
@@ -17164,7 +17326,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -17204,7 +17366,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's chats, owned and joined, with their own marks, newest first.",
@@ -17331,7 +17493,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -17371,7 +17533,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Creates a chat at version 1. 409 the id is taken; 413 a body past 4 MiB.",
@@ -17495,7 +17657,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -17535,7 +17697,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Deletes a chat, its members and marks with it: the owner's only.",
@@ -17664,7 +17826,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -17704,7 +17866,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A chat: its turns, version and the caller's role.",
@@ -17835,7 +17997,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -17875,7 +18037,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Who has a chat: its owner, members and general access.",
@@ -18017,7 +18179,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -18057,7 +18219,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Does an answer's proposed operation, as the caller and through the same gate as their own request; the action is marked done in the chat. One a cell of the chat's session waits on goes on there, and the answer resumes: a new one, the model told what the code did next.",
@@ -18086,7 +18248,11 @@
           "claude.input",
           "claude.cache_write",
           "claude.cache_read",
-          "claude.output"
+          "claude.output",
+          "openai.input",
+          "openai.cache_write",
+          "openai.cache_read",
+          "openai.output"
         ]
       }
     },
@@ -18197,7 +18363,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -18237,7 +18403,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Archives or unarchives a chat, for the caller alone.",
@@ -18266,7 +18432,6 @@
     },
     "/assistant/chats/{id}/ask": {
       "post": {
-        "description": "503 without either Claude, or when the model does not answer.",
         "operationId": "ask",
         "parameters": [
           {
@@ -18379,7 +18544,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -18419,10 +18584,10 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
-        "summary": "Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if they connected one, else on the panel's, each round charged to them at its prices. A call a cell of the chat's session waits on is declined: the person moved on.",
+        "summary": "Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done, or `stopped` saying why. It runs on the asker's own models if they connected any, else on the panel's, each round charged to them at its prices. A call a cell of the chat's session waits on is declined: the person moved on.",
         "x-errors": {
           "another_country": 422,
           "bad_gateway": 502,
@@ -18445,7 +18610,11 @@
           "claude.input",
           "claude.cache_write",
           "claude.cache_read",
-          "claude.output"
+          "claude.output",
+          "openai.input",
+          "openai.cache_write",
+          "openai.cache_read",
+          "openai.output"
         ]
       }
     },
@@ -18563,7 +18732,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -18603,7 +18772,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets who beyond its members may read a chat: the owner's.",
@@ -18744,7 +18913,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -18784,7 +18953,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Makes people members of a chat. 400 an unknown user.",
@@ -18918,7 +19087,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -18958,7 +19127,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Removes a member from a chat: the owner anyone, a member themselves.",
@@ -19092,7 +19261,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -19132,7 +19301,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Pins or unpins a chat, for the caller alone.",
@@ -19273,7 +19442,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -19313,7 +19482,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Renames a chat.",
@@ -19455,7 +19624,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -19495,7 +19664,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Writes a chat's turns: those before `from` kept, the rest replaced.",
@@ -19627,7 +19796,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -19667,7 +19836,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Whom the caller shares a chat with, by name or email, and whoever has `q` as their whole email.",
@@ -19786,7 +19955,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -19826,7 +19995,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's brands, each with how many GBPs hold it and its photos.",
@@ -19950,7 +20119,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -19990,7 +20159,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a brand under one of the caller's gmails and categories (set up there). 409 a live one of that gmail and category is so named already, whatever its case.",
@@ -20114,7 +20283,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -20154,7 +20323,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Removes a brand; its photos' uses are kept. 409 while a live GBP holds it.",
@@ -20293,7 +20462,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -20333,7 +20502,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Renames a brand or moves it to another site.",
@@ -20460,7 +20629,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -20500,7 +20669,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A brand's logo. 404 none yet.",
@@ -20655,7 +20824,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -20695,7 +20864,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets a brand's logo, ≤ 10 MiB: re-encoded as a PNG, at most 512 px on its longer side.",
@@ -20826,7 +20995,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -20866,7 +21035,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A brand's photos, newest first.",
@@ -21021,7 +21190,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -21061,7 +21230,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a photo to a brand, ≤ 10 MiB: re-encoded as a JPEG, its EXIF (GPS with it) gone, turned upright; the same bytes again are the same photo, back if removed. Answers its photos.",
@@ -21093,6 +21262,16 @@
         "operationId": "remove_photo",
         "parameters": [
           {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "style": "simple"
+          },
+          {
             "description": "`<photo>.jpg`.",
             "in": "path",
             "name": "file",
@@ -21100,16 +21279,6 @@
             "schema": {
               "description": "`<photo>.jpg`.",
               "type": "string"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "int64",
-              "type": "integer"
             },
             "style": "simple"
           }
@@ -21196,7 +21365,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -21236,7 +21405,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Removes a photo: out of every offer, its uses kept.",
@@ -21266,6 +21435,16 @@
         "operationId": "photo",
         "parameters": [
           {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "style": "simple"
+          },
+          {
             "description": "`<photo>.jpg`.",
             "in": "path",
             "name": "file",
@@ -21273,16 +21452,6 @@
             "schema": {
               "description": "`<photo>.jpg`.",
               "type": "string"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "int64",
-              "type": "integer"
             },
             "style": "simple"
           }
@@ -21372,7 +21541,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -21412,7 +21581,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A photo of a brand, `{file}` being `<photo>.jpg`.",
@@ -21442,6 +21611,16 @@
         "operationId": "label_photo",
         "parameters": [
           {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            },
+            "style": "simple"
+          },
+          {
             "description": "`<photo>.jpg`.",
             "in": "path",
             "name": "file",
@@ -21449,16 +21628,6 @@
             "schema": {
               "description": "`<photo>.jpg`.",
               "type": "string"
-            },
-            "style": "simple"
-          },
-          {
-            "in": "path",
-            "name": "id",
-            "required": true,
-            "schema": {
-              "format": "int64",
-              "type": "integer"
             },
             "style": "simple"
           }
@@ -21562,7 +21731,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -21602,7 +21771,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Labels a photo of the brand with what it shows; answers the brand's photos.",
@@ -21721,7 +21890,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -21761,7 +21930,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's categories, by trade and country.",
@@ -21791,15 +21960,6 @@
         "operationId": "delete_category",
         "parameters": [
           {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
             "description": "`gcid:plumber`.",
             "in": "path",
             "name": "trade",
@@ -21807,6 +21967,15 @@
             "schema": {
               "description": "`gcid:plumber`.",
               "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
             },
             "style": "simple"
           }
@@ -21893,7 +22062,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -21933,7 +22102,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Takes the caller's category away; its history stays.",
@@ -21964,15 +22133,6 @@
         "operationId": "apply_category",
         "parameters": [
           {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
             "description": "`gcid:plumber`.",
             "in": "path",
             "name": "trade",
@@ -21980,6 +22140,15 @@
             "schema": {
               "description": "`gcid:plumber`.",
               "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
             },
             "style": "simple"
           }
@@ -22084,7 +22253,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -22124,7 +22293,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Applies settings to the caller's category of a trade in a country, setting it up if it was not: a new version, the head moved onto it. Settings equal to the head's move nothing.",
@@ -22157,15 +22326,6 @@
         "operationId": "move_category_head",
         "parameters": [
           {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
             "description": "`gcid:plumber`.",
             "in": "path",
             "name": "trade",
@@ -22173,6 +22333,15 @@
             "schema": {
               "description": "`gcid:plumber`.",
               "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
             },
             "style": "simple"
           }
@@ -22277,7 +22446,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -22317,7 +22486,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Moves the caller's category's head: onto a listing's version (an adopt, setting it up if it was not; an update when the listing is its lineage's and the version newer), or back to one of its own (a revert). Onto its head moves nothing.",
@@ -22349,15 +22518,6 @@
         "operationId": "category_history",
         "parameters": [
           {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
             "description": "`gcid:plumber`.",
             "in": "path",
             "name": "trade",
@@ -22365,6 +22525,15 @@
             "schema": {
               "description": "`gcid:plumber`.",
               "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
             },
             "style": "simple"
           }
@@ -22458,7 +22627,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -22498,7 +22667,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's category's moves since it was set up, oldest first.",
@@ -22530,15 +22699,6 @@
         "operationId": "kit_pool",
         "parameters": [
           {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
             "description": "`gcid:plumber`.",
             "in": "path",
             "name": "trade",
@@ -22546,6 +22706,15 @@
             "schema": {
               "description": "`gcid:plumber`.",
               "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
             },
             "style": "simple"
           }
@@ -22639,7 +22808,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -22679,7 +22848,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The category's drafts.",
@@ -22711,15 +22880,6 @@
         "operationId": "add_kit_draft",
         "parameters": [
           {
-            "in": "path",
-            "name": "country",
-            "required": true,
-            "schema": {
-              "$ref": "#/components/schemas/Country"
-            },
-            "style": "simple"
-          },
-          {
             "description": "`gcid:plumber`.",
             "in": "path",
             "name": "trade",
@@ -22727,6 +22887,15 @@
             "schema": {
               "description": "`gcid:plumber`.",
               "type": "string"
+            },
+            "style": "simple"
+          },
+          {
+            "in": "path",
+            "name": "country",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/Country"
             },
             "style": "simple"
           }
@@ -22830,7 +22999,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -22870,7 +23039,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a draft to the category; answers the category's drafts.",
@@ -22902,6 +23071,17 @@
         "operationId": "remove_kit_draft",
         "parameters": [
           {
+            "description": "A gcid.",
+            "in": "path",
+            "name": "trade",
+            "required": true,
+            "schema": {
+              "description": "A gcid.",
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
             "in": "path",
             "name": "country",
             "required": true,
@@ -22917,17 +23097,6 @@
             "schema": {
               "format": "int64",
               "type": "integer"
-            },
-            "style": "simple"
-          },
-          {
-            "description": "A gcid.",
-            "in": "path",
-            "name": "trade",
-            "required": true,
-            "schema": {
-              "description": "A gcid.",
-              "type": "string"
             },
             "style": "simple"
           }
@@ -23014,7 +23183,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -23054,7 +23223,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Removes a draft: out of every offer, its uses kept.",
@@ -23085,6 +23254,17 @@
         "operationId": "edit_kit_draft",
         "parameters": [
           {
+            "description": "A gcid.",
+            "in": "path",
+            "name": "trade",
+            "required": true,
+            "schema": {
+              "description": "A gcid.",
+              "type": "string"
+            },
+            "style": "simple"
+          },
+          {
             "in": "path",
             "name": "country",
             "required": true,
@@ -23100,17 +23280,6 @@
             "schema": {
               "format": "int64",
               "type": "integer"
-            },
-            "style": "simple"
-          },
-          {
-            "description": "A gcid.",
-            "in": "path",
-            "name": "trade",
-            "required": true,
-            "schema": {
-              "description": "A gcid.",
-              "type": "string"
             },
             "style": "simple"
           }
@@ -23214,7 +23383,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -23254,7 +23423,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Edits a draft's text or its places; answers the category's drafts.",
@@ -23385,7 +23554,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -23425,7 +23594,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A category version: one the caller's moves went to, or one a listing released (404 otherwise).",
@@ -23545,7 +23714,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -23585,7 +23754,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's gmails and their GBPs, the removed left out.",
@@ -23712,7 +23881,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -23752,7 +23921,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a managing gmail. 409 if the caller has it already.",
@@ -23876,7 +24045,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -23916,7 +24085,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Removes the gmail to the trash, its GBPs with it. 409 while it has a browser.",
@@ -24040,7 +24209,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -24080,7 +24249,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Removes the gmail's browser: stopped, the provider's profile (a phone's film) and session gone.",
@@ -24239,7 +24408,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -24279,7 +24448,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The gmail's browser on screen: its frames down, the viewer's input up. A browser's through the relay here, a phone's the runner's own, passed through.",
@@ -24420,7 +24589,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -24460,7 +24629,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets the gmail's browser up, kept only once its proxy comes out in the country of every GBP of the gmail; the provider and device are a fingerprint, set once, the proxy replaced under them.",
@@ -24584,7 +24753,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -24624,7 +24793,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Takes the browser's film away.",
@@ -24753,7 +24922,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -24793,7 +24962,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Uploads an mp4 as the camera of the browser's next launch, its sound the mic: ≤ 512 MiB; a cloud phone's ≤ 100 MiB, to Multilogin's Library.",
@@ -24928,7 +25097,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -24968,7 +25137,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Starts the gmail's browser, answering once it is up: at a GBP's point, its zone and its country's locale; for the gmail alone the position blocked. A cloud phone bills while it runs.",
@@ -25097,7 +25266,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -25137,7 +25306,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Stops the gmail's browser.",
@@ -25268,7 +25437,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -25308,7 +25477,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Checks the browser's proxy exit again.",
@@ -25443,7 +25612,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -25483,7 +25652,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Opens a thread in a new tab of the gmail's own running browser, on the Google session signed in there: Gmail is never asked from here. 409 while it does not run, or on a cloud phone.",
@@ -25607,7 +25776,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -25647,7 +25816,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Forgets the gmail's Business Profile client and grant.",
@@ -25787,7 +25956,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -25827,7 +25996,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets the gmail's Business Profile OAuth client, kept only once Google knows it; a grant to the one before is dropped.",
@@ -25958,7 +26127,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -25998,7 +26167,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Google's consent page for the gmail's client, back at `/auth/google/business` within 15 minutes. 404 no client set.",
@@ -26129,7 +26298,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -26169,7 +26338,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Asks the Business Profile APIs on the gmail's grant again, the check recorded. 404 none granted.",
@@ -26300,7 +26469,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -26340,7 +26509,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A gmail's inbox, Maps key and browser, and what Places requests cost on the shared keys: no secret, ever.",
@@ -26482,7 +26651,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -26522,7 +26691,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Adds a GBP on Google already, by its place, to the gmail.",
@@ -26654,7 +26823,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -26694,7 +26863,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Forgets the gmail's inbox.",
@@ -26834,7 +27003,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -26874,7 +27043,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets the gmail's inbox, kept only once it logs in (IMAPS :993, a public address only).",
@@ -27005,7 +27174,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -27045,7 +27214,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Checks the gmail's inbox again, the check recorded. 404 none set.",
@@ -27169,7 +27338,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -27209,7 +27378,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Forgets the gmail's Maps key.",
@@ -27349,7 +27518,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -27389,7 +27558,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets the gmail's own Maps key, kept only once Google answers for it (an unbilled id-only details); the caller's Places requests are paid with it first.",
@@ -27520,7 +27689,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -27560,7 +27729,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Checks the gmail's Maps key again, the check recorded. 404 none set.",
@@ -27690,7 +27859,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -27730,7 +27899,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Creates a GBP no place is known of: a draft by its spots, or one verifying or suspended (off Maps) by a location.",
@@ -27852,7 +28021,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -27892,7 +28061,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Gives GBPs a brand, every one or none: 404 one not the caller's, 409 one not of the brand's gmail and category.",
@@ -28014,7 +28183,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -28054,7 +28223,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Switches GBPs on or off, every one or none (404 one not the caller's); review_archive inherits it.",
@@ -28087,6 +28256,17 @@
         "operationId": "resolve_place",
         "parameters": [
           {
+            "description": "A place id, a Maps URL or a search.",
+            "in": "query",
+            "name": "place",
+            "required": true,
+            "schema": {
+              "description": "A place id, a Maps URL or a search.",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
             "description": "The caller's gmail whose key is tried first.",
             "in": "query",
             "name": "gmail",
@@ -28097,17 +28277,6 @@
                 "integer",
                 "null"
               ]
-            },
-            "style": "form"
-          },
-          {
-            "description": "A place id, a Maps URL or a search.",
-            "in": "query",
-            "name": "place",
-            "required": true,
-            "schema": {
-              "description": "A place id, a Maps URL or a search.",
-              "type": "string"
             },
             "style": "form"
           }
@@ -28201,7 +28370,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -28241,7 +28410,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The places a pasted id, Maps URL or search may mean (Google Places).",
@@ -28281,6 +28450,17 @@
         "operationId": "suggest_places",
         "parameters": [
           {
+            "description": "What is typed so far.",
+            "in": "query",
+            "name": "input",
+            "required": true,
+            "schema": {
+              "description": "What is typed so far.",
+              "type": "string"
+            },
+            "style": "form"
+          },
+          {
             "description": "The caller's gmail whose key is tried first.",
             "in": "query",
             "name": "gmail",
@@ -28291,17 +28471,6 @@
                 "integer",
                 "null"
               ]
-            },
-            "style": "form"
-          },
-          {
-            "description": "What is typed so far.",
-            "in": "query",
-            "name": "input",
-            "required": true,
-            "schema": {
-              "description": "What is typed so far.",
-              "type": "string"
             },
             "style": "form"
           }
@@ -28395,7 +28564,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -28435,7 +28604,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Places Autocomplete in the countries served, paid as `resolve`: each distinct input is a request.",
@@ -28565,7 +28734,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -28605,7 +28774,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Gives GBPs a trade, every one or none (400 a gcid Google does not list in one's country, 404 one not the caller's).",
@@ -28729,7 +28898,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -28769,7 +28938,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Removes a GBP to the trash.",
@@ -28910,7 +29079,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -28950,7 +29119,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Edits a GBP.",
@@ -29084,7 +29253,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -29124,7 +29293,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets a GBP's country by hand. 409 Google has its country.",
@@ -29265,7 +29434,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -29305,7 +29474,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The GBP's kit: where its QR leads, its category's drafts as its offer weighs them, and what it collected since `since`.",
@@ -29445,7 +29614,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -29485,7 +29654,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Points the GBP's QR at `target`, `null` turning the kit off. On, its review link is asked of Places once (a Place Details, paid as a lookup).",
@@ -29631,7 +29800,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -29671,7 +29840,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The operator showed the GBP's QR: the tally's `shown`, tagged with the kit whose page showed it.",
@@ -29795,7 +29964,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -29835,7 +30004,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Takes back the point placed by hand. 409 none is.",
@@ -29967,7 +30136,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -30007,7 +30176,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Places a GBP's point by hand. 409 Google has its point.",
@@ -30165,7 +30334,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -30205,7 +30374,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A GBP's log, newest first, a page at a time: what changed of it (each field before and after) and what was done with it, in the write that did it; and its gmails' own while it was under them.",
@@ -30336,7 +30505,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -30376,7 +30545,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A GBP's mail: every try to verify it, its cases, its every message.",
@@ -30507,7 +30676,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -30547,7 +30716,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's own note on a GBP. While acting as another, the actor's own on it, never the subject's.",
@@ -30680,7 +30849,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -30720,7 +30889,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Writes the caller's own note on a GBP, in any state; `null` takes it away. Nobody else reads it, and it is not in the GBP's log.",
@@ -30857,7 +31026,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -30897,7 +31066,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A photo a GBP's last Sync took, never another under its id.",
@@ -31038,7 +31207,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -31078,7 +31247,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Replaces a draft's candidate spots, its location the first's. 409 not a draft.",
@@ -31219,7 +31388,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -31259,7 +31428,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Moves a GBP to another state. 400 a move its `next` lacks.",
@@ -31399,7 +31568,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -31439,7 +31608,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Overwrites a verified GBP with its profile on Google, asked afresh, paid by the caller: name, address, phone, website, hours, primary category, country, point (none on Google: one placed by hand kept), photos. With no trade, it takes the caller's one trade set up there with that category.",
@@ -31577,7 +31746,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -31617,7 +31786,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Google's categories in a country, named in its language and the front end's.",
@@ -31749,7 +31918,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -31789,7 +31958,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Cities and towns what is typed may be heading for, in the countries served (Places Autocomplete, paid by the caller).",
@@ -31927,7 +32096,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -31967,7 +32136,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The place a suggestion is: its point and the rectangle that frames it (Places, paid by the caller).",
@@ -32116,7 +32285,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -32156,7 +32325,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The city or town a point lies in (Geocoding, paid by the caller). 404 outside any.",
@@ -32283,7 +32452,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -32323,7 +32492,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's kits.",
@@ -32447,7 +32616,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -32487,7 +32656,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Removes the caller's kit: its slug is free again; nothing it collected goes, its events keep its tag.",
@@ -32626,7 +32795,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -32666,7 +32835,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's kit over the period from `since`: what its GBPs collected, each GBP's QR and what is left to offer it, its categories' pools and the latest of what happened.",
@@ -32796,7 +32965,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -32836,7 +33005,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Makes the caller's kit `slug`, or sets it over what it was: a GBP that stays keeps when it joined. `new` is no kit's.",
@@ -32868,27 +33037,25 @@
         "operationId": "library",
         "parameters": [
           {
+            "description": "A gcid.",
             "in": "query",
-            "name": "country",
+            "name": "trade",
             "schema": {
-              "anyOf": [
-                {
-                  "$ref": "#/components/schemas/Country"
-                },
-                {
-                  "type": "null"
-                }
+              "description": "A gcid.",
+              "type": [
+                "string",
+                "null"
               ]
             },
             "style": "form"
           },
           {
             "in": "query",
-            "name": "kind",
+            "name": "country",
             "schema": {
               "anyOf": [
                 {
-                  "$ref": "#/components/schemas/Kind"
+                  "$ref": "#/components/schemas/Country"
                 },
                 {
                   "type": "null"
@@ -32912,23 +33079,25 @@
           },
           {
             "in": "query",
-            "name": "sort",
-            "required": true,
+            "name": "kind",
             "schema": {
-              "$ref": "#/components/schemas/Sort"
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Kind"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "style": "form"
           },
           {
-            "description": "A gcid.",
             "in": "query",
-            "name": "trade",
+            "name": "sort",
+            "required": true,
             "schema": {
-              "description": "A gcid.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "$ref": "#/components/schemas/Sort"
             },
             "style": "form"
           }
@@ -33022,7 +33191,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -33062,7 +33231,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The listings the caller may see: not withdrawn, their own, or ones they used.",
@@ -33188,7 +33357,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -33228,7 +33397,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Releases one of the caller's versions as a new listing: readable by everyone, for good.",
@@ -33260,11 +33429,11 @@
         "operationId": "published_studies",
         "parameters": [
           {
-            "description": "An area's slug.",
+            "description": "A gcid.",
             "in": "query",
-            "name": "area",
+            "name": "trade",
             "schema": {
-              "description": "An area's slug.",
+              "description": "A gcid.",
               "type": [
                 "string",
                 "null"
@@ -33288,11 +33457,11 @@
             "style": "form"
           },
           {
-            "description": "A gcid.",
+            "description": "An area's slug.",
             "in": "query",
-            "name": "trade",
+            "name": "area",
             "schema": {
-              "description": "A gcid.",
+              "description": "An area's slug.",
               "type": [
                 "string",
                 "null"
@@ -33390,7 +33559,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -33430,7 +33599,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The published studies the caller may see, of a trade, a country and an area when given.",
@@ -33558,7 +33727,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -33598,7 +33767,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Publishes a study of an area under a category version: on the version's release, or releasing it in the same write. Readable by everyone, for good.",
@@ -33723,7 +33892,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -33763,7 +33932,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Withdraws a study the caller published: hidden from whoever never used its listing.",
@@ -33894,7 +34063,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -33934,7 +34103,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A listing, its versions with what each says, and the studies published on it (404 one the caller may not see).",
@@ -34068,7 +34237,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -34108,7 +34277,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Puts a listing in the standard library at a rank, or takes it out.",
@@ -34251,7 +34420,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -34291,7 +34460,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Releases one of the caller's versions as the next version of a listing of theirs.",
@@ -34415,7 +34584,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -34455,7 +34624,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Withdraws a listing of the caller's: hidden from whoever never used it, readable by whoever did.",
@@ -34604,7 +34773,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -34644,7 +34813,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A socket telling what changed: each table committed to, as it commits.",
@@ -34761,7 +34930,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -34801,7 +34970,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The gmails and topics whose replies go by themselves, a quarter of an hour after they are written.",
@@ -34928,7 +35097,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -34968,7 +35137,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Lets replies on a topic of a gmail's go by themselves, or no more. 400 a topic that never does.",
@@ -35129,7 +35298,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -35169,7 +35338,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's mail with Google about their GBPs, as cases: a conversation with support, or a lone notice; what each says, whose turn it is and why.",
@@ -35300,7 +35469,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -35340,7 +35509,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A case of the caller's: its messages, its draft, the tries to verify its GBP, its missing reviews.",
@@ -35480,7 +35649,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -35520,7 +35689,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Corrects a case's GBP or topic, or marks it done: its draft is let go; one going by itself waits for its person.",
@@ -35663,7 +35832,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -35703,7 +35872,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Writes a reply to the case now, in place of the one there; nothing is sent.",
@@ -35732,7 +35901,11 @@
           "claude.input",
           "claude.cache_write",
           "claude.cache_read",
-          "claude.output"
+          "claude.output",
+          "openai.input",
+          "openai.cache_write",
+          "openai.cache_read",
+          "openai.output"
         ]
       }
     },
@@ -35833,7 +36006,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -35873,7 +36046,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Lets a draft go: none is written to the same message by itself again. 409 it was sent or let go.",
@@ -36012,7 +36185,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -36052,7 +36225,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Keeps the operator's edit of a draft; one going by itself waits for them now. 409 it was sent or let go.",
@@ -36195,7 +36368,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -36235,7 +36408,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sends a draft to Google as the case's gmail, once: the recipient is the case's (`recipient`).",
@@ -36379,7 +36552,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -36419,7 +36592,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Corrects what a message of Google's was read as; the caller's word from then on. A draft going by itself waits for its person.",
@@ -36539,7 +36712,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -36579,7 +36752,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The Maps JS key this page loads on: of the accounts with a browser key, the first with free map loads and panoramas left, else the first within its allowance. 404 when none has a browser key: there is no map; 409 when none has room.",
@@ -36710,7 +36883,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -36750,7 +36923,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Buys the Google map the caller's browser builds on an account's browser key, before it builds it: recorded and charged (`map.map`, the admin's price) in one write.",
@@ -36884,7 +37057,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -36924,7 +37097,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Buys the Street View panorama at a point on the page's account: recorded and charged (`street_view.panorama`, the admin's price) in one write.",
@@ -37117,7 +37290,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -37157,7 +37330,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Back to one's own account.",
@@ -37278,7 +37451,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -37318,7 +37491,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Signs this browser's session into `user_id`'s account, lending it the caller's permissions but the bound ones, until `DELETE /me/acting`.",
@@ -37431,7 +37604,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -37471,10 +37644,10 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
-        "summary": "Disconnects the caller's own Claude: their answers run on the panel's again. 404 none.",
+        "summary": "Disconnects the caller's own Claude. 404 none.",
         "tags": [
           "claude"
         ],
@@ -37596,7 +37769,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -37636,10 +37809,10 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
-        "summary": "The caller's own Claude, which their assistant's answers run on; `null`, they run on the panel's.",
+        "summary": "The caller's own Claude, which their assistant's answers run on; `null`, none.",
         "x-errors": {
           "another_country": 422,
           "bad_gateway": 502,
@@ -37762,7 +37935,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -37802,7 +37975,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Connects the caller's own Claude from the code its page showed, kept only once Claude answers on it.",
@@ -37922,7 +38095,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -37962,12 +38135,496 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Starts connecting the caller's own Claude: open `url`, authorize, and paste the code it shows into `PUT /me/claude` within 10 minutes.",
         "tags": [
           "claude"
+        ],
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/me/openai": {
+      "delete": {
+        "operationId": "remove_openai",
+        "responses": {
+          "204": {
+            "description": "no content"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unaffordable`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`csrf`, `forbidden`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`conflict`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_large`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_many`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`, `browsers_not_connected`"
+          }
+        },
+        "summary": "Disconnects the caller's own OpenAI key. 404 none.",
+        "tags": [
+          "openai"
+        ],
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      },
+      "get": {
+        "operationId": "openai",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/OpenAi"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": ""
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unaffordable`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`csrf`, `forbidden`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`conflict`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_large`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_many`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`, `browsers_not_connected`"
+          }
+        },
+        "summary": "The caller's own OpenAI key, which their assistant's answers run on, after their Claude; `null`, none.",
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      },
+      "put": {
+        "description": "400 OpenAI refuses it, it is out of credit, or it has no access to the model; 503 it does not answer now.",
+        "operationId": "set_openai",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OpenAiKey"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenAi"
+                }
+              }
+            },
+            "description": "A person's OpenAI key: its last four alone."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unaffordable`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`csrf`, `forbidden`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`conflict`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_large`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_many`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`, `browsers_not_connected`"
+          }
+        },
+        "summary": "Connects the caller's own OpenAI key, kept only once OpenAI answers on it: their account pays it.",
+        "tags": [
+          "openai"
         ],
         "x-errors": {
           "another_country": 422,
@@ -38082,7 +38739,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -38122,7 +38779,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Everyone the conductor knows, to act as.",
@@ -38322,7 +38979,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -38362,7 +39019,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The countries placement holds a base for.",
@@ -38494,7 +39151,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -38534,7 +39191,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A published study, built as a study is: of what is held, nothing bought.",
@@ -38665,7 +39322,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -38705,7 +39362,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Builds a published study again, buying what it lacks at the caller's tokens, as a pull does.",
@@ -38854,7 +39511,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -38894,7 +39551,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "A study of an area: under a category version the caller may read, or the area's grid alone; never spends. Built on the first read and kept, out of what is held: a study whose searches are not all there opens on what is, and its notice says how many it lacks.",
@@ -39040,7 +39697,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -39080,7 +39737,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Builds a study again, buying the Places searches it lacks at the caller's tokens.",
@@ -39203,7 +39860,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -39243,7 +39900,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Every source key, revoked ones too.",
@@ -39372,7 +40029,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -39412,7 +40069,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Issues a signing key; its secret is in this answer only.",
@@ -39533,7 +40190,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -39573,7 +40230,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Every active site key's landing report (`<origin>/.well-known/sa-site`, no redirect, 5 s) beside what sites saw of it: its last ingest per key, its last internal read per brand.",
@@ -39698,7 +40355,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -39738,7 +40395,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Revokes a source key for good: its id is never issued again.",
@@ -39874,7 +40531,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -39914,7 +40571,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Gives a site key issued before origins its origin, once; the same origin again is no change.",
@@ -40034,7 +40691,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -40074,7 +40731,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's balance, renewed a day's worth when read, the kick-backs not claimed, and what they read before spending.",
@@ -40190,7 +40847,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -40230,7 +40887,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Claims every kick-back and grant owed to the caller into their balance.",
@@ -40378,7 +41035,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -40418,7 +41075,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's ledger, newest first.",
@@ -40541,7 +41198,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -40581,7 +41238,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Above how many tokens an action asks the caller first.",
@@ -40701,7 +41358,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -40741,7 +41398,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "What the caller spent per UTC day over the last 30, oldest first.",
@@ -40861,7 +41518,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -40901,7 +41558,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "The caller's trash: what they removed, restorable until purged `keep_days` after its removal.",
@@ -41022,7 +41679,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -41062,7 +41719,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Deletes a trashed gmail for good, with every GBP of it in the trash.",
@@ -41187,7 +41844,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -41227,7 +41884,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Restores a gmail, with the GBPs removed with it.",
@@ -41351,7 +42008,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -41391,7 +42048,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Deletes a trashed GBP for good.",
@@ -41516,7 +42173,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -41556,7 +42213,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Restores a GBP.",
@@ -41679,7 +42336,7 @@
                 }
               }
             },
-            "description": "`another_country`, `unreleased_category`, `unstudied`"
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
           },
           "429": {
             "content": {
@@ -41719,7 +42376,7 @@
                 }
               }
             },
-            "description": "`browsers_not_connected`, `unavailable`"
+            "description": "`unavailable`, `browsers_not_connected`"
           }
         },
         "summary": "Sets how long the caller's trash keeps what they removed. `never_purge` needs `sa:admin:trash:keep` (403); turned off, the kept days count from now.",
@@ -41860,8 +42517,8 @@
             }
           },
           "required": [
-            "continue",
-            "need"
+            "need",
+            "continue"
           ],
           "type": "object"
         }
@@ -42513,8 +43170,8 @@
             }
           },
           "required": [
-            "gmb",
-            "slug"
+            "slug",
+            "gmb"
           ],
           "type": "object"
         },
@@ -42547,9 +43204,9 @@
             }
           },
           "required": [
-            "country",
             "slug",
-            "trade"
+            "trade",
+            "country"
           ],
           "type": "object"
         },
@@ -42573,8 +43230,8 @@
             }
           },
           "required": [
-            "gmb",
-            "slug"
+            "slug",
+            "gmb"
           ],
           "type": "object"
         },

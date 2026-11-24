@@ -107,8 +107,8 @@ export const VIEWS = {
           }
         },
         "required": [
-          "continue",
-          "need"
+          "need",
+          "continue"
         ],
         "type": "object"
       }
@@ -760,8 +760,8 @@ export const VIEWS = {
           }
         },
         "required": [
-          "gmb",
-          "slug"
+          "slug",
+          "gmb"
         ],
         "type": "object"
       },
@@ -794,9 +794,9 @@ export const VIEWS = {
           }
         },
         "required": [
-          "country",
           "slug",
-          "trade"
+          "trade",
+          "country"
         ],
         "type": "object"
       },
@@ -820,8 +820,8 @@ export const VIEWS = {
           }
         },
         "required": [
-          "gmb",
-          "slug"
+          "slug",
+          "gmb"
         ],
         "type": "object"
       },

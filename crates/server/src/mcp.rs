@@ -209,7 +209,7 @@ async fn endpoint(State(m): State<Mcp>, headers: HeaderMap, body: Result<Json<Va
 		"tools/list" => Ok(json!({ "tools": list(m.tools.definitions(|p| may(&caller, p), false, approval(&caller)), approval(&caller), s.elicit) })),
 		"tools/call" => match call(&m, &caller, &s, &headers, params, streams).await {
 			Ok(Reply::Now(result)) => Ok(result),
-			Ok(Reply::Asking(work)) => return stream(m, s, headers, work, id),
+			Ok(Reply::Asking(work)) => return stream(m, s, headers, *work, id),
 			Err(e) => Err(e),
 		},
 		_ => Err((-32601, format!("no method {method}"))),
@@ -252,7 +252,7 @@ fn list(defs: Vec<Def>, approval: Approval, elicit: bool) -> Value {
 /// A tool's answer: now, or on a stream that asks the user first.
 enum Reply {
 	Now(Value),
-	Asking(Work),
+	Asking(Box<Work>),
 }
 
 /// What runs on a stream, asking the user what the level holds as it goes.
@@ -289,7 +289,7 @@ async fn call(m: &Mcp, caller: &Caller, s: &Session, headers: &HeaderMap, params
 				}
 			};
 			return Ok(match told {
-				Ok(t) if asks && matches!(t.state, CellState::Paused(_)) => Reply::Asking(Work::Cell(t)),
+				Ok(t) if asks && matches!(t.state, CellState::Paused(_)) => Reply::Asking(Box::new(Work::Cell(t))),
 				Ok(t) => Reply::Now(cell(&m.tools, &t)),
 				Err(e) => Reply::Now(text(&json!({ "error": e }), true)),
 			});
@@ -315,7 +315,7 @@ async fn call(m: &Mcp, caller: &Caller, s: &Session, headers: &HeaderMap, params
 	};
 	if matches!(gate, Gate::Held) && !confirmed {
 		if asks {
-			return Ok(Reply::Asking(Work::Call { call: c, own }));
+			return Ok(Reply::Asking(Box::new(Work::Call { call: c, own })));
 		}
 		let Some(p) = m.tools.proposal(&c) else {
 			return Ok(Reply::Now(text(&json!({ "error": format!("no operation {:?}: search for one", c.operation) }), true)));

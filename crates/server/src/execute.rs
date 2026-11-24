@@ -250,7 +250,7 @@ impl Told {
 pub enum CellState {
 	Running,
 	/// Waiting for the person on this call.
-	Paused(Call),
+	Paused(Box<Call>),
 	Ended(Ended),
 }
 
@@ -331,7 +331,7 @@ impl Cell {
 	fn told(&mut self) -> Told {
 		let state = match (self.ended, &self.held) {
 			(Some(e), _) => CellState::Ended(e),
-			(None, Some(h)) => CellState::Paused(h.call.clone()),
+			(None, Some(h)) => CellState::Paused(Box::new(h.call.clone())),
 			(None, None) => CellState::Running,
 		};
 		let told = Told {
@@ -436,7 +436,7 @@ async fn drive(s: Arc<Session>, tools: Tools, mut child: Child, mut stdin: Child
 					Ok(Up::Print(text)) => to_cell(&mut |c| c.stdout.add(&text)),
 					Ok(Up::Call(call)) => {
 						let relayed = tokio::select! {
-							r = relay(&s, &tools, call) => r,
+							r = relay(&s, &tools, *call) => r,
 							() = async { tokio::time::sleep_until(deadline.expect("a call comes from a running cell")).await } => break Some(Ended::Killed),
 							order = orders.recv() => {
 								assert!(order.is_none(), "no cell is ordered while one runs");

@@ -2,58 +2,135 @@
 
 import { Badge, Button, Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Input, toast } from "@evinvest/uikit";
 import { ClipboardPaste, ExternalLink } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import { api, ok } from "@/shared/api";
-import type { Claude } from "@/shared/api/schema";
+import type { Checked } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
-import { claude as keys } from "../model/i18n";
-import { useClaude } from "../model/use-claude";
+import { own as keys } from "../model/i18n";
+import { useOwnModels } from "../model/use-own-models";
 
-/**
- * Connects the person's own Claude in three clicks: Connect opens Claude's authorize page, its Copy
- * puts the code on the clipboard, Paste here sends it. Connected, it says so and can disconnect.
- */
-export function ConnectClaudeDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+/** The person's own Claude and OpenAI key: each connected, seen to work, disconnected. An offer: without either, answers run on the panel's. */
+export function ConnectModelDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useT();
-  const mine = useClaude();
-  const [connecting, setConnecting] = useState(false);
-  const connected = mine.status === "ok" ? mine.data : null;
+  const mine = useOwnModels();
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => {
-        if (!o) setConnecting(false);
-        onOpenChange(o);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{t(keys.title, "Your Claude")}</DialogTitle>
+          <DialogTitle>{t(keys.title, "Your own models")}</DialogTitle>
           <DialogDescription>
-            {t(keys.why, "The assistant runs on the panel's Claude and costs tokens. Connect your own Claude subscription and its answers cost nothing here.")}
+            {t(keys.why, "On the panel's models the assistant and mail cost tokens. Connect your own and they cost nothing here, and run on yours alone.")}
           </DialogDescription>
         </DialogHeader>
-        {connected !== null && !connecting ? (
-          <ClaudeStatus claude={connected} onReconnect={() => setConnecting(true)} onChanged={mine.reload} />
-        ) : (
-          <Connect
-            onDone={() => {
-              setConnecting(false);
-              mine.reload();
-            }}
-          />
+        {mine !== null && (
+          <>
+            <Own
+              title={t(keys.claude, "Claude subscription")}
+              state={mine.claude}
+              expires={mine.claude?.expires_at ?? null}
+              last4={null}
+              connect={(done) => <ConnectClaude onDone={done} />}
+              disconnect={() => ok(api.DELETE("/me/claude"))}
+              onChanged={mine.reload}
+            />
+            <Own
+              title={t(keys.openai, "OpenAI key")}
+              state={mine.openai}
+              expires={null}
+              last4={mine.openai?.last4 ?? null}
+              connect={(done) => <ConnectOpenAi onDone={done} />}
+              disconnect={() => ok(api.DELETE("/me/openai"))}
+              onChanged={mine.reload}
+            />
+          </>
         )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function Connect({ onDone }: { onDone: () => void }) {
+function Own({
+  title,
+  state,
+  expires,
+  last4,
+  connect,
+  disconnect,
+  onChanged,
+}: {
+  title: string;
+  state: { set_at: string; checked: Checked } | null;
+  expires: string | null;
+  last4: string | null;
+  connect: (onDone: () => void) => ReactNode;
+  disconnect: () => Promise<unknown>;
+  onChanged: () => void;
+}) {
+  const t = useT();
+  const locale = useLocale();
+  const button = useButtonSize();
+  const [connecting, setConnecting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const failing = state !== null && state.checked.error !== null;
+  const drop = async () => {
+    setBusy(true);
+    try {
+      await disconnect();
+      onChanged();
+    } catch (e) {
+      notifyFailure(e, t);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="flex flex-col gap-3 border-t border-border-subtle pt-4" aria-label={title}>
+      <h3 className="flex items-center gap-2 text-body-s font-medium text-ink">
+        <span className="flex-1">
+          {title}
+          {last4 !== null && <span className="ml-1.5 font-mono text-ink-soft">…{last4}</span>}
+        </span>
+        {state !== null && <Badge tone={failing ? "error" : "positive"}>{failing ? t(keys.failing, "Refused") : t(keys.works, "Connected")}</Badge>}
+      </h3>
+      {state === null || connecting ? (
+        connect(() => {
+          setConnecting(false);
+          onChanged();
+        })
+      ) : (
+        <>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-body-s text-ink-soft">
+            <dt>{t(keys.since, "Since")}</dt>
+            <dd className="text-right">{formatDateTime(state.set_at, locale)}</dd>
+            {expires !== null && (
+              <>
+                <dt>{t(keys.expires, "Expires")}</dt>
+                <dd className="text-right">{formatDateTime(expires, locale)}</dd>
+              </>
+            )}
+          </dl>
+          {failing && <p className="text-body-s text-accent-error">{state.checked.error}</p>}
+          <div className="flex flex-wrap gap-2">
+            <Button variant={failing ? "primary" : "outline"} size={button("sm")} disabled={busy} onClick={() => setConnecting(true)}>
+              {t(keys.reconnect, "Reconnect")}
+            </Button>
+            <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => void drop()}>
+              {t(keys.disconnect, "Disconnect")}
+            </Button>
+          </div>
+        </>
+      )}
+    </section>
+  );
+}
+
+/** In three clicks: Connect opens Claude's authorize page, its Copy puts the code on the clipboard, Paste here sends it. */
+function ConnectClaude({ onDone }: { onDone: () => void }) {
   const t = useT();
   const button = useButtonSize();
   const [url, setUrl] = useState<string | null>(null);
@@ -79,7 +156,7 @@ function Connect({ onDone }: { onDone: () => void }) {
     setBusy(true);
     try {
       await ok(api.PUT("/me/claude", { body: { code: pasted.trim() } }));
-      toast.positive(t(keys.connected, "Your Claude is connected: your answers run on it"));
+      toast.positive(t(keys.connected.claude, "Your Claude is connected: your answers run on it"));
       onDone();
     } catch (e) {
       notifyFailure(e, t);
@@ -89,8 +166,8 @@ function Connect({ onDone }: { onDone: () => void }) {
   };
   if (url === null)
     return (
-      <Button size={button()} disabled={busy} onClick={() => void start()}>
-        {t(keys.connect, "Connect")}
+      <Button className="self-start" size={button()} disabled={busy} onClick={() => void start()}>
+        {t(keys.connect.claude, "Connect Claude")}
       </Button>
     );
   return (
@@ -137,18 +214,17 @@ function Connect({ onDone }: { onDone: () => void }) {
   );
 }
 
-/** A connected Claude: since when, until when, whether Claude still takes it. */
-function ClaudeStatus({ claude, onReconnect, onChanged }: { claude: Claude; onReconnect: () => void; onChanged: () => void }) {
+function ConnectOpenAi({ onDone }: { onDone: () => void }) {
   const t = useT();
-  const locale = useLocale();
   const button = useButtonSize();
+  const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
-  const failing = claude.checked.error !== null;
-  const disconnect = async () => {
+  const send = async () => {
     setBusy(true);
     try {
-      await ok(api.DELETE("/me/claude"));
-      onChanged();
+      await ok(api.PUT("/me/openai", { body: { key: key.trim() } }));
+      toast.positive(t(keys.connected.openai, "Your OpenAI key is connected: your answers run on it"));
+      onDone();
     } catch (e) {
       notifyFailure(e, t);
     } finally {
@@ -156,26 +232,17 @@ function ClaudeStatus({ claude, onReconnect, onChanged }: { claude: Claude; onRe
     }
   };
   return (
-    <div className="flex flex-col gap-3">
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-body-s">
-        <dt className="text-ink-soft">{t(keys.state, "State")}</dt>
-        <dd className="text-right">
-          <Badge tone={failing ? "error" : "positive"}>{failing ? t(keys.failing, "Refused") : t(keys.works, "Connected")}</Badge>
-        </dd>
-        <dt className="text-ink-soft">{t(keys.since, "Since")}</dt>
-        <dd className="text-right text-ink-soft">{formatDateTime(claude.set_at, locale)}</dd>
-        <dt className="text-ink-soft">{t(keys.expires, "Expires")}</dt>
-        <dd className="text-right text-ink-soft">{formatDateTime(claude.expires_at, locale)}</dd>
-      </dl>
-      {failing && <p className="text-body-s text-accent-error">{claude.checked.error}</p>}
-      <div className="flex flex-wrap gap-2">
-        <Button variant={failing ? "primary" : "outline"} size={button("sm")} disabled={busy} onClick={onReconnect}>
-          {t(keys.reconnect, "Reconnect")}
-        </Button>
-        <Button variant="ghost" size={button("sm")} disabled={busy} onClick={() => void disconnect()}>
-          {t(keys.disconnect, "Disconnect")}
-        </Button>
-      </div>
-    </div>
+    <form
+      className="flex gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send();
+      }}
+    >
+      <Input type="password" value={key} onChange={(e) => setKey(e.target.value)} autoComplete="off" aria-label={t(keys.openai, "OpenAI key")} placeholder="sk-…" />
+      <Button type="submit" size={button()} disabled={busy || key.trim() === ""}>
+        {t(keys.connect, "Connect")}
+      </Button>
+    </form>
   );
 }

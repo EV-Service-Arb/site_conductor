@@ -7,6 +7,7 @@ use std::sync::{Arc, Mutex};
 
 use axum::{Json, Router, http::Method, routing::post};
 use jiff::Timestamp;
+use sa_core::prices::Provider;
 use sa_panel::{
 	Panel,
 	import::Export,
@@ -14,11 +15,11 @@ use sa_panel::{
 };
 use sa_sandbox::{MAX, OUTPUT, WAIT};
 use sa_server::{
-	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
 	http,
+	model::Model,
 	signin::{SignIn, SignInConfig},
-	testing::{Browser, Mcp, ORIGIN, mcp_grant, sandbox, tool_result},
+	testing::{Browser, Mcp, ORIGIN, mcp_grant, origins, sandbox, tool_result},
 };
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -111,7 +112,7 @@ impl Stack {
 			Default::default(),
 			None,
 			None,
-			Some(Model::new(Origins { api: model.clone(), oauth: model }, Some("owner".to_owned().into()))),
+			Some(Model::new(origins(&model), vec![(Provider::Claude, "owner".to_owned().into())])),
 			sandbox(),
 			None,
 		);
@@ -347,7 +348,10 @@ async fn signing_out_ends_the_session() {
 	let act = json!({ "turn": said["id"], "action": said["actions"][0]["id"] });
 	let (status, chat) = s.b.call(&s.app, Method::POST, &format!("/api/v1/assistant/chats/{}/act", s.chat), Some(act)).await;
 	assert_eq!(status, 200, "{chat}");
-	let resumed = s.sent.lock().unwrap()[2]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_owned();
+	let resumed = s.sent.lock().unwrap()[2]["messages"].as_array().unwrap().last().unwrap()["content"][0]["text"]
+		.as_str()
+		.unwrap()
+		.to_owned();
 	assert!(resumed.contains("signed_out"), "the held call ran as the signed-out session: {resumed}");
 	s.ask("ask").await;
 	let gone = s.result(4, 0);
@@ -368,7 +372,7 @@ async fn a_paused_cell_goes_on_once_the_person_agrees() {
 	assert_eq!(turns[1]["actions"][0]["state"], "done");
 	assert_eq!(turns.last().unwrap()["text"], "It is removed.", "the answer resumed");
 	let sent = s.sent.lock().unwrap();
-	let resumed = sent[2]["messages"].as_array().unwrap().last().unwrap()["content"].as_str().unwrap().to_owned();
+	let resumed = sent[2]["messages"].as_array().unwrap().last().unwrap()["content"][0]["text"].as_str().unwrap().to_owned();
 	assert!(resumed.contains("<resumed>"), "the call ran in the code: {resumed}");
 	assert!(resumed.contains("removed not_found"), "the call ran in the code: {resumed}");
 }

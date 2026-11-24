@@ -6,13 +6,14 @@ use std::sync::{Arc, Mutex};
 
 use axum::{Json, Router, body::Body, http::Method, routing::post};
 use jiff::Timestamp;
+use sa_core::prices::Provider;
 use sa_panel::testing::{TestDb, operator, panel};
 use sa_server::{
-	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
 	http,
+	model::Model,
 	signin::{SignIn, SignInConfig},
-	testing::{Browser, ORIGIN},
+	testing::{Browser, ORIGIN, origins},
 };
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -72,7 +73,7 @@ async fn the_assistant_calls_as_the_asker_and_proposes_what_destroys() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	let model = Model::new(Origins { api: base.clone(), oauth: base }, Some("owner".to_owned().into()));
+	let model = Model::new(origins(&base), vec![(Provider::Claude, "owner".to_owned().into())]);
 	let app = http::app(
 		SignIn::new(p.clone(), Concierge::dev(who), config),
 		None,
@@ -179,7 +180,7 @@ async fn the_approval_level_holds_only_what_it_does_not_cover() {
 		panel_origin: ORIGIN.to_owned(),
 		concierge_origin: ORIGIN.to_owned(),
 	};
-	let model = Model::new(Origins { api: base.clone(), oauth: base }, Some("owner".to_owned().into()));
+	let model = Model::new(origins(&base), vec![(Provider::Claude, "owner".to_owned().into())]);
 	let app = http::app(
 		SignIn::new(p.clone(), Concierge::dev(who), config),
 		None,

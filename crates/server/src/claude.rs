@@ -1,5 +1,4 @@
-//! Claude: the Messages API the assistant asks, on the panel's subscription or a person's own, and
-//! a person's own connected as `claude setup-token` does it (OAuth PKCE on Claude Code's public
+//! A person's own Claude, connected as `claude setup-token` does it (OAuth PKCE on Claude Code's public
 //! client). Its redirect is Anthropic's page, never ours: the code comes back pasted.
 //!
 //! ```text
@@ -17,8 +16,9 @@ use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
 use ev_lib::api::{Body, JsonSchema, Refusal};
 use jiff::{SignedDuration, Timestamp};
 use sa_auth::Own;
+use sa_core::prices::Provider;
 use sa_panel::{
-	claude::Claude,
+	own_models::Claude,
 	session::{pkce_challenge, random_token},
 };
 use serde::{Deserialize, Serialize};
@@ -31,12 +31,10 @@ use crate::{
 	api::{ApiResult, Code},
 	connections::CheckedDto,
 	http::{ApiRoute, ApiState, USER},
+	model::Model,
 	signin::Caller,
 };
 
-pub(crate) const MODEL: &str = "claude-opus-5-5";
-/// A subscription's token is served only to a system prompt that opens so.
-pub(crate) const SUBSCRIPTION: &str = "You are Claude Code, Anthropic's official CLI for Claude.";
 const CLIENT_ID: &str = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const AUTHORIZE: &str = "https://claude.com/cai/oauth/authorize";
 const REDIRECT: &str = "https://platform.claude.com/oauth/code/callback";
@@ -45,57 +43,41 @@ const LIFETIME: i64 = 31_536_000;
 /// How long a Connect waits for its code.
 const PENDING: SignedDuration = SignedDuration::from_mins(10);
 
-/// The Claude API, and the panel's own subscription (`CLAUDE_CODE_OAUTH_TOKEN`) if it has one.
+/// A person's Claude: never its token.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "Claude")]
+pub struct ClaudeDto {
+	/// RFC 3339.
+	pub set_at: String,
+	/// RFC 3339.
+	pub expires_at: String,
+	/// The last time Claude took it or refused it.
+	pub checked: CheckedDto,
+}
+
+/// Where the person authorizes the panel on claude.ai.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "ClaudeConnect")]
+pub struct ConnectDto {
+	pub url: String,
+}
+
+/// Claude's sign-in, and each person's Connect with it.
 #[derive(Clone)]
-pub struct Model {
+pub(crate) struct Connects {
 	http: reqwest::Client,
-	base: String,
-	oauth: String,
-	owner: Option<Arc<Zeroizing<String>>>,
-	/// Each person's Connect, until its code is pasted. A restart loses them: Connect again.
+	sign_in: String,
+	/// Until its code is pasted. A restart loses them: Connect again.
 	pending: Arc<Mutex<HashMap<Uuid, Pending>>>,
 }
-impl Model {
-	pub fn new(Origins { api: base, oauth }: Origins, owner: Option<Zeroizing<String>>) -> Self {
+impl Connects {
+	pub(crate) fn new(sign_in: String) -> Self {
 		let _ = rustls::crypto::ring::default_provider().install_default(); //IGNORED_ERROR: Err is "a provider is already installed", which is all reqwest needs
 		let http = reqwest::Client::builder().timeout(Duration::from_secs(300)).build().expect("the TLS backend initialises at boot");
 		Self {
 			http,
-			base,
-			oauth,
-			owner: owner.map(Arc::new),
+			sign_in,
 			pending: Arc::default(),
-		}
-	}
-
-	/// The panel's own subscription's token.
-	pub fn owner(&self) -> Option<&Zeroizing<String>> {
-		self.owner.as_deref()
-	}
-
-	/// What the model answered on `token`; `Err`, Claude refused the token, with what it said.
-	pub(crate) async fn answer(&self, token: &str, body: &impl Serialize) -> ApiResult<Result<Value, String>> {
-		let res = self
-			.http
-			.post(format!("{}/v1/messages", self.base))
-			.bearer_auth(token)
-			.header("anthropic-version", "2026-10-21")
-			.header("anthropic-beta", "server-side-fallback-2026-07-01,oauth-2025-04-20")
-			.json(body)
-			.send()
-			.await
-			.map_err(|e| Refusal::new(Code::Unavailable, format!("the assistant's model did not answer: {e}")))?;
-		let status = res.status();
-		let body: Value = res
-			.json()
-			.await
-			.map_err(|e| Refusal::new(Code::Unavailable, format!("the assistant's model answered no JSON: {e}")))?;
-		match status {
-			s if s.is_success() => Ok(Ok(body)),
-			reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => Ok(Err(body["error"]["message"].as_str().map_or_else(|| body.to_string(), str::to_owned))),
-			// what it was asked is at fault: too long, or filtered
-			s @ (reqwest::StatusCode::BAD_REQUEST | reqwest::StatusCode::PAYLOAD_TOO_LARGE) => Err(Refusal::new(Code::BadRequest, format!("the assistant's model refused with {s}: {body}"))),
-			s => Err(Refusal::new(Code::Unavailable, format!("the assistant's model refused with {s}: {body}"))),
 		}
 	}
 
@@ -136,7 +118,7 @@ impl Model {
 		};
 		let res = self
 			.http
-			.post(format!("{}/v1/oauth/token", self.oauth))
+			.post(format!("{}/v1/oauth/token", self.sign_in))
 			.json(&json!({
 				"grant_type": "authorization_code",
 				"code": code,
@@ -162,33 +144,6 @@ impl Model {
 		let lasts = body["expires_in"].as_i64().ok_or_else(|| eyre::eyre!("Claude's sign-in answered no expires_in"))?;
 		Ok((Zeroizing::new(token.to_owned()), now + SignedDuration::from_secs(lasts)))
 	}
-}
-
-/// Where [`Model`] reaches Claude.
-pub struct Origins {
-	/// `https://api.anthropic.com`.
-	pub api: String,
-	/// `https://platform.claude.com`: where a code is exchanged.
-	pub oauth: String,
-}
-
-/// A person's Claude: never its token.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "Claude")]
-pub struct ClaudeDto {
-	/// RFC 3339.
-	pub set_at: String,
-	/// RFC 3339.
-	pub expires_at: String,
-	/// The last time Claude took it or refused it.
-	pub checked: CheckedDto,
-}
-
-/// Where the person authorizes the panel on claude.ai.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "ClaudeConnect")]
-pub struct ConnectDto {
-	pub url: String,
 }
 
 struct Pending {
@@ -224,11 +179,11 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	]
 }
 
-fn model(state: &ApiState) -> ApiResult<&Model> {
+pub(crate) fn model(state: &ApiState) -> ApiResult<&Model> {
 	state.model.as_ref().ok_or_else(|| Refusal::new(Code::Unavailable, "the assistant is not connected"))
 }
 
-/// The caller's own Claude, which their assistant's answers run on; `null`, they run on the panel's.
+/// The caller's own Claude, which their assistant's answers run on; `null`, none.
 async fn claude(State(state): State<ApiState>, Extension(caller): Extension<Caller>) -> ApiResult<Json<Option<ClaudeDto>>> {
 	Ok(Json(state.sign_in.panel.claude(caller.user_id).await?.map(ClaudeDto::from)))
 }
@@ -236,7 +191,7 @@ async fn claude(State(state): State<ApiState>, Extension(caller): Extension<Call
 /// Starts connecting the caller's own Claude: open `url`, authorize, and paste the code it shows
 /// into `PUT /me/claude` within 10 minutes.
 async fn connect(State(state): State<ApiState>, Extension(caller): Extension<Caller>) -> ApiResult<Json<ConnectDto>> {
-	let url = model(&state)?.connect(caller.user_id, Timestamp::now())?;
+	let url = model(&state)?.connects.connect(caller.user_id, Timestamp::now())?;
 	Ok(Json(ConnectDto { url }))
 }
 
@@ -247,24 +202,16 @@ async fn connect(State(state): State<ApiState>, Extension(caller): Extension<Cal
 async fn set_claude(State(state): State<ApiState>, Extension(caller): Extension<Caller>, Body(b): Body<Pasted>) -> ApiResult<Json<ClaudeDto>> {
 	let model = model(&state)?;
 	let now = Timestamp::now();
-	let (token, expires_at) = model.exchange(caller.user_id, &b.code, now).await?;
-	let probe = json!({
-		"model": MODEL,
-		"max_tokens": 1,
-		"system": [{ "type": "text", "text": SUBSCRIPTION }],
-		"messages": [{ "role": "user", "content": "hi" }],
-	});
-	if let Err(said) = model.answer(&token, &probe).await? {
-		return Err(Refusal::new(Code::BadRequest, format!("Claude refuses the token it gave: {said}")));
-	}
+	let (token, expires_at) = model.connects.exchange(caller.user_id, &b.code, now).await?;
+	model.probe(Provider::Claude, &token).await?;
 	let set = state.sign_in.panel.set_claude(caller.user_id, &token, expires_at, now).await?;
 	tracing::info!(user_id = %caller.user_id, "a person's Claude connected");
 	Ok(Json(set.into()))
 }
 
-/// Disconnects the caller's own Claude: their answers run on the panel's again. 404 none.
+/// Disconnects the caller's own Claude. 404 none.
 async fn remove_claude(State(state): State<ApiState>, Extension(caller): Extension<Caller>) -> ApiResult<NoContent> {
-	state.sign_in.panel.remove_claude(caller.user_id).await??;
+	state.sign_in.panel.remove_own_model(caller.user_id, Provider::Claude).await??;
 	tracing::info!(user_id = %caller.user_id, "a person's Claude disconnected");
 	Ok(NoContent)
 }

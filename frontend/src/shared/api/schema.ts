@@ -719,10 +719,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done. It runs on the asker's own Claude if they connected one, else on the panel's, each round charged to them at its prices. A call a cell of the chat's session waits on is declined: the person moved on.
-         * @description 503 without either Claude, or when the model does not answer.
-         */
+        /** Asks the assistant in a chat: the question and the answer join its turns, the answer written as it grows; answered with the chat once the answer is done, or `stopped` saying why. It runs on the asker's own models if they connected any, else on the panel's, each round charged to them at its prices. A call a cell of the chat's session waits on is declined: the person moved on. */
         post: operations["ask"];
         delete?: never;
         options?: never;
@@ -2252,7 +2249,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's own Claude, which their assistant's answers run on; `null`, they run on the panel's. */
+        /** The caller's own Claude, which their assistant's answers run on; `null`, none. */
         get: operations["claude"];
         /**
          * Connects the caller's own Claude from the code its page showed, kept only once Claude answers on it.
@@ -2260,7 +2257,7 @@ export interface paths {
          */
         put: operations["set_claude"];
         post?: never;
-        /** Disconnects the caller's own Claude: their answers run on the panel's again. 404 none. */
+        /** Disconnects the caller's own Claude. 404 none. */
         delete: operations["remove_claude"];
         options?: never;
         head?: never;
@@ -2279,6 +2276,28 @@ export interface paths {
         /** Starts connecting the caller's own Claude: open `url`, authorize, and paste the code it shows into `PUT /me/claude` within 10 minutes. */
         post: operations["connect"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/openai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's own OpenAI key, which their assistant's answers run on, after their Claude; `null`, none. */
+        get: operations["openai"];
+        /**
+         * Connects the caller's own OpenAI key, kept only once OpenAI answers on it: their account pays it.
+         * @description 400 OpenAI refuses it, it is out of credit, or it has no access to the model; 503 it does not answer now.
+         */
+        put: operations["set_openai"];
+        post?: never;
+        /** Disconnects the caller's own OpenAI key. 404 none. */
+        delete: operations["remove_openai"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3486,13 +3505,41 @@ export interface components {
             /** @description Google's consent page, for the gmail to grant `business.manage` on. */
             url: string;
         };
-        /** @description What an answer cost: the model's tokens, on whose Claude, and the tokens it charged its asker. */
+        /** @description What an answer cost: the model's tokens, on whose account, and the tokens it charged its asker. */
         Cost: {
-            /** @description `ours`: the panel's Claude, charged; `theirs`: the asker's own, free here. */
+            /** @description `ours`: the panel's, charged; `theirs`: the asker's own, free here. */
             bill: components["schemas"]["Bill"];
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description Of the asker's tokens.
+             */
             charged: number;
+            /** @description The model that answered; `null`: none yet, or an answer from before it was told. */
+            model: string | null;
             tokens: components["schemas"]["ModelUsed"];
+            /**
+             * Format: int64
+             * @description What the tokens list for at the provider, in millionths of a dollar: not what is charged here. `null`: not known.
+             */
+            usd_micros: number | null;
+        };
+        /** @description What an answer cost: the model's tokens, on whose account, and the tokens it charged its asker. */
+        CostInput: {
+            /** @description `ours`: the panel's, charged; `theirs`: the asker's own, free here. */
+            bill: components["schemas"]["Bill"];
+            /**
+             * Format: int64
+             * @description Of the asker's tokens.
+             */
+            charged: number;
+            /** @description The model that answered; `null`: none yet, or an answer from before it was told. */
+            model?: string | null;
+            tokens: components["schemas"]["ModelUsed"];
+            /**
+             * Format: int64
+             * @description What the tokens list for at the provider, in millionths of a dollar: not what is charged here. `null`: not known.
+             */
+            usd_micros?: number | null;
         };
         /**
          * @description ISO 3166-1 alpha-2, of the countries GBPs are in.
@@ -5063,7 +5110,7 @@ export interface components {
          * @enum {string}
          */
         Method: "email" | "telegram" | "discord" | "slack" | "push" | "webhook";
-        /** @description The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]). */
+        /** @description The model's tokens, by how its provider bills them ([`sa_core::prices::ModelTokens`]). */
         ModelUsed: {
             /** Format: int64 */
             cache_read: number;
@@ -5198,6 +5245,17 @@ export interface components {
          * @enum {string}
          */
         OnGoogle: "verifying" | "verified" | "suspended";
+        /** @description A person's OpenAI key: its last four alone. */
+        OpenAi: {
+            /** @description The last time OpenAI took it or refused it. */
+            checked: components["schemas"]["Checked"];
+            last4: string;
+            /** @description RFC 3339. */
+            set_at: string;
+        };
+        OpenAiKey: {
+            key: string;
+        };
         /** @description An OpenAPI 3.1 document. */
         OpenApi: Record<string, never>;
         /** @description A Gmail thread for the gmail's browser to open. */
@@ -5285,7 +5343,7 @@ export interface components {
             unit: string;
         };
         /** @enum {string} */
-        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "places.profile" | "places.photo" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "placement.search" | "ads.location" | "ads.keyword_ideas" | "ads.historical_metrics" | "dataforseo.keywords_for_keywords" | "dataforseo.search_volume" | "browser.gologin" | "browser.mimic" | "claude.input" | "claude.cache_write" | "claude.cache_read" | "claude.output";
+        PricedItem: "places.details" | "places.search" | "places.autocomplete" | "places.geocode" | "places.profile" | "places.photo" | "street_view.panorama" | "map.map" | "walk.open" | "walk.reviews" | "walk.sort" | "walk.sort_retry" | "walk.step" | "phone.running" | "placement.search" | "ads.location" | "ads.keyword_ideas" | "ads.historical_metrics" | "dataforseo.keywords_for_keywords" | "dataforseo.search_volume" | "browser.gologin" | "browser.mimic" | "claude.input" | "claude.cache_write" | "claude.cache_read" | "claude.output" | "openai.input" | "openai.cache_write" | "openai.cache_read" | "openai.output";
         /** @description Every item, in the catalog's order. */
         Prices: {
             prices: components["schemas"]["Price"][];
@@ -5588,6 +5646,14 @@ export interface components {
                 /** Format: double */
                 "map.map"?: number;
                 /** Format: double */
+                "openai.cache_read"?: number;
+                /** Format: double */
+                "openai.cache_write"?: number;
+                /** Format: double */
+                "openai.input"?: number;
+                /** Format: double */
+                "openai.output"?: number;
+                /** Format: double */
                 "phone.running"?: number;
                 /** Format: double */
                 "placement.search"?: number;
@@ -5641,6 +5707,14 @@ export interface components {
                 "dataforseo.search_volume"?: number;
                 /** Format: double */
                 "map.map"?: number;
+                /** Format: double */
+                "openai.cache_read"?: number;
+                /** Format: double */
+                "openai.cache_write"?: number;
+                /** Format: double */
+                "openai.input"?: number;
+                /** Format: double */
+                "openai.output"?: number;
                 /** Format: double */
                 "phone.running"?: number;
                 /** Format: double */
@@ -5988,6 +6062,14 @@ export interface components {
                 /** Format: int64 */
                 "map.map"?: number;
                 /** Format: int64 */
+                "openai.cache_read"?: number;
+                /** Format: int64 */
+                "openai.cache_write"?: number;
+                /** Format: int64 */
+                "openai.input"?: number;
+                /** Format: int64 */
+                "openai.output"?: number;
+                /** Format: int64 */
                 "phone.running"?: number;
                 /** Format: int64 */
                 "placement.search"?: number;
@@ -6115,6 +6197,11 @@ export interface components {
             actions: components["schemas"]["Action"][];
             /** Format: int64 */
             at: number;
+            /**
+             * @description It stopped for what connecting a model of one's own, or again, helps.
+             * @default false
+             */
+            connect: boolean;
             /** @description What it cost, as it grows; `null` on answers from before it was told. */
             cost: components["schemas"]["Cost"] | null;
             /**
@@ -6151,8 +6238,13 @@ export interface components {
             actions: components["schemas"]["Action"][];
             /** Format: int64 */
             at: number;
+            /**
+             * @description It stopped for what connecting a model of one's own, or again, helps.
+             * @default false
+             */
+            connect?: boolean;
             /** @description What it cost, as it grows; `null` on answers from before it was told. */
-            cost?: components["schemas"]["Cost"] | null;
+            cost?: components["schemas"]["CostInput"] | null;
             /**
              * Format: int64
              * @description When the answer stopped growing; `null` while it runs.
@@ -6343,6 +6435,7 @@ export type ConnectedSites = components['schemas']['ConnectedSites'];
 export type Connections = components['schemas']['Connections'];
 export type Consent = components['schemas']['Consent'];
 export type Cost = components['schemas']['Cost'];
+export type CostInput = components['schemas']['CostInput'];
 export type Country = components['schemas']['Country'];
 export type CreditInput = components['schemas']['CreditInput'];
 export type Demand = components['schemas']['Demand'];
@@ -6482,6 +6575,8 @@ export type NewUnplaced = components['schemas']['NewUnplaced'];
 export type NextListingVersion = components['schemas']['NextListingVersion'];
 export type On = components['schemas']['On'];
 export type OnGoogle = components['schemas']['OnGoogle'];
+export type OpenAi = components['schemas']['OpenAi'];
+export type OpenAiKey = components['schemas']['OpenAiKey'];
 export type OpenApi = components['schemas']['OpenApi'];
 export type OpenThread = components['schemas']['OpenThread'];
 export type Origin = components['schemas']['Origin'];
@@ -6679,7 +6774,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6715,7 +6810,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -6806,7 +6901,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6842,7 +6937,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -6938,7 +7033,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6974,7 +7069,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7068,7 +7163,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7104,7 +7199,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7196,7 +7291,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7232,7 +7327,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7331,7 +7426,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7367,7 +7462,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7464,7 +7559,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7500,7 +7595,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7597,7 +7692,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7633,7 +7728,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7725,7 +7820,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7761,7 +7856,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7858,7 +7953,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7894,7 +7989,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7986,7 +8081,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8022,7 +8117,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8122,7 +8217,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8158,7 +8253,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8260,7 +8355,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8296,7 +8391,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8393,7 +8488,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8429,7 +8524,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8521,7 +8616,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8557,7 +8652,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8655,7 +8750,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8691,7 +8786,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8783,7 +8878,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8819,7 +8914,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -8911,7 +9006,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8947,7 +9042,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -9043,7 +9138,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9079,7 +9174,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -9175,7 +9270,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9211,7 +9306,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -9307,7 +9402,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9343,7 +9438,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -9439,7 +9534,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9475,7 +9570,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -9489,12 +9584,12 @@ export interface operations {
     alert_inbox: {
         parameters: {
             query?: {
-                /** @description Older than this one. */
-                before?: number | null;
-                /** @description About this GBP. */
-                gmb?: number | null;
                 tier?: components["schemas"]["Tier"] | null;
                 unread?: boolean;
+                /** @description About this GBP. */
+                gmb?: number | null;
+                /** @description Older than this one. */
+                before?: number | null;
             };
             header?: never;
             path?: never;
@@ -9574,7 +9669,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9610,7 +9705,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -9704,7 +9799,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9740,7 +9835,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -9834,7 +9929,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9870,7 +9965,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -9964,7 +10059,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10000,7 +10095,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -10097,7 +10192,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10133,7 +10228,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -10229,7 +10324,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10265,7 +10360,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -10363,7 +10458,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10399,7 +10494,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -10495,7 +10590,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10531,7 +10626,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -10627,7 +10722,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10663,7 +10758,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -10755,7 +10850,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10791,7 +10886,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -10886,7 +10981,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10922,7 +11017,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -11013,7 +11108,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11049,7 +11144,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -11142,7 +11237,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11178,7 +11273,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -11275,7 +11370,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11311,7 +11406,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -11401,7 +11496,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11437,7 +11532,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -11529,7 +11624,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11565,7 +11660,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -11661,7 +11756,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11697,7 +11792,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -11791,7 +11886,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11827,7 +11922,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -11919,7 +12014,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11955,7 +12050,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -12049,7 +12144,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12085,7 +12180,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -12183,7 +12278,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12219,7 +12314,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -12315,7 +12410,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12351,7 +12446,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -12449,7 +12544,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12485,7 +12580,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -12583,7 +12678,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12619,7 +12714,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -12717,7 +12812,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12753,7 +12848,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -12846,7 +12941,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12882,7 +12977,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -12978,7 +13073,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13014,7 +13109,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -13112,7 +13207,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13148,7 +13243,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -13246,7 +13341,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13282,7 +13377,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -13377,7 +13472,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13413,7 +13508,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -13505,7 +13600,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13541,7 +13636,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -13637,7 +13732,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13673,7 +13768,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -13765,7 +13860,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13801,7 +13896,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -13899,7 +13994,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13935,7 +14030,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -14029,7 +14124,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14065,7 +14160,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -14165,7 +14260,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14201,7 +14296,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -14295,7 +14390,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14331,7 +14426,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -14431,7 +14526,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14467,7 +14562,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -14483,9 +14578,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                id: number;
                 /** @description `<photo>.jpg`. */
                 file: string;
-                id: number;
             };
             cookie?: never;
         };
@@ -14563,7 +14658,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14599,7 +14694,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -14615,9 +14710,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                id: number;
                 /** @description `<photo>.jpg`. */
                 file: string;
-                id: number;
             };
             cookie?: never;
         };
@@ -14693,7 +14788,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14729,7 +14824,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -14745,9 +14840,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
+                id: number;
                 /** @description `<photo>.jpg`. */
                 file: string;
-                id: number;
             };
             cookie?: never;
         };
@@ -14829,7 +14924,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14865,7 +14960,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -14956,7 +15051,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14992,7 +15087,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -15008,9 +15103,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                country: components["schemas"]["Country"];
                 /** @description `gcid:plumber`. */
                 trade: string;
+                country: components["schemas"]["Country"];
             };
             cookie?: never;
         };
@@ -15093,7 +15188,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15129,7 +15224,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -15145,9 +15240,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                country: components["schemas"]["Country"];
                 /** @description `gcid:plumber`. */
                 trade: string;
+                country: components["schemas"]["Country"];
             };
             cookie?: never;
         };
@@ -15223,7 +15318,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15259,7 +15354,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -15275,9 +15370,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                country: components["schemas"]["Country"];
                 /** @description `gcid:plumber`. */
                 trade: string;
+                country: components["schemas"]["Country"];
             };
             cookie?: never;
         };
@@ -15360,7 +15455,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15396,7 +15491,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -15412,9 +15507,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                country: components["schemas"]["Country"];
                 /** @description `gcid:plumber`. */
                 trade: string;
+                country: components["schemas"]["Country"];
             };
             cookie?: never;
         };
@@ -15491,7 +15586,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15527,7 +15622,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -15543,9 +15638,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                country: components["schemas"]["Country"];
                 /** @description `gcid:plumber`. */
                 trade: string;
+                country: components["schemas"]["Country"];
             };
             cookie?: never;
         };
@@ -15623,7 +15718,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15659,7 +15754,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -15675,9 +15770,9 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                country: components["schemas"]["Country"];
                 /** @description `gcid:plumber`. */
                 trade: string;
+                country: components["schemas"]["Country"];
             };
             cookie?: never;
         };
@@ -15759,7 +15854,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15795,7 +15890,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -15811,10 +15906,10 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                country: components["schemas"]["Country"];
-                draft: number;
                 /** @description A gcid. */
                 trade: string;
+                country: components["schemas"]["Country"];
+                draft: number;
             };
             cookie?: never;
         };
@@ -15890,7 +15985,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15926,7 +16021,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -15942,10 +16037,10 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                country: components["schemas"]["Country"];
-                draft: number;
                 /** @description A gcid. */
                 trade: string;
+                country: components["schemas"]["Country"];
+                draft: number;
             };
             cookie?: never;
         };
@@ -16027,7 +16122,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16063,7 +16158,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -16157,7 +16252,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16193,7 +16288,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -16285,7 +16380,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16321,7 +16416,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -16417,7 +16512,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16453,7 +16548,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -16545,7 +16640,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16581,7 +16676,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -16677,7 +16772,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16713,7 +16808,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -16810,7 +16905,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16846,7 +16941,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -16938,7 +17033,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16974,7 +17069,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -17070,7 +17165,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17106,7 +17201,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -17198,7 +17293,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17234,7 +17329,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -17330,7 +17425,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17366,7 +17461,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -17458,7 +17553,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17494,7 +17589,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -17587,7 +17682,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17623,7 +17718,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -17720,7 +17815,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17756,7 +17851,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -17853,7 +17948,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -17889,7 +17984,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -17981,7 +18076,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18017,7 +18112,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -18110,7 +18205,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18146,7 +18241,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -18239,7 +18334,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18275,7 +18370,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -18368,7 +18463,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18404,7 +18499,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -18502,7 +18597,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18538,7 +18633,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -18635,7 +18730,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18671,7 +18766,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -18763,7 +18858,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18799,7 +18894,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -18892,7 +18987,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -18928,7 +19023,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -19025,7 +19120,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19061,7 +19156,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -19153,7 +19248,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19189,7 +19284,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -19282,7 +19377,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19318,7 +19413,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -19414,7 +19509,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19450,7 +19545,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -19544,7 +19639,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19580,7 +19675,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -19674,7 +19769,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19710,7 +19805,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -19724,10 +19819,10 @@ export interface operations {
     resolve_place: {
         parameters: {
             query: {
-                /** @description The caller's gmail whose key is tried first. */
-                gmail?: number | null;
                 /** @description A place id, a Maps URL or a search. */
                 place: string;
+                /** @description The caller's gmail whose key is tried first. */
+                gmail?: number | null;
             };
             header?: never;
             path?: never;
@@ -19807,7 +19902,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19843,7 +19938,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -19857,10 +19952,10 @@ export interface operations {
     suggest_places: {
         parameters: {
             query: {
-                /** @description The caller's gmail whose key is tried first. */
-                gmail?: number | null;
                 /** @description What is typed so far. */
                 input: string;
+                /** @description The caller's gmail whose key is tried first. */
+                gmail?: number | null;
             };
             header?: never;
             path?: never;
@@ -19940,7 +20035,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19976,7 +20071,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -20070,7 +20165,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20106,7 +20201,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -20198,7 +20293,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20234,7 +20329,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -20333,7 +20428,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20369,7 +20464,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -20465,7 +20560,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20501,7 +20596,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -20597,7 +20692,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20633,7 +20728,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -20731,7 +20826,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20767,7 +20862,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -20862,7 +20957,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -20898,7 +20993,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -20994,7 +21089,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21030,7 +21125,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -21122,7 +21217,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21158,7 +21253,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -21257,7 +21352,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21293,7 +21388,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -21387,7 +21482,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21423,7 +21518,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -21517,7 +21612,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21553,7 +21648,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -21649,7 +21744,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21685,7 +21780,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -21780,7 +21875,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21816,7 +21911,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -21914,7 +22009,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -21950,7 +22045,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -22048,7 +22143,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22084,7 +22179,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -22178,7 +22273,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22214,7 +22309,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -22308,7 +22403,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22344,7 +22439,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -22439,7 +22534,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22475,7 +22570,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -22568,7 +22663,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22604,7 +22699,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -22698,7 +22793,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22734,7 +22829,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -22825,7 +22920,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22861,7 +22956,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -22957,7 +23052,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -22993,7 +23088,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -23089,7 +23184,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23125,7 +23220,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -23217,7 +23312,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23253,7 +23348,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -23267,13 +23362,13 @@ export interface operations {
     library: {
         parameters: {
             query: {
-                country?: components["schemas"]["Country"] | null;
-                kind?: components["schemas"]["Kind"] | null;
-                /** @description In the title, the about or the trade's names, whatever its case. */
-                q?: string | null;
-                sort: components["schemas"]["Sort"];
                 /** @description A gcid. */
                 trade?: string | null;
+                country?: components["schemas"]["Country"] | null;
+                /** @description In the title, the about or the trade's names, whatever its case. */
+                q?: string | null;
+                kind?: components["schemas"]["Kind"] | null;
+                sort: components["schemas"]["Sort"];
             };
             header?: never;
             path?: never;
@@ -23352,7 +23447,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23388,7 +23483,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -23485,7 +23580,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23521,7 +23616,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -23535,11 +23630,11 @@ export interface operations {
     published_studies: {
         parameters: {
             query?: {
-                /** @description An area's slug. */
-                area?: string | null;
-                country?: components["schemas"]["Country"] | null;
                 /** @description A gcid. */
                 trade?: string | null;
+                country?: components["schemas"]["Country"] | null;
+                /** @description An area's slug. */
+                area?: string | null;
             };
             header?: never;
             path?: never;
@@ -23618,7 +23713,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23654,7 +23749,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -23750,7 +23845,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23786,7 +23881,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -23879,7 +23974,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -23915,7 +24010,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -24008,7 +24103,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24044,7 +24139,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -24140,7 +24235,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24176,7 +24271,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -24274,7 +24369,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24310,7 +24405,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -24402,7 +24497,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24438,7 +24533,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -24532,7 +24627,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24568,7 +24663,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -24660,7 +24755,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24696,7 +24791,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -24792,7 +24887,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24828,7 +24923,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -24924,7 +25019,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -24960,7 +25055,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -25054,7 +25149,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25090,7 +25185,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -25189,7 +25284,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25225,7 +25320,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -25323,7 +25418,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25359,7 +25454,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -25457,7 +25552,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25493,7 +25588,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -25585,7 +25680,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25621,7 +25716,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -25719,7 +25814,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25755,7 +25850,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -25854,7 +25949,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -25890,7 +25985,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -25985,7 +26080,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26021,7 +26116,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -26118,7 +26213,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26154,7 +26249,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -26251,7 +26346,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26287,7 +26382,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -26446,7 +26541,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26482,7 +26577,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -26572,7 +26667,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26608,7 +26703,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -26699,7 +26794,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26735,7 +26830,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -26831,7 +26926,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26867,7 +26962,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -26957,7 +27052,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -26993,7 +27088,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -27085,7 +27180,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -27121,7 +27216,392 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    openai: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenAi"] | null;
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_openai: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenAiKey"];
+            };
+        };
+        responses: {
+            /** @description A person's OpenAI key: its last four alone. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenAi"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    remove_openai: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -27213,7 +27693,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -27249,7 +27729,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -27406,7 +27886,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -27442,7 +27922,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -27537,7 +28017,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -27573,7 +28053,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -27668,7 +28148,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -27704,7 +28184,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -27804,7 +28284,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -27840,7 +28320,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -27940,7 +28420,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -27976,7 +28456,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -28067,7 +28547,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -28103,7 +28583,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -28199,7 +28679,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -28235,7 +28715,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -28326,7 +28806,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -28362,7 +28842,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -28454,7 +28934,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -28490,7 +28970,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -28586,7 +29066,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -28622,7 +29102,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -28714,7 +29194,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -28750,7 +29230,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -28842,7 +29322,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -28878,7 +29358,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -28975,7 +29455,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29011,7 +29491,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -29106,7 +29586,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29142,7 +29622,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -29234,7 +29714,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29270,7 +29750,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -29362,7 +29842,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29398,7 +29878,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -29490,7 +29970,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29526,7 +30006,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -29618,7 +30098,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29654,7 +30134,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -29746,7 +30226,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29782,7 +30262,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -29874,7 +30354,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -29910,7 +30390,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -30005,7 +30485,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -30041,7 +30521,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description `browsers_not_connected`, `unavailable` */
+            /** @description `unavailable`, `browsers_not_connected` */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -30097,7 +30577,7 @@ export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["sc
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:library:curate", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
 export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Permission"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:library:curate", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read"];
-export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "places.profile", "places.photo", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output"];
+export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "places.profile", "places.photo", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output", "openai.input", "openai.cache_write", "openai.cache_read", "openai.output"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
 export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "booked", "payment_received", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed", "tokens_low", "browser_stopped", "kickback", "access_granted", "access_requested", "source_silent", "google_mail", "connection_lost", "assistant_waiting", "release_out", "trash_purge", "feed_stalled", "meter_held"];

@@ -13,7 +13,7 @@ use axum::{
 };
 use jiff::Timestamp;
 use sa_core::{
-	prices::{Item, ModelTokens},
+	prices::{ClaudeTokens, Item, Provider},
 	usage::Bill,
 };
 use sa_panel::{
@@ -23,11 +23,11 @@ use sa_panel::{
 	testing::{TestDb, operator, panel},
 };
 use sa_server::{
-	claude::{Model, Origins},
 	concierge::{Concierge, DevIdentity},
 	http,
+	model::Model,
 	signin::{SignIn, SignInConfig},
-	testing::{Browser, ORIGIN},
+	testing::{Browser, ORIGIN, origins},
 };
 use serde_json::{Value, json};
 use uuid::Uuid;
@@ -104,7 +104,7 @@ impl World {
 			panel_origin: ORIGIN.to_owned(),
 			concierge_origin: ORIGIN.to_owned(),
 		};
-		let model = Model::new(Origins { api: base.clone(), oauth: base }, Some("owner".to_owned().into()));
+		let model = Model::new(origins(&base), vec![(Provider::Claude, "owner".to_owned().into())]);
 		let app = http::app(
 			SignIn::new(panel.clone(), Concierge::dev(who), config),
 			None,
@@ -210,14 +210,25 @@ async fn an_answer_runs_on_whose_claude_and_says_what_it_cost() {
 	w.call(Method::GET, "/api/v1/me", None).await; // the gate's GetMe records the user a balance is kept for
 	let start = w.balance().await;
 
-	let per_million = [(ModelTokens::Input, 10), (ModelTokens::CacheWrite, 12), (ModelTokens::CacheRead, 1), (ModelTokens::Output, 50)];
+	let per_million = [
+		(ClaudeTokens::Input, 10),
+		(ClaudeTokens::CacheWrite, 12),
+		(ClaudeTokens::CacheRead, 1),
+		(ClaudeTokens::Output, 50),
+	];
 	let prices: Vec<(Item, i64)> = per_million.iter().map(|&(t, p)| (Item::from(t), p)).collect();
 	sa_panel::testing::priced(&w.panel, &prices).await;
 	let ours = w.ask().await;
 	assert_eq!(w.bearers(), ["owner"]);
 	assert_eq!(
 		ours["cost"],
-		json!({ "bill": "ours", "tokens": { "input": 100_000, "cache_write": 0, "cache_read": 900_000, "output": 40_000 }, "charged": 4 }),
+		json!({
+			"bill": "ours",
+			"model": "claude-opus-5-5",
+			"tokens": { "input": 100_000, "cache_write": 0, "cache_read": 900_000, "output": 40_000 },
+			"usd_micros": 1_380_000,
+			"charged": 4,
+		}),
 		"(100k × 10 + 900k × 1 + 40k × 50) / 1M, rounded up"
 	);
 	assert_eq!(w.balance().await, start - 4);
@@ -236,7 +247,7 @@ async fn an_answer_runs_on_whose_claude_and_says_what_it_cost() {
 		.await
 		.unwrap()
 		.into_iter()
-		.filter(|d| d.item == Item::from(ModelTokens::Input))
+		.filter(|d| d.item == Item::from(ClaudeTokens::Input))
 		.map(|d| (d.bill, d.units))
 		.collect();
 	assert_eq!(bills, [(Bill::Ours, 100_000), (Bill::Theirs, 100_000)]);
@@ -249,6 +260,7 @@ async fn an_answer_runs_on_whose_claude_and_says_what_it_cost() {
 	assert_eq!(refused["state"], "stopped");
 	assert!(refused["text"].as_str().unwrap().contains("reconnect"), "{refused}");
 	let (_, status) = w.call(Method::GET, "/api/v1/me/claude", None).await;
-	assert_eq!(status["checked"]["error"], "OAuth token revoked");
+	assert_eq!(status["checked"]["error"], "Claude no longer takes it: connect it again.");
+	assert_eq!(refused["connect"], true);
 	assert_eq!(w.balance().await, start - 4);
 }
