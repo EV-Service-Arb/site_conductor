@@ -237,7 +237,7 @@ pub fn test_text(locale: Locale) -> &'static str {
 
 /// A message: its text and its Telegram `MessageEntity` objects (offsets in UTF-16 code units,
 /// as the Bot API counts), sent with no parse mode.
-#[derive(Clone, Debug, Default, serde::Deserialize, Eq, PartialEq, serde::Serialize)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct Rendered {
 	pub text: String,
 	pub entities: Vec<Value>,

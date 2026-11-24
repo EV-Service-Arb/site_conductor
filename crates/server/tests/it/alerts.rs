@@ -1993,8 +1993,8 @@ async fn what_is_no_address_is_not_added() {
 	for (path, body) in [
 		("slack", json!({"url": "https://evil.example/services/T/B/x"})),
 		("slack", json!({"url": "http://hooks.slack.com/services/T/B/x"})),
-		("discord/channels", json!({"url": "https://discord.com.evil.example/api/webhooks/1/x", "ping": true})),
-		("discord/channels", json!({"url": "https://discord.com/api/users/@me", "ping": false})),
+		("discord", json!({"url": "https://discord.com.evil.example/api/webhooks/1/x", "ping": true})),
+		("discord", json!({"url": "https://discord.com/api/users/@me", "ping": false})),
 		("push", push("https://evil.example/push")),
 		("push", push("https://fcm.googleapis.com/fcm/send/x")),
 		("webhooks", json!({"url": "not a url"})),

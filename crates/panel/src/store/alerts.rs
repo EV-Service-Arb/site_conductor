@@ -368,7 +368,7 @@ pub async fn count_proof(conn: &mut SqliteConnection, user: Uuid, address_tag: &
 // ── a person's hours and tiers ──────────────────────────────────────────────────────────
 
 /// A person's hours as they set them, in minutes since midnight in `tz`.
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, schemars::JsonSchema)]
+#[derive(Clone, Debug, Eq, PartialEq, schemars::JsonSchema, serde::Serialize)]
 #[schemars(rename = "AlertHours")]
 pub struct Hours {
 	/// An IANA time zone.

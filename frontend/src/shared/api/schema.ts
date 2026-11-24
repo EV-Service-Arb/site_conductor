@@ -291,7 +291,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/alerts/discord/channels": {
+    "/alerts/discord": {
         parameters: {
             query?: never;
             header?: never;
@@ -304,27 +304,7 @@ export interface paths {
          * Adds a Discord channel by its webhook, once a test went out there.
          * @description 400 refused (nothing stored), 409 a destination already.
          */
-        post: operations["add_discord_channel"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/alerts/discord/link": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * A consent page that makes the bot's direct messages the caller's destination.
-         * @description 503 without a bot.
-         */
-        post: operations["discord_link"];
+        post: operations["add_discord"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2781,7 +2761,7 @@ export interface components {
             /** @description `@channel`, `-100<id>`, or `<group>/<topic>` for a forum topic. */
             chat: string;
         };
-        AddDiscordChannel: {
+        AddDiscord: {
             /** @description Urgent ones say `@here`. */
             ping: boolean;
             /** @description The channel's webhook: Edit channel → Integrations → Webhooks. */
@@ -3487,10 +3467,6 @@ export interface components {
          * @enum {string}
          */
         Device: "pixel_7" | "galaxy_s23" | "redmi_note_14";
-        DiscordLink: {
-            /** @description Discord's consent page: it installs the bot to the caller's account, which lets it message them. */
-            url: string;
-        };
         EditBrand: {
             name?: string | null;
             site?: components["schemas"]["BrandId"] | null;
@@ -4900,14 +4876,13 @@ export interface components {
          * @description A network, and what of it an address is.
          *
          *     - `telegram`: A chat with the bot, a channel, a group or a topic of one.
-         *     - `discord`: The bot's direct message.
-         *     - `discord_channel`: A channel's webhook.
+         *     - `discord`: A channel's webhook.
          *     - `slack`: A channel's incoming webhook.
          *     - `push`: One browser's Web Push.
          *     - `webhook`: An https URL of theirs.
          * @enum {string}
          */
-        Method: "email" | "telegram" | "discord" | "discord_channel" | "slack" | "push" | "webhook";
+        Method: "email" | "telegram" | "discord" | "slack" | "push" | "webhook";
         /** @description The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]). */
         ModelUsed: {
             /** Format: int64 */
@@ -6206,7 +6181,7 @@ export type Action = components['schemas']['Action'];
 export type ActionState = components['schemas']['ActionState'];
 export type Actor = components['schemas']['Actor'];
 export type AddChat = components['schemas']['AddChat'];
-export type AddDiscordChannel = components['schemas']['AddDiscordChannel'];
+export type AddDiscord = components['schemas']['AddDiscord'];
 export type AddEmail = components['schemas']['AddEmail'];
 export type AddPush = components['schemas']['AddPush'];
 export type AddSlack = components['schemas']['AddSlack'];
@@ -6283,7 +6258,6 @@ export type Demand = components['schemas']['Demand'];
 export type Destination = components['schemas']['Destination'];
 export type DestinationKind = components['schemas']['DestinationKind'];
 export type Device = components['schemas']['Device'];
-export type DiscordLink = components['schemas']['DiscordLink'];
 export type EditBrand = components['schemas']['EditBrand'];
 export type EditKitDraft = components['schemas']['EditKitDraft'];
 export type Error = components['schemas']['Error'];
@@ -8893,7 +8867,7 @@ export interface operations {
             };
         };
     };
-    add_discord_channel: {
+    add_discord: {
         parameters: {
             query?: never;
             header?: never;
@@ -8902,7 +8876,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AddDiscordChannel"];
+                "application/json": components["schemas"]["AddDiscord"];
             };
         };
         responses: {
@@ -8913,133 +8887,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Alerts"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    discord_link: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscordLink"];
                 };
             };
             /** @description `bad_request` */
@@ -30152,7 +29999,7 @@ export const mailReaderValues: ReadonlyArray<FlattenedDeepRequired<components>["
 export const mailStandingValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailStanding"]> = ["needs_you", "done", "reply_ready", "sending", "reply_due", "waiting", "quiet"];
 export const mailTopicValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailTopic"]> = ["verification", "suspension", "reviews", "activity", "access", "profile", "other"];
 export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MentionKind"]> = ["location"];
-export const methodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Method"]> = ["email", "telegram", "discord", "discord_channel", "slack", "push", "webhook"];
+export const methodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Method"]> = ["email", "telegram", "discord", "slack", "push", "webhook"];
 export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MustHave"]> = ["name", "areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"];
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:library:curate", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];

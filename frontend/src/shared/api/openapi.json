@@ -3104,19 +3104,19 @@
         }
       }
     },
-    "/alerts/discord/channels": {
+    "/alerts/discord": {
       "post": {
         "tags": [
           "alerts"
         ],
         "summary": "Adds a Discord channel by its webhook, once a test went out there.",
         "description": "400 refused (nothing stored), 409 a destination already.",
-        "operationId": "add_discord_channel",
+        "operationId": "add_discord",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AddDiscordChannel"
+                "$ref": "#/components/schemas/AddDiscord"
               }
             }
           },
@@ -3273,167 +3273,6 @@
           "unstudied": 422
         },
         "x-outward": true,
-        "x-permission": "sa:own:credentials"
-      }
-    },
-    "/alerts/discord/link": {
-      "post": {
-        "tags": [
-          "alerts"
-        ],
-        "summary": "A consent page that makes the bot's direct messages the caller's destination.",
-        "description": "503 without a bot.",
-        "operationId": "discord_link",
-        "responses": {
-          "201": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DiscordLink"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`bad_request`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "`unauthenticated`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "402": {
-            "description": "`unaffordable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "`csrf`, `forbidden`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "`not_found`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "`conflict`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "`too_large`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "`another_country`, `unreleased_category`, `unstudied`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "`too_many`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "`internal`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "`bad_gateway`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "`browsers_not_connected`, `unavailable`",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "x-errors": {
-          "another_country": 422,
-          "bad_gateway": 502,
-          "bad_request": 400,
-          "browsers_not_connected": 503,
-          "conflict": 409,
-          "csrf": 403,
-          "forbidden": 403,
-          "internal": 500,
-          "not_found": 404,
-          "too_large": 413,
-          "too_many": 429,
-          "unaffordable": 402,
-          "unauthenticated": 401,
-          "unavailable": 503,
-          "unreleased_category": 422,
-          "unstudied": 422
-        },
         "x-permission": "sa:own:credentials"
       }
     },
@@ -31394,7 +31233,7 @@
           "chat"
         ]
       },
-      "AddDiscordChannel": {
+      "AddDiscord": {
         "type": "object",
         "properties": {
           "ping": {
@@ -33494,18 +33333,6 @@
           "pixel_7",
           "galaxy_s23",
           "redmi_note_14"
-        ]
-      },
-      "DiscordLink": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "description": "Discord's consent page: it installs the bot to the caller's account, which lets it message them.",
-            "type": "string"
-          }
-        },
-        "required": [
-          "url"
         ]
       },
       "EditBrand": {
@@ -37820,13 +37647,12 @@
         ]
       },
       "Method": {
-        "description": "A network, and what of it an address is.\n\n- `telegram`: A chat with the bot, a channel, a group or a topic of one.\n- `discord`: The bot's direct message.\n- `discord_channel`: A channel's webhook.\n- `slack`: A channel's incoming webhook.\n- `push`: One browser's Web Push.\n- `webhook`: An https URL of theirs.",
+        "description": "A network, and what of it an address is.\n\n- `telegram`: A chat with the bot, a channel, a group or a topic of one.\n- `discord`: A channel's webhook.\n- `slack`: A channel's incoming webhook.\n- `push`: One browser's Web Push.\n- `webhook`: An https URL of theirs.",
         "type": "string",
         "enum": [
           "email",
           "telegram",
           "discord",
-          "discord_channel",
           "slack",
           "push",
           "webhook"

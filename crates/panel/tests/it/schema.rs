@@ -669,7 +669,8 @@ async fn telegram_destinations_become_one_method_of_many_both_ways() {
 	}
 
 	migrator.undo(&mut *conn, METHODS - 1).await.unwrap();
-	let back: Vec<(i64, Option<i64>, String, i64, Option<String>)> = sqlx::query_as(
+	type Back = (i64, Option<i64>, String, i64, Option<String>);
+	let back: Vec<Back> = sqlx::query_as(
 		"SELECT d.id, d.gmail_id, t.kind, t.chat_id, t.dead_reason FROM alert_destinations d JOIN telegram_destinations t ON t.destination_id = d.id ORDER BY d.id",
 	)
 	.fetch_all(&mut *conn)
