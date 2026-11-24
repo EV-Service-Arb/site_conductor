@@ -1653,7 +1653,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A GBP's mail: every try to verify it, and its cases. */
+        /** A GBP's mail: every try to verify it, its cases, its every message. */
         get: operations["gmb_mail"];
         put?: never;
         post?: never;
@@ -3636,6 +3636,8 @@ export interface components {
             gmail: string;
             /** Format: int64 */
             id: number;
+            /** @description Its inbox's last check, as `Connections.imap.checked`; `null`: none set, its mail is not read. */
+            imap: components["schemas"]["Checked"] | null;
             /** @description Its window's tabs, in order. */
             tabs: components["schemas"]["Tab"][];
         };
@@ -3775,6 +3777,8 @@ export interface components {
             attempts: components["schemas"]["VerificationAttempt"][];
             /** @description Those last spoken in first. */
             cases: components["schemas"]["MailCase"][];
+            /** @description Its every message, newest first. */
+            lines: components["schemas"]["MailLine"][];
         };
         /** @description What the caller noted on a GBP: theirs alone, read by nobody else. */
         GmbNote: {
@@ -4350,14 +4354,23 @@ export interface components {
         };
         /** @description `GET /mail/auto`: those switched on. */
         MailAutos: {
+            /** @description Whether this conductor sends any by itself: production's alone. */
+            by_itself: boolean;
             on: components["schemas"]["MailAuto"][];
             /** @description The topics that can be. */
             topics: components["schemas"]["MailTopic"][];
+        };
+        /** @description What of a case a person set over its mail. */
+        MailByHand: {
+            gmb: boolean;
+            topic: boolean;
         };
         /** @description A conversation with Google, or a lone notice of its. */
         MailCase: {
             /** @description What Google asks in its last word. */
             asks: string[];
+            /** @description Whether a person said so of them, over its mail. */
+            by_hand: components["schemas"]["MailByHand"];
             /** @description RFC 3339; Google's, still running. */
             deadline: string | null;
             /** @description Its draft, until it is answered; what it lacks in `draft.needs`. */
@@ -4374,6 +4387,8 @@ export interface components {
             last: components["schemas"]["MailLine"];
             /** @description Google's case numbers. */
             numbers: string[];
+            /** @description What Google's last word was read as; `null`: none, or not read. */
+            said: components["schemas"]["MailKind"] | null;
             state: components["schemas"]["MailState"];
             /** @description Google's latest, else ours. */
             subject: string | null;
@@ -4386,6 +4401,11 @@ export interface components {
             /** @description Of its GBP, newest first. */
             attempts: components["schemas"]["VerificationAttempt"][];
             case: components["schemas"]["MailCase"];
+            /**
+             * Format: uint
+             * @description What a reply's files may be in all, bytes.
+             */
+            files_max: number;
             /** @description Its GBP's reviews missing now; `null`: it is not about reviews. */
             gone: components["schemas"]["MailGone"] | null;
             /** @description Oldest first. */
@@ -4508,12 +4528,16 @@ export interface components {
             /** @description RFC 3339. */
             at: string;
             /** Format: int64 */
+            case_id: number;
+            /** Format: int64 */
             id: number;
             /** @description `null`: ours, or not read. */
             kind: components["schemas"]["MailKind"] | null;
-            /** @description Ours. */
-            sent: boolean;
+            /** @description Why, in Google's words. */
+            reasons: string[];
+            subject: string | null;
             summary: string | null;
+            who: components["schemas"]["MailWho"];
         };
         /** @description A message, whole. */
         MailMessage: {
@@ -4594,7 +4618,7 @@ export interface components {
         MailSend: {
             /** @description What goes, as the operator leaves it. */
             body: string;
-            /** @description At most 18 MiB in all; never stored. */
+            /** @description At most the case's `files_max` in all; never stored. */
             files: components["schemas"]["MailFile"][];
         };
         /**
@@ -4629,6 +4653,8 @@ export interface components {
             /** Format: date-time */
             until: string;
         } | {
+            /** @description A person marked it so. */
+            by_hand: boolean;
             /** @constant */
             is: "done";
         } | {
@@ -4637,6 +4663,15 @@ export interface components {
         };
         /** @enum {string} */
         MailTopic: "verification" | "suspension" | "reviews" | "activity" | "access" | "profile" | "other";
+        /**
+         * @description Who speaks in a message.
+         *
+         *     - `support`: Google's support.
+         *     - `google`: Google, from an address nobody reads.
+         *     - `unproven`: Not proved Google's.
+         * @enum {string}
+         */
+        MailWho: "us" | "support" | "google" | "unproven";
         /** @description Why a case needs the operator. */
         MailWhy: {
             /** @constant */
@@ -6382,6 +6417,7 @@ export type LoggedDto = components['schemas']['LoggedDto'];
 export type MailAuto = components['schemas']['MailAuto'];
 export type MailAutoSwitch = components['schemas']['MailAutoSwitch'];
 export type MailAutos = components['schemas']['MailAutos'];
+export type MailByHand = components['schemas']['MailByHand'];
 export type MailCase = components['schemas']['MailCase'];
 export type MailCaseDetail = components['schemas']['MailCaseDetail'];
 export type MailCaseEdit = components['schemas']['MailCaseEdit'];
@@ -6402,6 +6438,7 @@ export type MailSend = components['schemas']['MailSend'];
 export type MailStanding = components['schemas']['MailStanding'];
 export type MailState = components['schemas']['MailState'];
 export type MailTopic = components['schemas']['MailTopic'];
+export type MailWho = components['schemas']['MailWho'];
 export type MailWhy = components['schemas']['MailWhy'];
 export type MapConfig = components['schemas']['MapConfig'];
 export type MapOn = components['schemas']['MapOn'];
@@ -30047,6 +30084,7 @@ export const mailKindValues: ReadonlyArray<FlattenedDeepRequired<components>["sc
 export const mailReaderValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailReader"]> = ["rule", "model", "person"];
 export const mailStandingValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailStanding"]> = ["needs_you", "done", "reply_ready", "sending", "reply_due", "waiting", "quiet"];
 export const mailTopicValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailTopic"]> = ["verification", "suspension", "reviews", "activity", "access", "profile", "other"];
+export const mailWhoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailWho"]> = ["us", "support", "google", "unproven"];
 export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MentionKind"]> = ["location"];
 export const methodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Method"]> = ["email", "telegram", "discord", "slack", "push", "webhook"];
 export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MustHave"]> = ["name", "areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"];

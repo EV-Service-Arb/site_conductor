@@ -44,7 +44,7 @@ export function AutoReplies() {
   if (auto.status === "loading" || gmails.status !== "ok") return <Skeleton className="h-60" />;
   const listed = gmails.data.gmails.filter((g) => scope.gmails === null || scope.gmails.has(g.id));
   if (listed.length === 0) return <EmptyState title={t(mail.auto.none, "No gmails in scope")} />;
-  const { on, topics } = auto.data;
+  const { on, topics, by_itself } = auto.data;
   const set = async (gmail: Gmail, topic: MailTopic, to: boolean) => {
     setBusy(true);
     try {
@@ -58,6 +58,7 @@ export function AutoReplies() {
   };
   return (
     <div className="flex flex-col gap-3">
+      {!by_itself && <p className="rounded-lg border border-border bg-hover/60 px-4 py-3 text-sm text-ink">{t(mail.auto.here, "This conductor sends nothing by itself: production's does.")}</p>}
       <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
         {listed.map((g) => (
           <li key={g.id} className="flex flex-col gap-3 px-4 py-3 @2xl:flex-row @2xl:items-center">

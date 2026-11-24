@@ -10,7 +10,7 @@ use sa_places::LatLng;
 use sqlx::SqliteConnection;
 use uuid::Uuid;
 
-use super::{from_db, to_db};
+use super::{connections::Checked, from_db, to_db};
 
 const GMB: &str = "SELECT b.id, b.owner, b.gmail_id, b.place_id, b.name, b.address, b.state, b.country, b.country_by IS NOT NULL AS country_by_hand, b.phone, \
 	b.trade, b.brand_id, b.areas, b.hidden_address, b.customers_visit, b.film, b.role, b.owner_gmail, b.lat, b.lng, b.placed_by IS NOT NULL AS placed, b.created_at, b.website, b.hours, b.google_primary, b.synced_at, \
@@ -20,7 +20,7 @@ const GMB: &str = "SELECT b.id, b.owner, b.gmail_id, b.place_id, b.name, b.addre
 /// Whether the gmail's browser's last check went through.
 const BROWSER: &str = "EXISTS (SELECT 1 FROM gmail_browsers w WHERE w.gmail_id = gmails.id AND w.check_error IS NULL)";
 
-type GmailRow = (i64, Uuid, String, i64, bool);
+type GmailRow = (i64, Uuid, String, i64, bool, Option<i64>, Option<String>);
 
 /// A GBP, by its id.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -36,6 +36,8 @@ pub struct Gmail {
 	pub created_at: Timestamp,
 	/// Its browser set up, its last check through.
 	pub browser: bool,
+	/// Its inbox's last check; `None`: none set.
+	pub imap: Option<Checked>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -363,7 +365,7 @@ pub async fn events(conn: &mut SqliteConnection, owner: Uuid, gmb: i64, before: 
 /// The owner's gmails not removed, by address.
 pub async fn gmails(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<Gmail>> {
 	let rows: Vec<GmailRow> = sqlx::query_as(sqlx::AssertSqlSafe(format!(
-		"SELECT id, owner, gmail, created_at, {BROWSER} FROM gmails WHERE owner = $1 AND removed_at IS NULL ORDER BY gmail"
+		"SELECT id, owner, gmail, created_at, {BROWSER}, i.checked_at, i.check_error FROM gmails LEFT JOIN gmail_imap i ON i.gmail_id = gmails.id WHERE owner = $1 AND removed_at IS NULL ORDER BY gmail"
 	)))
 	.bind(owner)
 	.fetch_all(&mut *conn)
@@ -397,7 +399,7 @@ pub async fn gmb_of(conn: &mut SqliteConnection, owner: Option<Uuid>, id: i64) -
 pub async fn add_gmail(conn: &mut SqliteConnection, id: Option<i64>, owner: Uuid, address: &str, now: Timestamp) -> eyre::Result<Option<Gmail>> {
 	let row: Option<GmailRow> = sqlx::query_as(
 		"INSERT INTO gmails (id, owner, gmail, created_at) VALUES ($1, $2, $3, $4) \
-		 ON CONFLICT DO NOTHING RETURNING id, owner, gmail, created_at, FALSE",
+		 ON CONFLICT DO NOTHING RETURNING id, owner, gmail, created_at, FALSE, NULL, NULL",
 	)
 	.bind(id)
 	.bind(owner)
@@ -985,13 +987,14 @@ struct GmbRow {
 	spots: String,
 }
 
-fn gmail((id, owner, gmail, created_at, browser): GmailRow) -> eyre::Result<Gmail> {
+fn gmail((id, owner, gmail, created_at, browser, checked_at, error): GmailRow) -> eyre::Result<Gmail> {
 	Ok(Gmail {
 		id,
 		owner,
 		gmail,
 		created_at: from_db(created_at)?,
 		browser,
+		imap: checked_at.map(|at| eyre::Ok(Checked { at: from_db(at)?, error })).transpose()?,
 	})
 }
 

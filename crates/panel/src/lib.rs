@@ -145,11 +145,13 @@ pub struct Panel {
 	purses: connections::Purses,
 	/// What sends a gmail's replies.
 	smtp: Arc<dyn mail::Smtp>,
+	/// Its held replies go by themselves: production's alone, or a copy of its database would answer Google too.
+	mail_by_itself: bool,
 	/// Told of every change review_archive's snapshot carries.
 	snapshot_due: Arc<tokio::sync::Notify>,
 }
 impl Panel {
-	pub fn new(store: Store, key: DataKey, renewal: Renewal, google: sa_places::Google, accounts: Arc<sa_places::Accounts>, smtp: Arc<dyn mail::Smtp>) -> Self {
+	pub fn new(store: Store, key: DataKey, renewal: Renewal, google: sa_places::Google, accounts: Arc<sa_places::Accounts>, smtp: Arc<dyn mail::Smtp>, mail_by_itself: bool) -> Self {
 		Self {
 			store,
 			key: Arc::new(key),
@@ -159,6 +161,7 @@ impl Panel {
 			accounts,
 			purses: Arc::default(),
 			smtp,
+			mail_by_itself,
 			snapshot_due: Arc::default(),
 		}
 	}

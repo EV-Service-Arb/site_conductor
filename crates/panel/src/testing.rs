@@ -150,7 +150,7 @@ pub fn panel_sending(store: Store, key: DataKey, google: sa_places::Google, acco
 	}
 	.validate()
 	.expect("a valid renewal");
-	Panel::new(store, key, renewal, google, Arc::new(accounts), smtp)
+	Panel::new(store, key, renewal, google, Arc::new(accounts), smtp, true)
 }
 
 /// An SMTP server that keeps what it is handed, answering each with the next of `answers`, then taking it.

@@ -36,8 +36,8 @@ const gmb = (id: number, name: string, address: string | null, located: boolean,
 
 const gmails: Gmails = {
   gmails: [
-    { id: 1, gmail: "eric@aquafix.top", created_at: "2026-11-05T00:00:00Z", browser: false, tabs: ["connections", "browser"] },
-    { id: 2, gmail: "sameday.ny", created_at: "2026-11-05T00:00:00Z", browser: false, tabs: ["connections", "browser"] },
+    { id: 1, gmail: "eric@aquafix.top", created_at: "2026-11-05T00:00:00Z", browser: false, imap: null, tabs: ["connections", "browser"] },
+    { id: 2, gmail: "sameday.ny", created_at: "2026-11-05T00:00:00Z", browser: false, imap: null, tabs: ["connections", "browser"] },
   ],
   gmbs: [
     { ...gmb(10, "Aquafix · Vaise", "Lyon 9e", true), trade: "gcid:plumber" },

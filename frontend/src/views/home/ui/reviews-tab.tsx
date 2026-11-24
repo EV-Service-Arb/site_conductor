@@ -2,15 +2,17 @@
 
 import { useResource } from "@evinvest/api/react";
 import { Button, Input, Planned, Skeleton, cn, toast } from "@evinvest/uikit";
-import { ExternalLink, RefreshCw, Search } from "lucide-react";
+import { ChevronRight, ExternalLink, RefreshCw, Search } from "lucide-react";
 import { useState } from "react";
 
 import { LiveReviews, type Listed, useGmbTags, windowKeys } from "@/entities/gmb";
-import { CaseLinks, useGmbMail } from "@/entities/mail";
+import { CaseLinks, over, useGmbMail } from "@/entities/mail";
 import { useSpendConfirm } from "@/entities/tokens";
 import { ok, reviewArchive } from "@/shared/api";
+import type { MailCase } from "@/shared/api/schema";
 import type { Board, BoardCard, LocationSummary, RunDto } from "@/shared/api/services/review_archive";
 import { useLocale, useT } from "@/shared/i18n";
+import { ViewLink } from "@/shared/lib/location";
 import { ago } from "@/shared/lib/time";
 import { EmptyState } from "@/shared/ui/empty-state";
 import { ErrorState } from "@/shared/ui/error-state";
@@ -24,25 +26,23 @@ const FILTERS: readonly Filter[] = ["non_five", "unresponded", "new_7d"];
 
 /** Its reviews as review_archive tracks them (02c), and what Google says of those asked back. */
 export function ReviewsTab({ listed }: { listed: Listed }) {
+  const mail = useGmbMail(listed.gmb.id);
+  const cases = mail.status === "ok" ? mail.data.cases.filter((c) => c.topic === "reviews") : [];
   return (
     <>
-      <Reinstatement gmb={listed.gmb.id} />
-      <Archived listed={listed} />
+      {mail.status === "error" && (
+        <div className="px-5 pt-5">
+          <ErrorState failure={mail.failure} onRetry={mail.reload} />
+        </div>
+      )}
+      <Reinstatement cases={cases.filter((c) => c.state.is !== "quiet")} />
+      <Archived listed={listed} asked={cases.find((c) => !over(c)) ?? cases[0]} />
     </>
   );
 }
 
-function Reinstatement({ gmb }: { gmb: number }) {
+function Reinstatement({ cases }: { cases: readonly MailCase[] }) {
   const t = useT();
-  const mail = useGmbMail(gmb);
-  if (mail.status === "loading") return null;
-  if (mail.status === "error")
-    return (
-      <div className="px-5 pt-5">
-        <ErrorState failure={mail.failure} onRetry={mail.reload} />
-      </div>
-    );
-  const cases = mail.data.cases.filter((c) => c.topic === "reviews" && c.state.is !== "quiet");
   if (cases.length === 0) return null;
   return (
     <section className="mx-5 mt-5 flex flex-col gap-1 rounded-lg border border-border px-4 py-2">
@@ -52,7 +52,8 @@ function Reinstatement({ gmb }: { gmb: number }) {
   );
 }
 
-function Archived({ listed }: { listed: Listed }) {
+/** `asked`: the case its gone reviews are asked back in. */
+function Archived({ listed, asked }: { listed: Listed; asked: MailCase | undefined }) {
   const t = useT();
   const overview = useResource(reviewArchive, "/me/overview");
   if (overview.status === "loading") return <Skeleton className="m-4 h-96" />;
@@ -70,10 +71,10 @@ function Archived({ listed }: { listed: Listed }) {
         <EmptyState title={t(windowKeys.reviews.unknown, "The archive does not track this GBP")} description={t(windowKeys.reviews.unknownWhy, "Only a verified GBP on Maps has its reviews archived.")} />
       </div>
     );
-  return <Tracked gmb={listed.gmb.id} track={summary.track} reloadTrack={overview.reload} />;
+  return <Tracked gmb={listed.gmb.id} track={summary.track} reloadTrack={overview.reload} asked={asked} />;
 }
 
-function Tracked({ gmb, track, reloadTrack }: { gmb: number; track: LocationSummary; reloadTrack: () => void }) {
+function Tracked({ gmb, track, reloadTrack, asked }: { gmb: number; track: LocationSummary; reloadTrack: () => void; asked: MailCase | undefined }) {
   const t = useT();
   const locale = useLocale();
   const path = { gmb, target: track.target.id };
@@ -169,9 +170,13 @@ function Tracked({ gmb, track, reloadTrack }: { gmb: number; track: LocationSumm
           <Button size="sm" variant="outline" planned={t(windowKeys.reviews.appealAll, "Send an appeal for every suspended review")}>
             {t(windowKeys.reviews.appealAllButton, "Appeal {n} suspended", { n: b.suspended.length })}
           </Button>
-          <Group tone="bg-accent-error" name={t(windowKeys.reviews.suspended, "Suspended")} n={b.suspended.length} />
+          <Group tone="bg-accent-error" name={t(windowKeys.reviews.suspended, "Suspended")} n={b.suspended.length}>
+            {b.suspended.length > 0 && <Asked c={asked} />}
+          </Group>
           <List cards={b.suspended.filter(keep)} all={all} onAll={() => setAll(true)} gmb={gmb} reload={board.reload} track={reloadTrack} />
-          <Group tone="bg-accent-warn" name={t(windowKeys.reviews.reinstating, "Reinstating")} n={b.reinstating.length} />
+          <Group tone="bg-accent-warn" name={t(windowKeys.reviews.reinstating, "Reinstating")} n={b.reinstating.length}>
+            {b.reinstating.length > 0 && <Asked c={asked} />}
+          </Group>
           <List cards={b.reinstating.filter(keep)} all={all} onAll={() => setAll(true)} gmb={gmb} reload={board.reload} track={reloadTrack} />
           <Group tone="bg-ink-faint" name={t(windowKeys.reviews.toRemove, "To remove")} n={b.removed.length} />
           <List cards={b.removed.filter(keep)} all={all} onAll={() => setAll(true)} gmb={gmb} reload={board.reload} track={reloadTrack} />
@@ -204,6 +209,18 @@ function Group({ tone, name, n, children }: { tone: string; name: string; n: num
       <span className="flex-1" />
       {children}
     </div>
+  );
+}
+
+/** The way from reviews gone to their case with Google. */
+function Asked({ c }: { c: MailCase | undefined }) {
+  const t = useT();
+  if (c === undefined) return null;
+  return (
+    <ViewLink to={{ view: "email", params: { case: c.id } }} className="flex items-center gap-1 rounded-sm font-sans text-xs text-ink-soft normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+      {t(windowKeys.reviews.reinstatement, "With Google support")}
+      <ChevronRight aria-hidden className="size-3" />
+    </ViewLink>
   );
 }
 

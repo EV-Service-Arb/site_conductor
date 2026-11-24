@@ -190,7 +190,6 @@ impl World {
 				panel: p.clone(),
 				model,
 				services: Some(services),
-				by_itself: true,
 				tell: None,
 			},
 			p,
@@ -282,7 +281,7 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	);
 	assert_eq!(case["state"], json!({ "is": "needs_you", "why": { "code": "needs", "needs": ["a photo of the signage"] } }));
 	assert_eq!(case["draft"]["state"], "proposed");
-	assert_eq!(rejected["state"], json!({ "is": "done" }), "the conversation, newer, carries it");
+	assert_eq!(rejected["state"], json!({ "is": "done", "by_hand": false }), "the conversation, newer, carries it");
 	let id = case["id"].as_i64().unwrap();
 
 	{
@@ -306,10 +305,21 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	let (status, detail) = w.call(Method::GET, &format!("/mail/cases/{id}"), None).await;
 	assert_eq!(status, 200);
 	assert_eq!(detail["recipient"], SUPPORT);
+	assert_eq!(detail["files_max"], 18 << 20);
 	assert_eq!(detail["messages"][0]["read_by"], "model");
 	assert_eq!((&detail["attempts"][0]["method"], &detail["attempts"][0]["outcome"]), (&json!("video"), &json!("rejected")));
 	let (_, of_gmb) = w.call(Method::GET, &format!("/gmbs/{}/mail", w.gmb), None).await;
 	assert_eq!((of_gmb["attempts"].as_array().unwrap().len(), of_gmb["cases"].as_array().unwrap().len()), (1, 2));
+	let lines: Vec<_> = of_gmb["lines"].as_array().unwrap().iter().map(|l| (&l["who"], &l["kind"], &l["case_id"])).collect();
+	assert_eq!(
+		lines,
+		[
+			(&json!("support"), &json!("asks"), &case["id"]),
+			(&json!("google"), &json!("video_rejected"), &rejected["id"])
+		]
+	);
+	let (_, gmails) = w.call(Method::GET, "/gmails", None).await;
+	assert_eq!(gmails["gmails"][0]["imap"], json!({ "at": "1970-01-01T00:00:00Z", "error": null }));
 	let (_, waiting) = w.call(Method::GET, "/mail/cases?state=waiting", None).await;
 	assert_eq!(waiting["cases"], json!([]));
 
@@ -365,7 +375,9 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	assert_eq!(theirs["cases"], json!([]));
 
 	let (status, marked) = w.call(Method::PATCH, &format!("/mail/cases/{id}"), Some(json!({ "done": true }))).await;
-	assert_eq!((status, &marked["case"]["state"]["is"]), (200, &json!("done")));
+	assert_eq!((status, &marked["case"]["state"]), (200, &json!({ "is": "done", "by_hand": true })));
+	let (_, named) = w.call(Method::PATCH, &format!("/mail/cases/{id}"), Some(json!({ "gmb": w.gmb, "done": false }))).await;
+	assert_eq!(named["case"]["by_hand"], json!({ "gmb": true, "topic": false }));
 	let (status, corrected) = w
 		.call(Method::PATCH, &format!("/mail/messages/{}", detail["messages"][0]["id"]), Some(json!({ "kind": "call_offered" })))
 		.await;
@@ -375,6 +387,7 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	);
 	let (status, auto) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmail": w.gmail, "topic": "reviews", "on": true }))).await;
 	assert_eq!((status, &auto["on"]), (200, &json!([{ "gmail_id": w.gmail, "topic": "reviews" }])));
+	assert_eq!(auto["by_itself"], true);
 	let (status, _) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmail": w.gmail, "topic": "suspension", "on": true }))).await;
 	assert_eq!(status, 400);
 }
@@ -483,7 +496,7 @@ async fn missing_reviews_are_the_archives_for_the_writer_and_the_operator() {
 	);
 	w.arrives(4, SUPPORT, subject, "We reinstated them.").await;
 	w.worker.read_and_write().await.unwrap();
-	assert_eq!(detail(&mut w).await["case"]["state"], json!({ "is": "done" }));
+	assert_eq!(detail(&mut w).await["case"]["state"], json!({ "is": "done", "by_hand": false }));
 	assert!(w.outbox.sent.lock().unwrap().is_empty());
 }
 

@@ -5,7 +5,7 @@ import { Badge, Button, Planned, Skeleton } from "@evinvest/uikit";
 import { Phone, RefreshCw, ShieldCheck, Video } from "lucide-react";
 
 import { type Listed, STATE_NAME, STATE_TONE, openWindow, windowKeys } from "@/entities/gmb";
-import { CaseLinks, METHOD_NAME, OUTCOME_NAME, OUTCOME_TONE, useGmbMail } from "@/entities/mail";
+import { CaseLinks, METHOD_NAME, MailLines, OUTCOME_NAME, OUTCOME_TONE, over, useGmbMail } from "@/entities/mail";
 import { AutoLink } from "@/features/auto-mail";
 import { api } from "@/shared/api";
 import type { Gmail, GmbMail, VerificationAttempt } from "@/shared/api/schema";
@@ -113,9 +113,10 @@ export function VerificationTab({ listed: { gmb, gmail } }: { listed: Listed }) 
 }
 
 /** Each try at verifying it, what stands since a rejected video, and Google's mail, as it was read. */
-function FromGoogle({ mail: { attempts, cases }, gmail }: { mail: GmbMail; gmail: Gmail | null }) {
+function FromGoogle({ mail: { attempts, cases, lines }, gmail }: { mail: GmbMail; gmail: Gmail | null }) {
   const t = useT();
   const card = "flex flex-col gap-2 rounded-lg border border-border px-4 py-3";
+  const theirs = lines.filter((l) => l.who !== "us");
   return (
     <>
       <section className={card}>
@@ -135,8 +136,8 @@ function FromGoogle({ mail: { attempts, cases }, gmail }: { mail: GmbMail; gmail
       )}
       <section className={card}>
         <h3 className="text-sm font-semibold text-ink">{t(windowKeys.verification.emails, "Google's emails")}</h3>
-        {cases.length === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.log.noEmails, "No emails with Google: they are read from the gmail's inbox once its IMAP is set.")}</p>}
-        <CaseLinks cases={cases} />
+        {theirs.length === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.log.noEmails, "No emails with Google: they are read from the gmail's inbox once its IMAP is set.")}</p>}
+        <MailLines lines={theirs} cases={cases} />
       </section>
     </>
   );
@@ -171,7 +172,7 @@ function Attempt({ a }: { a: VerificationAttempt }) {
 function AfterRejected({ cases, gmail }: { cases: GmbMail["cases"]; gmail: Gmail | null }) {
   const t = useT();
   // a lone notice carries no number: support's conversations do
-  const asking = cases.filter((c) => c.topic === "verification" && c.numbers.length > 0 && c.state.is !== "done" && c.state.is !== "quiet");
+  const asking = cases.filter((c) => c.topic === "verification" && c.numbers.length > 0 && !over(c));
   return (
     <>
       {asking.length === 0 ? <p className="text-sm text-ink-soft">{t(windowKeys.verification.after.none, "No open conversation asks Google for the live call.")}</p> : <CaseLinks cases={asking} />}

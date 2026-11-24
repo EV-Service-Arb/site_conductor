@@ -52,15 +52,19 @@ export function standing(c: MailCase, t: T, locale: Locale, now: Date): { text: 
   }
   switch (c.state.is) {
     case "needs_you":
+      // what Google asks, its reply written: there to check
+      if (c.state.why.code === "kind" && c.state.why.kind === "asks") return { text: t(mail.state.reply_ready, "reply ready · {since}", { since }), tone: "warn" };
+      if (c.state.why.code === "asked_often" && c.said === "routed") return { text: `${NEEDS.unanswered(t)} · ${since}`, tone: "warn" };
       return { text: `${NEEDS[c.state.why.code](t)} · ${since}`, tone: c.state.why.code === "failed" || c.state.why.code === "may_have_gone_out" ? "error" : "warn" };
     case "reply_ready":
       return { text: t(mail.state.reply_ready, "reply ready · {since}", { since }), tone: "warn" };
     case "sending":
-      return c.draft?.state === "held" ? { text: t(mail.state.held, "goes at {at}", { at: when(c.state.at, locale, now) }), tone: "info" } : { text: t(mail.state.sending, "sending"), tone: "info" };
+      if (c.draft?.state !== "held") return { text: t(mail.state.sending, "sending"), tone: "info" };
+      return { text: Date.parse(c.state.at) > now.getTime() ? t(mail.state.held, "goes at {at}", { at: when(c.state.at, locale, now) }) : t(mail.held.due, "due"), tone: "info" };
     case "reply_due":
       return { text: t(mail.state.reply_due, "reply due · {since}", { since }), tone: "neutral" };
     case "waiting":
-      return { text: t(mail.state.waiting, "with Google until {at}", { at: when(c.state.until, locale, now) }), tone: "neutral" };
+      return { text: c.said === "routed" ? t(mail.state.routed, "with a specialist until {at}", { at: when(c.state.until, locale, now) }) : t(mail.state.waiting, "with Google until {at}", { at: when(c.state.until, locale, now) }), tone: "neutral" };
     case "done":
       return { text: t(mail.state.done, "done · {since}", { since }), tone: "neutral" };
     case "quiet":
@@ -82,8 +86,8 @@ const NEEDS: Record<MailWhy["code"], (t: T) => string> = {
   failed: (t) => t(mail.needs.failed, "not sent"),
 };
 
-/** Why a case is the operator's. */
-export function whyText(why: MailWhy, t: T, locale: Locale, now: Date): string {
+/** Why case `c` is the operator's. */
+export function whyText(c: MailCase, why: MailWhy, t: T, locale: Locale, now: Date): string {
   switch (why.code) {
     case "kind":
       return KIND_ASKS[why.kind]?.(t) ?? KIND_NAME[why.kind](t);
@@ -92,7 +96,7 @@ export function whyText(why: MailWhy, t: T, locale: Locale, now: Date): string {
     case "needs":
       return t(mail.why.needs, "Google wants what only you have: {what}.", { what: why.needs.join(", ") });
     case "asked_often":
-      return t(mail.why.asked_often, "Google answers nothing new, however often it was asked.");
+      return c.said === "routed" ? t(mail.why.silent, "Google's specialist stayed silent past the time given, and when asked again.") : t(mail.why.asked_often, "Google answers nothing new, however often it was asked.");
     case "unanswered":
       return t(mail.why.unanswered, "Google went silent, and nothing here takes a reply.");
     case "no_reply":
@@ -116,8 +120,7 @@ export function subjectOf(c: MailCase, t: T): string {
   return bare === "" ? t(mail.noSubject, "(no subject)") : bare;
 }
 
-/** Who speaks in a case: only support's conversations carry a number. */
-export function whoIn(c: MailCase, t: T): string {
-  if (c.last.kind === "impersonation") return KIND_NAME.impersonation(t);
-  return c.numbers.length > 0 ? t(mail.who.support, "Google support") : t(mail.who.google, "Google");
-}
+/** Whether it is about a GBP its mail does not name. */
+export const unnamed = (c: MailCase) => c.gmb_id === null && c.topic !== "other" && c.said !== "account_restricted";
+
+export const over = (c: MailCase) => c.state.is === "done" || c.state.is === "quiet";

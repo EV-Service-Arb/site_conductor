@@ -21,6 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
 	api::{ApiResult, Code, Id},
+	connections::CheckedDto,
 	http::{ApiRoute, ApiState, USER},
 	signin::Caller,
 	tokens::BalanceDto,
@@ -151,6 +152,8 @@ pub struct GmailDto {
 	pub created_at: String,
 	/// Its browser set up, its last check through: the GBPs' `profile` must-have.
 	pub browser: bool,
+	/// Its inbox's last check, as `Connections.imap.checked`; `null`: none set, its mail is not read.
+	pub imap: Option<CheckedDto>,
 	/// Its window's tabs, in order.
 	pub tabs: Vec<Tab>,
 }
@@ -414,6 +417,7 @@ impl From<Gmail> for GmailDto {
 			gmail: g.gmail,
 			created_at: g.created_at.to_string(),
 			browser: g.browser,
+			imap: g.imap.map(CheckedDto::from),
 			tabs: vec![Tab::Connections, Tab::Browser],
 		}
 	}

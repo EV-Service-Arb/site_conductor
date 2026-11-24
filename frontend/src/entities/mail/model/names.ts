@@ -1,6 +1,6 @@
 import type { Tone } from "@evinvest/uikit";
 
-import { type MailKind, type MailTopic, type VerificationMethod, type VerificationOutcome, mailKindValues } from "@/shared/api/schema";
+import { type MailKind, type MailTopic, type MailWho, type VerificationMethod, type VerificationOutcome, mailKindValues } from "@/shared/api/schema";
 import type { T } from "@/shared/i18n";
 
 import { mail } from "./i18n";
@@ -18,6 +18,13 @@ export const TOPIC_NAME: Named<MailTopic> = {
 };
 
 export const TOPIC_TONE: Record<MailTopic, Tone> = { verification: "warn", suspension: "error", reviews: "info", activity: "warn", access: "neutral", profile: "neutral", other: "neutral" };
+
+export const WHO_NAME: Named<MailWho> = {
+  us: (t) => t(mail.message.us, "You"),
+  support: (t) => t(mail.who.support, "Google support"),
+  google: (t) => t(mail.who.google, "Google"),
+  unproven: (t) => t(mail.kind.impersonation, "Not from Google"),
+};
 
 /** A topic's kinds, as a person picks one; `null`: of any topic. */
 export const KINDS: readonly { topic: MailTopic | null; kinds: readonly MailKind[] }[] = [
@@ -77,8 +84,26 @@ export const KIND_NAME: Named<MailKind> = {
   impersonation: (t) => t(mail.kind.impersonation, "Not from Google"),
 };
 
+/** A kind that decides something; any other is neutral. */
+export const KIND_TONE: Partial<Record<MailKind, Tone>> = {
+  verified: "positive",
+  call_offered: "warn",
+  appeal_approved: "positive",
+  restriction_lifted: "positive",
+  reinstatement_done: "positive",
+  video_rejected: "error",
+  call_failed: "error",
+  options_exhausted: "error",
+  suspended: "error",
+  account_restricted: "error",
+  appeal_denied: "error",
+  reinstatement_refused: "error",
+  impersonation: "error",
+};
+
 /** What a kind that is the operator's asks of them. */
 export const KIND_ASKS: Partial<Named<MailKind>> = {
+  asks: (t) => t(mail.why.asks, "Google asks for something, and the reply is written: check it and send it."),
   video_rejected: (t) => t(mail.why.video_rejected, "Google rejected the recorded video, and no open conversation asks for the live call."),
   reverification_required: (t) => t(mail.why.reverification_required, "Google wants it verified again: start it from the profile."),
   call_offered: (t) => t(mail.why.call_offered, "The live call is enabled: take it from the profile, at the place."),
@@ -95,7 +120,6 @@ export const KIND_ASKS: Partial<Named<MailKind>> = {
   edit_suggested: (t) => t(mail.why.edit_suggested, "Somebody suggested an edit: accept or refuse it on the profile."),
   policy_warning: (t) => t(mail.why.policy_warning, "Google warns of a policy broken on the profile."),
   duplicate: (t) => t(mail.why.duplicate, "Google marked it another profile's duplicate."),
-  unclear: (t) => t(mail.why.unclear, "What the mail says could not be told: read it and set its kind."),
 };
 
 export const METHOD_NAME: Named<VerificationMethod> = {

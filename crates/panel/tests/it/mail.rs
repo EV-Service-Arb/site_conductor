@@ -25,6 +25,7 @@ use uuid::Uuid;
 
 const SUPPORT: &str = "googlebusinessprofile-support@google.com";
 const NOTICE: &str = "businessprofile-noreply@google.com";
+const DONE: State = State::Done { by_hand: false };
 
 const REJECTED: &str = "Action required: Submit a new verification video";
 
@@ -257,7 +258,7 @@ async fn rejected_videos_are_attempts_of_the_gbp_named_or_known_by_its_link() {
 	};
 	assert_eq!(
 		cases.iter().map(|c| c.state.clone()).collect::<Vec<_>>(),
-		[State::Done, rejection(), rejection()],
+		[DONE, rejection(), rejection()],
 		"the newer one stands, and nobody read our answer"
 	);
 	let attempts: Vec<_> = cases
@@ -395,7 +396,7 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 		.await;
 	w.reads("2026-10-07T10:01:00Z", Kind::Verified, |_| {}).await;
 	let states: Vec<_> = w.cases("2026-10-07T10:02:00Z").await.into_iter().map(|c| c.state).collect();
-	assert_eq!(states, [State::Done, State::Done, State::Done]);
+	assert_eq!(states, [DONE; 3]);
 }
 
 #[tokio::test]
@@ -404,7 +405,7 @@ async fn a_switched_on_reply_is_held_then_goes_unless_another_message_comes() {
 	let request = "[1-1234000056789] Your Request to Google";
 	assert!(matches!(w.p.set_mail_auto(w.owner, w.gmail, Topic::Suspension, true).await.unwrap(), Err(Refused::Invalid(_))));
 	w.p.set_mail_auto(w.owner, w.gmail, Topic::Verification, true).await.unwrap().unwrap();
-	assert_eq!(w.p.mail_auto(w.owner).await.unwrap(), [(w.gmail, Topic::Verification)]);
+	assert_eq!(w.p.mail_auto(w.owner).await.unwrap().on, [(w.gmail, Topic::Verification)]);
 	w.arrives(support("2026-10-01T09:00:00Z", 1, request, "Follow the prompts.")).await;
 	w.reads("2026-10-01T09:01:00Z", Kind::SelfServe, |_| {}).await;
 	let case = w.only("2026-10-01T09:02:00Z").await;
@@ -679,7 +680,7 @@ async fn a_case_is_not_pressed_once_its_gbp_is_verified_nor_when_it_is_old() {
 		w.p.advance(Some(Spender::new(w.owner)), gmb, sa_core::gbp::State::Verified, None).await.unwrap().unwrap();
 	}
 	let settled = w.cases("2026-10-02T09:00:00Z").await;
-	assert!(settled.iter().all(|c| c.state == State::Done && !c.due), "{settled:#?}");
+	assert!(settled.iter().all(|c| c.state == DONE && !c.due), "{settled:#?}");
 }
 
 #[tokio::test]
@@ -748,7 +749,7 @@ async fn a_persons_mail_is_theirs_alone_corrected_by_them_and_gone_with_its_gmai
 	};
 	assert!(matches!(w.p.correct_mail(w.owner, mail, wrong, t(now)).await.unwrap(), Err(Refused::Invalid(_))));
 	w.p.edit_mail_case(w.owner, w.owner, case.id, edit(), t(now)).await.unwrap().unwrap();
-	assert_eq!(w.only(now).await.state, State::Done);
+	assert_eq!(w.only(now).await.state, State::Done { by_hand: true });
 
 	let pool = w.db.pool().await;
 	let text: Vec<u8> = sqlx::query_scalar("SELECT text_sealed FROM mails").fetch_one(&pool).await.unwrap();

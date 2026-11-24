@@ -24,7 +24,7 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel, Refused,
-	mail::{Brief, Case, CaseEdit, Draft, File, Kept, ReadBy, ReadingEdit, Unread, Written},
+	mail::{Brief, ByHand, Case, CaseEdit, Draft, FILES_MAX, File, Kept, ReadBy, ReadingEdit, Unread, Written},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -60,6 +60,8 @@ pub struct CaseDto {
 	/// The GBP it is about; `null`: not known.
 	pub gmb_id: Option<i64>,
 	pub topic: Topic,
+	/// Whether a person said so of them, over its mail.
+	pub by_hand: ByHand,
 	/// Google's latest, else ours.
 	pub subject: Option<String>,
 	/// Google's case numbers.
@@ -70,6 +72,8 @@ pub struct CaseDto {
 	/// RFC 3339; Google's, still running.
 	pub deadline: Option<String>,
 	pub last: MailLineDto,
+	/// What Google's last word was read as; `null`: none, or not read.
+	pub said: Option<Kind>,
 	/// What Google asks in its last word.
 	pub asks: Vec<String>,
 	/// Its draft, until it is answered; what it lacks in `draft.needs`.
@@ -79,28 +83,37 @@ impl CaseDto {
 	fn of(c: &Case, now: Timestamp) -> Self {
 		let (last, google) = (c.last(), c.google());
 		let read = google.and_then(|m| m.said.reading.as_ref());
-		let said = last.said.reading.as_ref();
 		Self {
 			id: c.id,
 			gmail_id: c.gmail,
 			gmb_id: c.gmb,
 			topic: c.topic,
+			by_hand: c.by_hand,
 			subject: google.unwrap_or(last).subject.clone(),
 			numbers: c.numbers.iter().cloned().collect(),
 			thread: last.thread.clone(),
 			state: c.state.clone(),
 			deadline: read.and_then(|r| r.deadline).filter(|d| *d > now).map(|d| d.to_string()),
-			last: MailLineDto {
-				id: last.said.id,
-				at: last.said.at.to_string(),
-				sent: last.said.sent,
-				kind: said.map(|r| r.kind),
-				summary: said.map(|r| r.summary.clone()),
-			},
+			last: MailLineDto::of(c, last),
+			said: read.map(|r| r.kind),
 			asks: read.map(|r| r.asks.clone()).unwrap_or_default(), // not read: nothing asked is known
 			draft: c.draft.as_ref().filter(|d| d.reply.answers == last.said.id).map(DraftDto::from),
 		}
 	}
+}
+
+/// Who speaks in a message.
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[schemars(rename = "MailWho")]
+pub enum Who {
+	Us,
+	/// Google's support.
+	Support,
+	/// Google, from an address nobody reads.
+	Google,
+	/// Not proved Google's.
+	Unproven,
 }
 
 /// A message, in a line.
@@ -108,13 +121,36 @@ impl CaseDto {
 #[schemars(rename = "MailLine")]
 pub struct MailLineDto {
 	pub id: i64,
+	pub case_id: i64,
 	/// RFC 3339.
 	pub at: String,
-	/// Ours.
-	pub sent: bool,
+	pub who: Who,
+	pub subject: Option<String>,
 	/// `null`: ours, or not read.
 	pub kind: Option<Kind>,
 	pub summary: Option<String>,
+	/// Why, in Google's words.
+	pub reasons: Vec<String>,
+}
+impl MailLineDto {
+	fn of(c: &Case, m: &Kept) -> Self {
+		let read = m.said.reading.as_ref();
+		Self {
+			id: m.said.id,
+			case_id: c.id,
+			at: m.said.at.to_string(),
+			who: match (m.said.sent, m.authentic, m.said.noreply) {
+				(true, ..) => Who::Us,
+				(false, false, _) => Who::Unproven,
+				(false, true, false) => Who::Support,
+				(false, true, true) => Who::Google,
+			},
+			subject: m.subject.clone(),
+			kind: read.map(|r| r.kind),
+			summary: read.map(|r| r.summary.clone()),
+			reasons: read.map(|r| r.reasons.clone()).unwrap_or_default(), // not read: none is known
+		}
+	}
 }
 
 /// A reply written to a case.
@@ -213,6 +249,8 @@ pub struct CaseDetailDto {
 	pub messages: Vec<MessageDto>,
 	/// Where a reply goes; `null`: nothing in it takes one.
 	pub recipient: Option<String>,
+	/// What a reply's files may be in all, bytes.
+	pub files_max: usize,
 	/// Of its GBP, newest first.
 	pub attempts: Vec<AttemptDto>,
 	/// Its GBP's reviews missing now; `null`: it is not about reviews.
@@ -242,6 +280,8 @@ pub struct GmbMailDto {
 	pub attempts: Vec<AttemptDto>,
 	/// Those last spoken in first.
 	pub cases: Vec<CaseDto>,
+	/// Its every message, newest first.
+	pub lines: Vec<MailLineDto>,
 }
 
 /// A topic whose replies go by themselves.
@@ -259,6 +299,8 @@ pub struct AutosDto {
 	pub on: Vec<AutoDto>,
 	/// The topics that can be.
 	pub topics: Vec<Topic>,
+	/// Whether this conductor sends any by itself: production's alone.
+	pub by_itself: bool,
 }
 
 impl From<&Draft> for DraftDto {
@@ -284,8 +326,6 @@ pub struct Worker {
 	pub model: Model,
 	/// Where the review archive is asked of the reviews gone; none, they are not known.
 	pub services: Option<Services>,
-	/// Replies go by themselves: production's alone, or a copy of its database would answer Google too.
-	pub by_itself: bool,
 	/// The alerts' language; none tells nothing.
 	pub tell: Option<Locale>,
 }
@@ -314,9 +354,7 @@ impl Worker {
 
 	/// What is held until now sent, and what turned to a person told.
 	pub async fn send_and_tell(&self) -> eyre::Result<()> {
-		if self.by_itself {
-			self.panel.send_held_mail(Timestamp::now()).await?;
-		}
+		self.panel.send_held_mail(Timestamp::now()).await?;
 		if let Some(locale) = self.tell {
 			self.panel.tell_mail(locale, Timestamp::now()).await?;
 		}
@@ -325,9 +363,7 @@ impl Worker {
 
 	/// The person's mail; whether the model was asked anything.
 	async fn of(&self, owner: Uuid) -> Result<bool, Unanswered> {
-		let Self {
-			panel, model, services, by_itself, ..
-		} = self;
+		let Self { panel, model, services, .. } = self;
 		let mut asked = false;
 		for m in panel.unread_mail(owner, Timestamp::now()).await? {
 			asked = true;
@@ -357,7 +393,7 @@ impl Worker {
 				Err(Unanswered::Unread(why)) => Written::Failed(why),
 				Err(e) => return Err(e),
 			};
-			panel.draft_mail(owner, c.id, brief.case.last().said.id, written, !by_itself, Timestamp::now()).await?;
+			panel.draft_mail(owner, c.id, brief.case.last().said.id, written, false, Timestamp::now()).await?;
 		}
 		Ok(asked)
 	}
@@ -384,15 +420,24 @@ pub async fn run(w: Worker, mut shutdown: watch::Receiver<bool>) {
 	}
 }
 
-/// The tries to verify GBP `gmb` that `cases` tell of, newest first.
-fn attempts(cases: &[Case], gmb: i64) -> Vec<AttemptDto> {
-	let mut tried: Vec<(Timestamp, AttemptDto)> = cases
+/// What `cases` hold of GBP `gmb`, newest first, each message with its case.
+fn about(cases: &[Case], gmb: i64) -> Vec<(&Case, &Kept)> {
+	let mut held: Vec<_> = cases
 		.iter()
 		.flat_map(|c| c.messages.iter().filter(move |m| m.gmb.or(c.gmb) == Some(gmb)).map(move |m| (c, m)))
+		.collect();
+	held.sort_by_key(|(_, m)| std::cmp::Reverse((m.said.at, m.said.id)));
+	held
+}
+
+/// The tries to verify a GBP that its mail, `about`, tells of.
+fn attempts(about: &[(&Case, &Kept)]) -> Vec<AttemptDto> {
+	about
+		.iter()
 		.filter_map(|(c, m)| {
 			let r = m.said.reading.as_ref()?;
 			let (method, outcome) = rules::attempt(r.kind)?;
-			let dto = AttemptDto {
+			Some(AttemptDto {
 				at: m.said.at.to_string(),
 				method,
 				outcome,
@@ -400,12 +445,9 @@ fn attempts(cases: &[Case], gmb: i64) -> Vec<AttemptDto> {
 				summary: r.summary.clone(),
 				case_id: c.id,
 				message_id: m.said.id,
-			};
-			Some((m.said.at, dto))
+			})
 		})
-		.collect();
-	tried.sort_by_key(|(at, _)| std::cmp::Reverse(*at));
-	tried.into_iter().map(|(_, a)| a).collect()
+		.collect()
 }
 
 /// The missing reviews case `c` is about, when it is about reviews.
@@ -437,7 +479,7 @@ async fn detail(state: &ApiState, owner: Uuid, id: i64) -> ApiResult<Json<CaseDe
 	let now = Timestamp::now();
 	let Brief { case, texts, .. } = panel.mail_case(owner, id, now).await??;
 	let tried = match case.gmb {
-		Some(gmb) => attempts(&panel.mail_cases(owner, now).await?, gmb),
+		Some(gmb) => attempts(&about(&panel.mail_cases(owner, now).await?, gmb)),
 		None => Vec::new(),
 	};
 	let gone = gone(state.sites.as_ref(), &case).await.unwrap_or_else(|e| {
@@ -450,6 +492,7 @@ async fn detail(state: &ApiState, owner: Uuid, id: i64) -> ApiResult<Json<CaseDe
 		messages: case.messages.iter().zip(&texts).map(|(m, text)| MessageDto::of(m, text)).collect(),
 		case: CaseDto::of(&case, now),
 		recipient: recipient(&case).map(str::to_owned),
+		files_max: FILES_MAX,
 		attempts: tried,
 	}))
 }
@@ -599,7 +642,7 @@ async fn draft_mail(State(state): State<ApiState>, Spends(caller, by): Spends<Mo
 pub(crate) struct SendDraft {
 	/// What goes, as the operator leaves it.
 	body: String,
-	/// At most 18 MiB in all; never stored.
+	/// At most the case's `files_max` in all; never stored.
 	files: Vec<SendFile>,
 }
 
@@ -669,9 +712,10 @@ async fn dismiss_mail_draft(State(panel): State<Panel>, Extension(caller): Exten
 
 /// The gmails and topics whose replies go by themselves, a quarter of an hour after they are written.
 async fn mail_auto(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<AutosDto>> {
-	let on = panel.mail_auto(caller.user_id).await?;
+	let auto = panel.mail_auto(caller.user_id).await?;
 	Ok(Json(AutosDto {
-		on: on.into_iter().map(|(gmail_id, topic)| AutoDto { gmail_id, topic }).collect(),
+		by_itself: auto.by_itself,
+		on: auto.on.into_iter().map(|(gmail_id, topic)| AutoDto { gmail_id, topic }).collect(),
 		topics: sa_panel::mail::AUTO.to_vec(),
 	}))
 }
@@ -693,7 +737,7 @@ async fn set_mail_auto(_: Outward, State(panel): State<Panel>, Extension(caller)
 	mail_auto(State(panel), Extension(caller)).await
 }
 
-/// A GBP's mail: every try to verify it, and its cases.
+/// A GBP's mail: every try to verify it, its cases, its every message.
 async fn gmb_mail(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<Json<GmbMailDto>> {
 	let (_, gmbs) = panel.gmails(caller.user_id).await?;
 	if !gmbs.iter().any(|g| g.id == id) {
@@ -701,9 +745,11 @@ async fn gmb_mail(State(panel): State<Panel>, Extension(caller): Extension<Calle
 	}
 	let now = Timestamp::now();
 	let cases = panel.mail_cases(caller.user_id, now).await?;
+	let about = about(&cases, id);
 	Ok(Json(GmbMailDto {
-		attempts: attempts(&cases, id),
+		attempts: attempts(&about),
 		cases: cases.iter().filter(|c| c.gmb == Some(id)).map(|c| CaseDto::of(c, now)).collect(),
+		lines: about.iter().map(|(c, m)| MailLineDto::of(c, m)).collect(),
 	}))
 }
 

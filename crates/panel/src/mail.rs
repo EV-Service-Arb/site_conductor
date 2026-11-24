@@ -95,6 +95,7 @@ pub struct Case {
 	/// The GBP it is about.
 	pub gmb: Option<i64>,
 	pub topic: Topic,
+	pub by_hand: ByHand,
 	pub numbers: BTreeSet<String>,
 	pub state: State,
 	/// A reply is due and none is written, whatever it waits on.
@@ -119,6 +120,14 @@ impl Case {
 	fn messages(&self) -> Vec<Message> {
 		self.messages.iter().map(|m| m.said.clone()).collect()
 	}
+}
+
+/// What of a case a person set over its mail.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, schemars::JsonSchema, serde::Serialize)]
+#[schemars(rename = "MailByHand")]
+pub struct ByHand {
+	pub gmb: bool,
+	pub topic: bool,
 }
 
 /// A message kept; its text apart ([`Panel::mail_case`]).
@@ -190,6 +199,14 @@ pub struct CaseEdit {
 	pub gmb: Option<Option<i64>>,
 	pub topic: Option<Option<Topic>>,
 	pub done: Option<bool>,
+}
+
+/// What goes by itself.
+pub struct Auto {
+	/// Whether anything does here: production's alone.
+	pub by_itself: bool,
+	/// The gmails' topics switched on.
+	pub on: Vec<(i64, Topic)>,
 }
 
 /// What a person corrects of a reading; each absent is left.
@@ -409,10 +426,13 @@ impl Panel {
 		Ok(Ok(case))
 	}
 
-	/// The gmails' topics whose replies go by themselves, the person's.
-	pub async fn mail_auto(&self, owner: Uuid) -> eyre::Result<Vec<(i64, Topic)>> {
+	/// The person's replies that go by themselves.
+	pub async fn mail_auto(&self, owner: Uuid) -> eyre::Result<Auto> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for automatic replies")?;
-		db::auto(&mut conn, owner).await
+		Ok(Auto {
+			by_itself: self.mail_by_itself,
+			on: db::auto(&mut conn, owner).await?,
+		})
 	}
 
 	pub async fn set_mail_auto(&self, owner: Uuid, gmail: i64, topic: Topic, on: bool) -> eyre::Result<Result<(), Refused>> {
@@ -516,7 +536,7 @@ impl Panel {
 			return Ok(None);
 		}
 		let asks = case.last().said.reading.as_ref().is_some_and(|r| r.kind == Kind::Asks);
-		let auto = !asked_for && !asks && db::auto(&mut tx, owner).await?.contains(&(case.gmail, case.topic));
+		let auto = self.mail_by_itself && !asked_for && !asks && db::auto(&mut tx, owner).await?.contains(&(case.gmail, case.topic));
 		let (body, needs, state, error) = match written {
 			Written::Reply { body, needs } if auto && needs.is_empty() => (body, needs, DraftState::Held, None),
 			Written::Reply { body, needs } => (body, needs, DraftState::Proposed, None),
@@ -588,8 +608,11 @@ impl Panel {
 		self.dispatch(owner, id, Some((by, body)), files, now).await
 	}
 
-	/// Sends the drafts held until `now`; how many went.
+	/// Sends the drafts held until `now`, where replies go by themselves; how many went.
 	pub async fn send_held_mail(&self, now: Timestamp) -> eyre::Result<usize> {
+		if !self.mail_by_itself {
+			return Ok(0);
+		}
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the drafts due")?;
 		let due = db::held_due(&mut conn, now).await?;
 		drop(conn);
@@ -756,7 +779,7 @@ impl Panel {
 					State::ReplyReady => "reply_ready",
 					State::Sending { .. } if c.draft.as_ref().is_some_and(|d| d.reply.state == DraftState::Held) => "held",
 					State::Waiting { .. } if last.said.reading.as_ref().is_some_and(|r| r.kind == Kind::Routed) => "routed",
-					State::Sending { .. } | State::ReplyDue | State::Waiting { .. } | State::Done | State::Quiet => continue,
+					State::Sending { .. } | State::ReplyDue | State::Waiting { .. } | State::Done { .. } | State::Quiet => continue,
 				};
 				if now.duration_since(at) > TELL_WITHIN {
 					continue;
@@ -825,7 +848,8 @@ impl Panel {
 			let messages = held.remove(&r.id).ok_or_else(|| eyre::eyre!("case {} holds no message", r.id))?;
 			let gmb = r.gmb_id.or_else(|| messages.iter().rev().find_map(|m| m.gmb));
 			let read = messages.iter().rev().filter_map(|m| m.said.reading.as_ref()).map(|r| r.topic).find(|t| *t != Topic::Other);
-			let topic = r.topic()?.or(read).unwrap_or(Topic::Other); // nothing read yet, or only of none
+			let by_hand = r.topic()?;
+			let topic = by_hand.or(read).unwrap_or(Topic::Other); // nothing read yet, or only of none
 			cases.push((
 				r.done_mail,
 				Case {
@@ -833,6 +857,10 @@ impl Panel {
 					gmail: r.gmail_id,
 					gmb,
 					topic,
+					by_hand: ByHand {
+						gmb: r.gmb_id.is_some(),
+						topic: by_hand.is_some(),
+					},
 					numbers: r.numbers().clone(),
 					state: State::Quiet,
 					due: false,
@@ -885,7 +913,7 @@ impl Panel {
 		let asking: HashMap<i64, i64> = cases
 			.iter()
 			.filter(|(_, c)| c.topic == Topic::Verification && c.messages.iter().any(|m| !m.said.noreply))
-			.filter(|(done, c)| !matches!(state(*done, c, false, None), State::Done | State::Quiet))
+			.filter(|(done, c)| !matches!(state(*done, c, false, None), State::Done { .. } | State::Quiet))
 			.filter_map(|(_, c)| Some((c.gmb?, c.id)))
 			.collect();
 		Ok(cases

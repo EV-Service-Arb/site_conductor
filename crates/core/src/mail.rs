@@ -518,7 +518,10 @@ pub enum State {
 	Waiting {
 		until: Timestamp,
 	},
-	Done,
+	Done {
+		/// A person marked it so.
+		by_hand: bool,
+	},
 	/// Nothing to do.
 	Quiet,
 }
@@ -556,7 +559,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	let heard: Vec<&Message> = c.messages.iter().filter(|m| !(m.sent && m.noreply)).collect();
 	let Some(last) = heard.last() else { return State::Quiet };
 	if c.done.is_some() && c.messages.iter().rev().take_while(|m| Some(m.id) != c.done).all(|m| m.sent && m.noreply) {
-		return State::Done;
+		return State::Done { by_hand: true };
 	}
 	let draft = c.draft.filter(|d| d.answers == last.id);
 	let needs = |why| State::NeedsYou { why };
@@ -585,7 +588,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 		(notice && !matches!(topic, Topic::Profile | Topic::Other)) || said.is_some_and(|r| r.kind.resolved_by(*kind))
 	});
 	if over {
-		return State::Done;
+		return State::Done { by_hand: false };
 	}
 	// what Google asks is the operator's to give or to confirm
 	let asks = last.reading.as_ref().is_some_and(|r| r.kind == Kind::Asks);
@@ -652,7 +655,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	match read.kind.turn() {
 		Turn::Reply => reply(c, &heard, false),
 		Turn::Google => deadline(silence()),
-		Turn::Nobody { resolved: true } => State::Done,
+		Turn::Nobody { resolved: true } => State::Done { by_hand: false },
 		Turn::Nobody { resolved: false } => deadline(State::Quiet),
 		Turn::Operator if read.kind == Kind::VideoRejected && c.asked_elsewhere => State::Quiet,
 		Turn::Operator => needs(Why::Kind { kind: read.kind }),
@@ -796,6 +799,7 @@ mod tests {
 	const GMAIL: &str = "mx.google.com; dkim=pass header.i=@google.com header.s=20230601 header.b=abc; spf=pass (google.com: domain of 3xyz@scoutcamp.bounces.google.com designates 209.85.220.69 as permitted sender) smtp.mailfrom=3xyz@scoutcamp.bounces.google.com; dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=google.com; dara=pass header.i=@gmail.com";
 	const NOTICE: &str = "businessprofile-noreply@google.com";
 	const SUPPORT: &str = "googlebusinessprofile-support@google.com";
+	const DONE: State = State::Done { by_hand: false };
 
 	fn t(s: &str) -> Timestamp {
 		s.parse().unwrap()
@@ -1109,8 +1113,8 @@ mod tests {
 		m.push(google(5, "2026-10-06T10:00:00Z", Kind::CallOffered));
 		assert_eq!(state(&case(&m), now), needs(Why::Kind { kind: Kind::CallOffered }));
 		let later = [(t("2026-10-06T10:10:00Z"), Topic::Verification, Kind::CallFailed)];
-		assert_eq!(state(&Case { elsewhere: &later, ..case(&m) }, now), State::Done, "the call was held");
-		assert_eq!(state(&Case { done: Some(5), ..case(&m) }, now), State::Done);
+		assert_eq!(state(&Case { elsewhere: &later, ..case(&m) }, now), DONE, "the call was held");
+		assert_eq!(state(&Case { done: Some(5), ..case(&m) }, now), State::Done { by_hand: true });
 		assert_eq!(
 			state(&Case { done: Some(4), ..case(&m) }, now),
 			needs(Why::Kind { kind: Kind::CallOffered }),
@@ -1118,7 +1122,7 @@ mod tests {
 		);
 		assert_eq!(state(&case(&m), t("2026-11-20T00:00:00Z")), State::Quiet);
 		m.push(google(6, "2026-10-06T10:20:00Z", Kind::Closed));
-		assert_eq!(state(&case(&m), now), State::Done);
+		assert_eq!(state(&case(&m), now), DONE);
 	}
 
 	#[test]
@@ -1179,8 +1183,8 @@ mod tests {
 				now,
 			)
 		};
-		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Verification, Kind::Verified), State::Done);
-		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Verification, Kind::VideoRejected), State::Done, "the newer one stands");
+		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Verification, Kind::Verified), DONE);
+		assert_eq!(on("2026-10-06T09:00:00Z", Topic::Verification, Kind::VideoRejected), DONE, "the newer one stands");
 		assert_eq!(
 			on("2026-10-04T09:00:00Z", Topic::Verification, Kind::Verified),
 			needs(Why::Kind { kind: Kind::VideoRejected }),

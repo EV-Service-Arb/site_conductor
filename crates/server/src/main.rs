@@ -190,7 +190,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 		};
 		let google = sa_places::Google::try_new(keys, Arc::new(rank), Arc::new(store.clone()))?.spend(spend);
 		let smtp = Arc::new(sa_panel::mail::Gmail);
-		eyre::Ok(Panel::new(store, settings.data_key()?, settings.renewal()?, google, accounts, smtp))
+		eyre::Ok(Panel::new(store, settings.data_key()?, settings.renewal()?, google, accounts, smtp, settings.app_env == "production"))
 	};
 	match cli.cmd {
 		Cmd::Migrate => {
@@ -389,7 +389,6 @@ async fn serve(
 		panel: panel.clone(),
 		model: model.clone(),
 		services: services.clone(),
-		by_itself: production,
 		tell: Some(networks.telegram.as_ref().map_or(Locale::En, |tg| tg.locale)),
 	};
 	let sign_in = SignIn::new(panel, concierge, config);

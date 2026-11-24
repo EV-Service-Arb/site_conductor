@@ -5,7 +5,8 @@ import { ArrowLeft } from "lucide-react";
 import type { KeyboardEvent } from "react";
 
 import { useGmails } from "@/entities/gmb";
-import { CaseRow, type Show, mail, shownIn, useCases } from "@/entities/mail";
+import { CaseRow, type Show, mail, over, shownIn, unnamed, useCases } from "@/entities/mail";
+import { WhichGbp } from "@/features/answer-mail";
 import { AutoReplies } from "@/features/auto-mail";
 import type { MailCase } from "@/shared/api/schema";
 import { type T, nav, useT } from "@/shared/i18n";
@@ -100,7 +101,7 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
           ) : read.shown === null ? (
             <Skeleton className="m-3 h-60" />
           ) : (
-            <List cases={listed} all={read.shown.length} show={show} opened={opened} />
+            <List cases={listed} all={read.shown.length} show={show} opened={opened} reload={read.reload} />
           )}
         </div>
       </div>
@@ -123,7 +124,7 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
   );
 }
 
-function List({ cases, all, show, opened }: { cases: readonly MailCase[]; all: number; show: Show; opened: number | undefined }) {
+function List({ cases, all, show, opened, reload }: { cases: readonly MailCase[]; all: number; show: Show; opened: number | undefined; reload: () => void }) {
   const t = useT();
   const gmails = useGmails();
   if (cases.length === 0)
@@ -138,7 +139,10 @@ function List({ cases, all, show, opened }: { cases: readonly MailCase[]; all: n
   return (
     <div className="flex flex-col gap-0.5 p-1.5" onKeyDown={arrows}>
       {cases.map((c) => (
-        <CaseRow key={c.id} c={c} gbp={gbp(c)} current={c.id === opened} to={threads(show, c.id)} />
+        <div key={c.id} className="flex flex-col">
+          <CaseRow c={c} gbp={gbp(c)} current={c.id === opened} to={threads(show, c.id)} />
+          {unnamed(c) && !over(c) && <WhichGbp c={c} onChanged={reload} className="mx-2.5 mb-2" />}
+        </div>
       ))}
     </div>
   );

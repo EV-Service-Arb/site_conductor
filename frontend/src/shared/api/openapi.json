@@ -19541,7 +19541,7 @@
         "tags": [
           "mail"
         ],
-        "summary": "A GBP's mail: every try to verify it, and its cases.",
+        "summary": "A GBP's mail: every try to verify it, its cases, its every message.",
         "operationId": "gmb_mail",
         "parameters": [
           {
@@ -33915,6 +33915,17 @@
             "type": "integer",
             "format": "int64"
           },
+          "imap": {
+            "description": "Its inbox's last check, as `Connections.imap.checked`; `null`: none set, its mail is not read.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Checked"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "tabs": {
             "description": "Its window's tabs, in order.",
             "type": "array",
@@ -33928,6 +33939,7 @@
           "gmail",
           "created_at",
           "browser",
+          "imap",
           "tabs"
         ]
       },
@@ -34368,11 +34380,19 @@
             "items": {
               "$ref": "#/components/schemas/MailCase"
             }
+          },
+          "lines": {
+            "description": "Its every message, newest first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MailLine"
+            }
           }
         },
         "required": [
           "attempts",
-          "cases"
+          "cases",
+          "lines"
         ]
       },
       "GmbNote": {
@@ -36130,6 +36150,10 @@
         "description": "`GET /mail/auto`: those switched on.",
         "type": "object",
         "properties": {
+          "by_itself": {
+            "description": "Whether this conductor sends any by itself: production's alone.",
+            "type": "boolean"
+          },
           "on": {
             "type": "array",
             "items": {
@@ -36146,7 +36170,24 @@
         },
         "required": [
           "on",
-          "topics"
+          "topics",
+          "by_itself"
+        ]
+      },
+      "MailByHand": {
+        "description": "What of a case a person set over its mail.",
+        "type": "object",
+        "properties": {
+          "gmb": {
+            "type": "boolean"
+          },
+          "topic": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gmb",
+          "topic"
         ]
       },
       "MailCase": {
@@ -36159,6 +36200,14 @@
             "items": {
               "type": "string"
             }
+          },
+          "by_hand": {
+            "description": "Whether a person said so of them, over its mail.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MailByHand"
+              }
+            ]
           },
           "deadline": {
             "description": "RFC 3339; Google's, still running.",
@@ -36204,6 +36253,17 @@
               "type": "string"
             }
           },
+          "said": {
+            "description": "What Google's last word was read as; `null`: none, or not read.",
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "state": {
             "$ref": "#/components/schemas/MailState"
           },
@@ -36227,12 +36287,14 @@
           "gmail_id",
           "gmb_id",
           "topic",
+          "by_hand",
           "subject",
           "numbers",
           "thread",
           "state",
           "deadline",
           "last",
+          "said",
           "asks",
           "draft"
         ]
@@ -36250,6 +36312,12 @@
           },
           "case": {
             "$ref": "#/components/schemas/MailCase"
+          },
+          "files_max": {
+            "description": "What a reply's files may be in all, bytes.",
+            "type": "integer",
+            "format": "uint",
+            "minimum": 0
           },
           "gone": {
             "description": "Its GBP's reviews missing now; `null`: it is not about reviews.",
@@ -36281,6 +36349,7 @@
           "case",
           "messages",
           "recipient",
+          "files_max",
           "attempts",
           "gone"
         ]
@@ -36554,6 +36623,10 @@
             "description": "RFC 3339.",
             "type": "string"
           },
+          "case_id": {
+            "type": "integer",
+            "format": "int64"
+          },
           "id": {
             "type": "integer",
             "format": "int64"
@@ -36569,23 +36642,38 @@
               }
             ]
           },
-          "sent": {
-            "description": "Ours.",
-            "type": "boolean"
+          "reasons": {
+            "description": "Why, in Google's words.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "subject": {
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "summary": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "who": {
+            "$ref": "#/components/schemas/MailWho"
           }
         },
         "required": [
           "id",
+          "case_id",
           "at",
-          "sent",
+          "who",
+          "subject",
           "kind",
-          "summary"
+          "summary",
+          "reasons"
         ]
       },
       "MailMessage": {
@@ -36826,7 +36914,7 @@
             "type": "string"
           },
           "files": {
-            "description": "At most 18 MiB in all; never stored.",
+            "description": "At most the case's `files_max` in all; never stored.",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/MailFile"
@@ -36935,13 +37023,18 @@
           {
             "type": "object",
             "properties": {
+              "by_hand": {
+                "description": "A person marked it so.",
+                "type": "boolean"
+              },
               "is": {
                 "type": "string",
                 "const": "done"
               }
             },
             "required": [
-              "is"
+              "is",
+              "by_hand"
             ]
           },
           {
@@ -36969,6 +37062,16 @@
           "access",
           "profile",
           "other"
+        ]
+      },
+      "MailWho": {
+        "description": "Who speaks in a message.\n\n- `support`: Google's support.\n- `google`: Google, from an address nobody reads.\n- `unproven`: Not proved Google's.",
+        "type": "string",
+        "enum": [
+          "us",
+          "support",
+          "google",
+          "unproven"
         ]
       },
       "MailWhy": {

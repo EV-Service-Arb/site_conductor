@@ -2,13 +2,13 @@
 
 import { Badge, Button, NativeSelect, NativeSelectGroup, NativeSelectOption, Skeleton, cn, useUndo } from "@evinvest/uikit";
 import { useResource } from "@evinvest/api/react";
-import { Check, ChevronRight, ExternalLink, ShieldAlert, SlidersHorizontal, TriangleAlert } from "lucide-react";
+import { Check, ChevronRight, ExternalLink, RotateCcw, ShieldAlert, SlidersHorizontal, TriangleAlert } from "lucide-react";
 import { type ReactNode, useId, useState } from "react";
 
 import { useNow } from "@/entities/alerts";
 import { openWindow, under, useGmails } from "@/entities/gmb";
-import { KINDS, KIND_NAME, Standing, TOPIC_NAME, TopicBadge, correctMail, editCase, mail, subjectOf, useOpenThread, whyText } from "@/entities/mail";
-import { Mend, Reply } from "@/features/answer-mail";
+import { KINDS, KIND_NAME, Standing, TOPIC_NAME, TopicBadge, WHO_NAME, correctMail, editCase, mail, subjectOf, unnamed, useOpenThread, whyText } from "@/entities/mail";
+import { Mend, Reply, WhichGbp } from "@/features/answer-mail";
 import { api } from "@/shared/api";
 import { type Gmails, type Gmb, type MailCaseDetail, type MailKind, type MailMessage, type MailTopic, mailTopicValues } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
@@ -17,6 +17,8 @@ import { when } from "@/shared/lib/time";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
+
+import { Gone } from "./gone";
 
 /** A case whole: why it is the operator's, what was said, what Google asks, and the reply. */
 export function CaseDetail({ id }: { id: number }) {
@@ -41,11 +43,12 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
   const thread = useOpenThread();
   const [correcting, setCorrecting] = useState(false);
   const push = useUndo();
-  const done = async () => {
+  const done = async (to: boolean) => {
     const set = (to: boolean) => editCase(c.id, { done: to }).finally(reload);
+    const subject = subjectOf(c, t);
     try {
-      await set(true);
-      push({ label: t(mail.done.label, "{subject} marked done", { subject: subjectOf(c, t) }), undo: async () => void (await set(false)), redo: async () => void (await set(true)) });
+      await set(to);
+      push({ label: to ? t(mail.done.label, "{subject} marked done", { subject }) : t(mail.reopen.label, "{subject} reopened", { subject }), undo: async () => void (await set(!to)), redo: async () => void (await set(to)) });
     } catch (e) {
       notifyFailure(e, t);
     }
@@ -59,7 +62,7 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-soft">
           <TopicBadge topic={c.topic} />
           <Standing c={c} />
-          {gbp === undefined ? <span>{t(mail.noGbp, "no GBP known")}</span> : <GbpLink gbp={gbp} />}
+          {gbp !== undefined ? <GbpLink gbp={gbp} /> : unnamed(c) ? <WhichGbp c={c} onChanged={reload} className="max-w-60" /> : <span>{t(mail.noGbp, "no GBP known")}</span>}
           <span className="min-w-0 truncate">{gmail.gmail}</span>
           {c.numbers.length > 0 && <span className="font-mono text-xs">{c.numbers.join(" · ")}</span>}
         </p>
@@ -69,9 +72,15 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
             {t(mail.thread.open, "Open thread")}
           </Button>
           {c.state.is !== "done" && (
-            <Button variant="outline" size={button("sm")} onClick={() => void done()} title={t(mail.done.means, "Until Google writes again; its draft is let go")}>
+            <Button variant="outline" size={button("sm")} onClick={() => void done(true)} title={t(mail.done.means, "Until Google writes again; its draft is let go")}>
               <Check aria-hidden />
               {t(mail.done, "Mark done")}
+            </Button>
+          )}
+          {c.state.is === "done" && c.state.by_hand && (
+            <Button variant="outline" size={button("sm")} onClick={() => void done(false)}>
+              <RotateCcw aria-hidden />
+              {t(mail.reopen, "Reopen")}
             </Button>
           )}
           <Button variant="ghost" size={button("sm")} aria-expanded={correcting} onClick={() => setCorrecting(!correcting)}>
@@ -88,7 +97,7 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
       )}
       <Why detail={detail} />
       <Timeline messages={messages} reload={reload} />
-      {c.asks.length > 0 && !c.last.sent && (
+      {c.asks.length > 0 && c.last.who !== "us" && (
         <section className="flex flex-col gap-2 rounded-lg bg-hover/60 px-4 py-3">
           <h3 className="text-xs text-ink-soft">{t(mail.asks, "Google asks")}</h3>
           <ul className="flex list-disc flex-col gap-1 pl-4 text-sm text-ink">
@@ -98,6 +107,7 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
           </ul>
         </section>
       )}
+      {detail.gone !== null && <Gone gone={detail.gone} gmb={c.gmb_id} />}
       <Reply detail={detail} gmail={gmail.gmail} onChanged={reload} />
     </article>
   );
@@ -132,8 +142,18 @@ function Why({ detail: { case: c } }: { detail: MailCaseDetail }) {
   const now = useNow(60_000);
   const why = c.state.is === "needs_you" ? c.state.why : null;
   const deadline = c.state.is === "done" ? null : c.deadline;
-  if (why === null && deadline === null) return null;
-  const said = why === null || why.code === "deadline" ? null : whyText(why, t, locale, now);
+  if (why === null && deadline === null) {
+    if (c.state.is !== "waiting" || c.said !== "routed") return null;
+    const until = when(c.state.until, locale, now);
+    return (
+      <p className="text-sm text-ink-soft">
+        {c.last.who === "us" || c.draft?.state === "sent"
+          ? t(mail.routed.pressed, "Asked again. If the specialist is still silent at {until}, it needs you.", { until })
+          : t(mail.routed, "A specialist answers by {until}. If they are silent past it, a reply asks again, once.", { until })}
+      </p>
+    );
+  }
+  const said = why === null || why.code === "deadline" ? null : whyText(c, why, t, locale, now);
   return (
     <Note tone={deadline !== null || why?.code === "failed" || why?.code === "may_have_gone_out" ? "error" : "warn"} icon={<TriangleAlert aria-hidden />}>
       {deadline !== null && <p className="font-medium">{t(mail.deadline, "Google's deadline: {at}", { at: formatDateTime(deadline, locale) })}</p>}
@@ -167,9 +187,10 @@ function Correct({ detail: { case: c }, gbps, reload }: { detail: MailCaseDetail
       <div className="flex min-w-0 flex-col gap-1">
         <label htmlFor={`${id}-gbp`} className="text-xs text-ink-soft">
           {t(mail.correct.gbp, "GBP")}
+          {c.by_hand.gmb && ` · ${t(mail.message.byHand, "set by hand")}`}
         </label>
         <NativeSelect id={`${id}-gbp`} size="sm" wrapperClassName="w-full" disabled={busy} value={c.gmb_id ?? AS_SAID} onChange={(e) => void set({ gmb: e.target.value === AS_SAID ? null : Number(e.target.value) })}>
-          <NativeSelectOption value={AS_SAID}>{c.gmb_id === null ? t(mail.correct.unknown, "Not known") : t(mail.correct.asSaid, "As its mail says")}</NativeSelectOption>
+          {c.by_hand.gmb ? <NativeSelectOption value={AS_SAID}>{t(mail.correct.asSaid, "As its mail says")}</NativeSelectOption> : c.gmb_id === null && <NativeSelectOption value={AS_SAID}>{t(mail.correct.unknown, "Not known")}</NativeSelectOption>}
           {gbps.map((g) => (
             <NativeSelectOption key={g.id} value={g.id}>
               {g.name}
@@ -182,9 +203,10 @@ function Correct({ detail: { case: c }, gbps, reload }: { detail: MailCaseDetail
       <div className="flex min-w-0 flex-col gap-1">
         <label htmlFor={`${id}-topic`} className="text-xs text-ink-soft">
           {t(mail.correct.topic, "Topic")}
+          {c.by_hand.topic && ` · ${t(mail.message.byHand, "set by hand")}`}
         </label>
         <NativeSelect id={`${id}-topic`} size="sm" wrapperClassName="w-full" disabled={busy} value={c.topic} onChange={(e) => void set({ topic: e.target.value === AS_SAID ? null : (e.target.value as MailTopic) })}>
-          <NativeSelectOption value={AS_SAID}>{t(mail.correct.asSaid, "As its mail says")}</NativeSelectOption>
+          {c.by_hand.topic && <NativeSelectOption value={AS_SAID}>{t(mail.correct.asSaid, "As its mail says")}</NativeSelectOption>}
           {mailTopicValues.map((topic) => (
             <NativeSelectOption key={topic} value={topic}>
               {TOPIC_NAME[topic](t)}
@@ -217,7 +239,7 @@ function Message({ m, opened, reload }: { m: MailMessage; opened: boolean; reloa
   const locale = useLocale();
   const now = useNow(60_000);
   const [open, setOpen] = useState(opened);
-  const who = m.sent ? t(mail.message.us, "You") : !m.authentic ? (m.from ?? t(mail.message.nobody, "No sender")) : t(mail.who.google, "Google");
+  const who = m.sent ? WHO_NAME.us(t) : !m.authentic ? (m.from ?? t(mail.message.nobody, "No sender")) : WHO_NAME.google(t);
   return (
     <li className="relative flex flex-col border-l border-border pl-4">
       <span aria-hidden className={cn("absolute top-3 -left-1 size-2 rounded-full", m.sent ? "bg-accent-info" : opened ? "bg-accent-warn" : "bg-ink-soft")} />
@@ -260,6 +282,7 @@ function Read({ m, reload }: { m: MailMessage; reload: () => void }) {
   return (
     <div className="flex flex-col gap-2 text-xs text-ink-soft">
       {reasons.length > 0 && <p className="break-words">{t(mail.message.reasons, "Reasons: {reasons}", { reasons: reasons.join(" · ") })}</p>}
+      {m.reading?.kind === "unclear" && <p>{t(mail.message.unclear, "What it says could not be told: it is answered by asking for the goal again. Set its kind if you can tell.")}</p>}
       {m.read_error !== null && <p className="break-words text-accent-error">{m.read_error}</p>}
       <span className="flex flex-wrap items-center gap-2">
         <label htmlFor={id}>{t(mail.message.kind, "Kind")}</label>
