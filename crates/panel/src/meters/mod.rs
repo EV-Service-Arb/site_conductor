@@ -124,7 +124,7 @@ pub struct Lever {
 	/// Requests since the quota day began.
 	pub today: Option<i64>,
 	pub action: Option<String>,
-	/// The digest of the definition it held ([`sa_core::google::digest`]).
+	/// The digest of the definition it held ([`sa_core::google::Definition::digest`]).
 	pub list: Option<String>,
 }
 
