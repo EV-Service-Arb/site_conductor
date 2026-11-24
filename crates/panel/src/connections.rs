@@ -306,8 +306,8 @@ impl Panel {
 		self.connections(owner, id).await
 	}
 
-	/// The grants, keys and proxies to ask again: those that answered not asked since [`ASK_EVERY`], those
-	/// that did not since [`ASK_FAILING`].
+	/// The grants, keys and proxies to ask again: those that answered not asked since `ASK_EVERY`, those
+	/// that did not since `ASK_FAILING`.
 	pub async fn connections_unasked(&self, now: Timestamp) -> eyre::Result<Vec<(Uuid, i64, Lost)>> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for the connections to ask")?;
 		db::unasked(&mut conn, now - ASK_EVERY, now - ASK_FAILING).await
