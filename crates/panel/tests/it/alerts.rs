@@ -26,7 +26,7 @@ use uuid::Uuid;
 
 /// What went out, and what the next send to an address answers; then delivered.
 #[derive(Clone, Default)]
-struct Kept {
+pub struct Kept {
 	sent: Arc<Mutex<Vec<(Address, Message)>>>,
 	next: Arc<Mutex<Vec<(Address, Failure)>>>,
 	/// Addresses whose network never answers.
@@ -75,7 +75,7 @@ impl Outlets for Kept {
 }
 
 /// A concierge that is never asked.
-struct Never;
+pub struct Never;
 
 impl Refresher for Never {
 	async fn refresh(&self, _: &str) -> Result<Tokens, RefreshError> {
@@ -91,7 +91,7 @@ impl Directory for Never {
 
 /// Sites, its leads so far.
 #[derive(Clone, Default)]
-struct Leads(Arc<Mutex<Vec<serde_json::Value>>>);
+pub struct Leads(Arc<Mutex<Vec<serde_json::Value>>>);
 
 impl Feeds for Leads {
 	async fn notes(&self, _: Service, after: i64, _: usize) -> eyre::Result<Option<NotePage>> {

@@ -12,7 +12,7 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel, Refused,
-	alerts::Sought,
+	alerts::{Hub, Identity, Pressed, Sought},
 	gmbs::Existing,
 	import::Export,
 	inbox::{Account, Batch, Cursor, Folder, Mail, Mailbox},
@@ -1536,4 +1536,49 @@ async fn a_switch_is_one_gbps_and_off_once_it_moves() {
 	let other = w.p.add_gmail(w.owner, "b@gmail.com", t("2026-10-02T00:00:00Z")).await.unwrap().unwrap().id;
 	sqlx::query("UPDATE gmbs SET gmail_id = $1 WHERE id = $2").bind(other).bind(w.est).execute(&w.db.pool().await).await.unwrap();
 	assert_eq!(w.p.mail_auto(w.owner).await.unwrap().on, []);
+}
+
+#[tokio::test]
+async fn a_held_reply_is_stopped_from_its_alert() {
+	let w = World::new().await;
+	let now = t("2026-10-01T09:06:00Z");
+	w.p.alerts_access_seen(w.owner, &sa_panel::testing::operator(), "owner", now).await.unwrap();
+	w.p.set_mail_auto(w.owner, &[w.lyon], Topic::Verification, true).await.unwrap().unwrap();
+	w.arrives(support(
+		"2026-10-01T09:00:00Z",
+		1,
+		"[1-1234000056789] Your Request to Google",
+		"Plomberie Dupont - Lyon: follow the prompts.",
+	))
+	.await;
+	w.reads("2026-10-01T09:01:00Z", Kind::SelfServe, |_| {}).await;
+	let case = w.only("2026-10-01T09:02:00Z").await;
+	w.drafts(&case, &[], false, "2026-10-01T09:05:00Z").await;
+	w.p.tell_mail(Locale::En, now).await.unwrap();
+	let told = w.p.alerts_inbox(w.owner, &sa_panel::testing::operator(), &Sought::default()).await.unwrap().remove(0);
+	assert!(told.text.text.contains("The reply: The recorded video"), "{}", told.text.text);
+	assert_eq!(told.buttons[0].label, "Stop");
+
+	let hub = Hub {
+		panel: w.p.clone(),
+		outlets: crate::alerts::Kept::default(),
+		concierge: crate::alerts::Never,
+		feeds: crate::alerts::Leads::default(),
+		locale: Locale::En,
+		cabinet: "https://evinvest.test".parse().unwrap(),
+		origin: "https://panel.test".parse().unwrap(),
+	};
+	let who = |user_id| Identity {
+		user_id,
+		email: "owner@localhost".into(),
+		email_verified: true,
+		preferred_name: "owner".into(),
+		permissions: sa_panel::testing::operator(),
+	};
+	let press = async |user| hub.press(&who(user), None, told.id, "stop", now).await.unwrap();
+	assert!(matches!(press(Uuid::now_v7()).await, Pressed::Unknown), "another's");
+	assert!(matches!(press(w.owner).await, Pressed::Done { .. }));
+	assert!(matches!(press(w.owner).await, Pressed::AlreadyDone));
+	assert_eq!(w.only("2026-10-01T09:30:00Z").await.state, State::ReplyReady);
+	assert_eq!(w.p.send_held_mail(t("2026-10-01T09:30:00Z")).await.unwrap(), 0);
 }

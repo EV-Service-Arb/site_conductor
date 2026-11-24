@@ -1149,7 +1149,7 @@ priced in money, so an account overshoots by its hours behind.
   `never_purge` (an admin's say; unsaid, on under dev sign-in); `never_purge` turned off counts
   the kept days from then, so nothing goes the moment it may. The owner may purge one at once: a
   gmail with every GBP of it in the trash. Purged is gone for good: its gmail's connections
-  and mail and the notes on it deleted, its row kept.
+  and mail, its documents and the notes on it deleted, its row kept.
 
 ```text
 follow (10 s)   GET review_archive /api/conductor/charges?after=<cursor>&limit=500 (Conductor)
@@ -1194,9 +1194,8 @@ push (a change, a page, 60 s)
   with the gmail it was under and who did it. A browser run for the gmail alone is the gmail's, in
   the log of each GBP while under it. Its gmail's mail with Google (`email`): `serve` reads each
   set inbox's All Mail, and of its Spam what is proved Google's, over IMAP every 60 s, each past its cursor
-  (account, UIDVALIDITY, last UID), a batch a write with the cursor (one failing 15 min says why as its check until it reads again); a message is logged once, on each GBP whose name (the longest first: one
-  may begin another) or place id it holds, else whose address's first line, else the gmail's; what is
-  about a Business Profile is kept too (Google's mail). Its thread opens in a new tab of the gmail's own running
+  (account, UIDVALIDITY, last UID), a batch a write with the cursor (one failing 15 min says why as its check until it reads again); a message is logged once, on each GBP it names, else the gmail's; what is
+  about a Business Profile is kept too, and then in the log of the GBP its case is of (Google's mail). Its thread opens in a new tab of the gmail's own running
   browser (`POST /gmails/{id}/browser/thread`); the conductor never reads Gmail on the web. review_archive's events of the GBP (reviews appeared, gone,
   back, appeals, failed scans) are its own (`/me/gmbs/{gmb}/events`): the page merges both by time.
 - **A note on a GBP** is a person's own (`gmb_notes`, one a person and GBP, plain text, at most 4000
@@ -1220,7 +1219,7 @@ follow (60 s) ─ kept, joined to its case ─ read ─┬─ by rule: the sende
                                                  └─ by a person, over either
 case's state: needs_you (why) │ reply_due │ reply_ready │ sending │ waiting │ done (by) │ quiet
 reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ SMTP ─▶ sent | failed
-                     └─▶ held (≥ 15 min; its topic switched on, to be pressed) ─┘
+                     └─▶ held (≥ 15 min; its GBP's topic on, to be pressed) ─┘
                          either ─ another message in its case ─▶ superseded
 ```
 
@@ -1232,9 +1231,14 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   its case number's; a notice only its number's: Gmail threads the notices of every profile together. A
   person may make two cases of a gmail one (`mail_cases.joined`).
 - **The GBP** of a message: by hand, else the one it names, of its gmail's, else of its owner's others; else
-  the one its profile link is known by (the latest mail that named a GBP beside it), else what its reader
-  saw. A profile has a link for its verification and another for its page. A failed call's follow-up names
-  none: it is of the gmail's one GBP whose call stands offered.
+  the one its profile link is known by (a pick by hand, else the latest mail that named a GBP beside it, else
+  what its reader saw), else what its reader saw. A profile has a link for its verification and another for its
+  page. A failed call's follow-up names none: it is of the gmail's one GBP whose call stands offered. A case is
+  **certain** of its GBP by hand, or where Google's own words, or a link they or a person told, name that one
+  alone; else it is likely.
+- **Named**: by its name now or one it had (the longest first) or its place id, else its address's first line; in a
+  message's own words, then its quote. A name whose words go on in capitals is another's, here or not: "Dupont - Lyon"
+  begins "Dupont - Lyon, Est". Matched again as the owner's GBPs are added or renamed.
 - **The model** runs on the gmail's owner's own models, else the panel's, charged to them; without
   any that answers or a balance, mail waits and its case says why. The writer's facts are the case, Google's other
   readings of the GBP, the GBP, and, of a case about reviews, those review_archive sees gone (a full page
@@ -1247,11 +1251,13 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   pressed once. What a notice says stands until a kind that supersedes it; a verification is over once its GBP is
   verified, a suspension once it is reinstated, a case once its GBP is in the trash. Of a GBP's open
   conversations on one topic the latest asks, its other cases quiet meanwhile.
+- **What it wants** of its person (what Google asks, what the draft lacks) is given or not, by a document of the GBP's
+  (kept sealed, for the next ask and the appeal) or otherwise.
 - **A reply** goes as the gmail, to support's one address, to the last message of the case that takes one.
   `sending` is committed before SMTP; one left so is never tried again, nor is another sent to what it answers.
-  One goes by itself only while its topic's switch (`verification`, `reviews`; off unless its owner's) is on
-  and its case may be pressed, asked as it is written, held and sent (`sa_core::mail::press`): by Google's last
-  word alone, nothing asked or lacking, its GBP known and live, mailed to the gmail's own account or written to by
+  One goes by itself only while its GBP's switch for the topic (`verification`, `reviews`; off unless its owner's, and
+  once the GBP moves to another gmail) is on and its case may be pressed, asked as it is written, held and sent
+  (`sa_core::mail::press`, or why not): by Google's last word alone, nothing asked or lacking, its GBP certain and live, mailed to the gmail's own account or written to by
   it, 12 h after ours, fewer than `MAX_ASKS` of ours since Google gave or asked something new; once its inbox was read past its moment, and
   at most an hour late. A correction holds it back; another account on the gmail, or the same on two, and
   nothing goes. A person may send past all that. Only production's goes by itself: a copy of its database
@@ -1410,7 +1416,7 @@ feed (2 s)        GET <service>/api/conductor/notifications?after=<cursor>&limit
 own               told in the write that made it so, or found due every 2 s (`own_alerts`); a gmail's grant,
                   Maps key and proxy asked daily, failing every 15 min, told when they fail twice running; Google's mail
                   every 60 s: a case turned to a person or to a specialist of Google's, or settled in it, once
-                  per message and turn, for 6 days; the oldest an hour unread
+                  per message and turn, for 6 days, and again after 48 h on a person; the oldest an hour unread
 told              once per (rule, event): kept 30 days, sealed; in the inbox of each person of its
                   audience; queued for each destination of theirs reached, its filter passed, their access
                   confirmed within the hour
@@ -1495,7 +1501,7 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
   listener, on GETs, for that query's life. The public listener never takes a token.
 - **A source is only ever revoked.** `sources` refuses DELETE and any UPDATE but of `revoked_at`
   and a site's `origin` set once from NULL (only a `site` has one); a key id is never reused.
-- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, alerts' notes and destinations' addresses, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, the bodies of its mail with Google and of the replies to it (what they were read as is in the clear), and a person's Claude token and OpenAI key are sealed (XChaCha20-Poly1305, what they belong
+- **Secrets never sit in the clear.** Sources' HMAC secrets, sessions' tokens, an MCP code's bearer, alerts' notes and destinations' addresses, a gmail's IMAP password, Maps key, proxy and Business Profile client secret and grant, the bodies of its mail with Google and of the replies to it (what they were read as is in the clear), a GBP's documents, and a person's Claude token and OpenAI key are sealed (XChaCha20-Poly1305, what they belong
   to as associated data) under `PANEL_DATA_KEY`, whose fingerprint is stored beside each. A
   person's are never read back out: the browser sees a key's last four.
 - **No price beside its use.** What a person is charged is an item of `sa_core::prices` at its
@@ -1519,7 +1525,7 @@ delivery (0.5 s)  a pass begins whatever the ones before still wait for: lead me
 - **Alerts are the conductor's.** A service publishes notes and never reaches a person itself;
   who is told, where and how is decided here.
 - **A message of Google's is answered through SMTP once**, only to support's own address, only one proved
-  Google's; by itself only where its gmail's owner switched its topic on and its case may be pressed.
+  Google's; by itself only where its GBP's owner switched that GBP's topic on, the GBP is certain, and its case may be pressed.
 - **A note is in the outbox before the cursor passes it**: the page and the cursor move in one
   transaction. **So is a charge in the ledger**, and a page is taken only from where the cursor
   stands.

@@ -347,9 +347,15 @@ impl<O, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		let Some(pressed) = received.note.buttons.iter().find(|b| b.id == button) else {
 			return Ok(Pressed::Unknown);
 		};
-		let service = received.note.rule.feed().expect("only a service's note carries buttons");
 		let key = format!("alert/{note}/{}/{button}", who.user_id);
-		let status = match self.feeds.press(who, actor, service, &pressed.call, &key).await {
+		let status = match received.note.rule.feed() {
+			Some(service) => self.feeds.press(who, actor, service, &pressed.call, &key).await,
+			None => {
+				let by = actor.map_or(Ok(who.user_id), |a| a.sub.parse().wrap_err("an actor's id"))?;
+				self.panel.press_own(who.user_id, by, &pressed.call).await
+			}
+		};
+		let status = match status {
 			Ok(status) => status,
 			Err(e) => {
 				tracing::warn!(error = format!("{e:#}"), "alerts: a service did not take a press");

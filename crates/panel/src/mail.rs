@@ -15,7 +15,7 @@ use std::{
 
 use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
-use sa_alerts::{Rule, Tier};
+use sa_alerts::{Button, Call, Rule, Tier};
 use sa_core::{
 	gbp::State as Stands,
 	mail::{self as rules, About, Draft as Reply, DraftState, HOLD, Halt, Holds, Joining, Kind, MAX_READS, Message, READ_BACK, Reading, Ruled, Said, Sender, Settled, State, Topic, Why},
@@ -51,6 +51,8 @@ const SUMMARY_MAX: usize = 160;
 const TELL_WITHIN: SignedDuration = SignedDuration::from_hours(24 * 6);
 /// A date Google set is told of again this long before.
 const DEADLINE_NEAR: SignedDuration = SignedDuration::from_hours(24);
+/// What a held reply's note does: the reply waits for its person.
+const STOP: &str = "stop_mail_draft";
 /// What waits on a person for this long is told of again.
 const REMIND_AFTER: SignedDuration = SignedDuration::from_hours(48);
 /// A held reply that did not go for this long past its moment goes by itself no more.
@@ -717,6 +719,25 @@ impl Panel {
 		Ok(Ok(d.case))
 	}
 
+	/// A button of a note of the conductor's own pressed, as a status: of what goes by itself, stopped.
+	pub(crate) async fn press_own(&self, owner: Uuid, by: Uuid, call: &Call) -> eyre::Result<u16> {
+		eyre::ensure!(call.operation == STOP, "{} is no operation of a note of the conductor's own", call.operation);
+		let id = call.path.get("id").and_then(serde_json::Value::as_i64).ok_or_else(|| eyre::eyre!("a button names no draft"))?;
+		let mut tx = self.store.begin_write().await?;
+		match db::draft_of(&mut tx, owner, id).await? {
+			None => return Ok(404),
+			Some(d) if d.state != DraftState::Held => return Ok(409),
+			Some(_) => {}
+		}
+		let stopped = Decided {
+			by: Some(by),
+			..Decided::new(DraftState::Proposed)
+		};
+		db::decide(&mut tx, id, &stopped).await?;
+		tx.commit().await.wrap_err("committing a draft held back")?;
+		Ok(201)
+	}
+
 	/// Answers its case.
 	pub async fn dismiss_mail_draft(&self, owner: Uuid, by: Uuid, id: i64) -> eyre::Result<Result<i64, Refused>> {
 		let mut tx = self.store.begin_write().await?;
@@ -1065,6 +1086,7 @@ impl Panel {
 					_ => None,
 				},
 				link: Some(format!("/email?case={}", c.id)),
+				buttons: c.draft.iter().filter(|_| turn == "held").map(|d| stop(d.id, locale)).collect(),
 				// what the mail says may be a code to sign in with: its owner's alone
 				body: Body {
 					open: Some(note(None, None).render(locale)),
@@ -1364,6 +1386,24 @@ fn kept(m: MailRow, known: &HashMap<String, (i64, bool)>, senders: &HashMap<Stri
 		authentic: m.authentic,
 		spam: m.spam,
 	})
+}
+
+fn stop(draft: i64, locale: Locale) -> Button {
+	let (label, pressed) = match locale {
+		Locale::Ru => ("Остановить", "Остановлено"),
+		Locale::En => ("Stop", "Stopped"),
+	};
+	Button {
+		id: "stop".to_owned(),
+		label: label.to_owned(),
+		pressed: pressed.to_owned(),
+		call: Call {
+			operation: STOP.to_owned(),
+			path: [("id".to_owned(), draft.into())].into_iter().collect(),
+			body: serde_json::Value::Null,
+		},
+		leaves: Vec::new(),
+	}
 }
 
 /// Whether what was sent went only where nobody reads it.
