@@ -1,9 +1,10 @@
 "use client";
 
 import type { NavIcon, NavSection } from "@evinvest/uikit";
-import { Archive, Coins, Globe, KeyRound, MapPin, Settings, ShieldCheck } from "lucide-react";
+import { Archive, Bot, Coins, Globe, Inbox, KeyRound, Mail, MapPin, Settings, ShieldCheck } from "lucide-react";
 import { href, mayOpen } from "@evinvest/views";
 
+import { mail } from "@/entities/mail";
 import { seesSites, useMe } from "@/entities/session";
 import { SitesElement } from "@/features/sites-element";
 import { VIEWS } from "@/shared/api/views";
@@ -68,6 +69,20 @@ export function useApps(onNavigate?: () => void): App[] {
         items: [
           { id: "places", href: link({ view: "review_archive.mine.home", params: {} }), label: t(reviewArchive.places, "Places"), icon: MapPin, description: t(reviewArchive.places.description, "Each place's reviews, newest first") },
           { id: "settings", href: link({ view: "review_archive.mine.settings", params: {} }), label: t(reviewArchive.settings, "Settings"), icon: Settings, description: t(reviewArchive.settings.description, "How the archive scans and keeps reviews") },
+        ],
+      },
+    },
+    {
+      href: link({ view: "email", params: {} }),
+      label: t(nav.email, "Email"),
+      icon: Mail,
+      description: t(nav.email.description, "Google's mail about the GBPs, and the replies"),
+      here: at.view === "email",
+      section: {
+        id: "email",
+        items: [
+          { id: "threads", href: link({ view: "email", params: {} }), label: t(mail.tab.threads, "Threads"), icon: Inbox, description: t(mail.tab.threads.description, "Each conversation and notice, and whose turn it is"), match: () => at.view === "email" && at.params.show !== "automatic" },
+          { id: "automatic", href: link({ view: "email", params: { show: "automatic" } }), label: t(mail.tab.automatic, "Automatic replies"), icon: Bot, description: t(mail.tab.automatic.description, "Which gmails answer Google by themselves"), match: () => at.view === "email" && at.params.show === "automatic" },
         ],
       },
     },
