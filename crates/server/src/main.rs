@@ -242,6 +242,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				settings.model(),
 				settings.placement(),
 				readers,
+				settings.app_env == "production", // a dev's holds would overwrite what the guard holds prod's accounts to
 				bind,
 			)
 			.await
@@ -318,6 +319,7 @@ async fn serve(
 	model: sa_server::claude::Model,
 	placement: Option<sa_server::placement::Placement>,
 	readers: Vec<sa_panel::meters::google::Google>,
+	publish: bool,
 	bind: SocketAddr,
 ) -> eyre::Result<()> {
 	let keep_by_default = matches!(identity, Identity::Dev(_));
@@ -481,7 +483,7 @@ async fn serve(
 				catalog.follow(services.clone(), stopped.clone()).await;
 			}
 		};
-		let meters = sa_server::meters::run(metered, readers, stopped.clone());
+		let meters = sa_server::meters::run(metered, readers, publish, stopped.clone());
 		let workers = sandbox.run(stopped.clone());
 		tokio::join!(bot, feed, usage, inboxes, tokens, grafana, purge, meters, catalog, workers);
 	};

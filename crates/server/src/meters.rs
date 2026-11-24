@@ -53,11 +53,11 @@ type Standing = (Vec<CreditDto>, Vec<String>, Vec<AllowanceDto>, Option<GuardDto
 /// Reads each account's meters now, then every SYNC_EVERY, a failure again after RETRY, and publishes its
 /// definition whenever it changes, until `shutdown`, each on its own: one failing leaves the others be, and its
 /// last good reading in force meanwhile.
-pub async fn run(panel: Panel, readers: Vec<impl Reader + Sync>, shutdown: watch::Receiver<bool>) {
+pub async fn run(panel: Panel, readers: Vec<impl Reader + Sync>, publish: bool, shutdown: watch::Receiver<bool>) {
 	let lasts: Vec<Mutex<Option<Timestamp>>> = readers.iter().map(|_| Mutex::new(None)).collect();
 	let published: Vec<tokio::sync::Mutex<Option<String>>> = readers.iter().map(|_| tokio::sync::Mutex::new(None)).collect();
 	let panel = &panel;
-	let publish = futures::future::join_all(readers.iter().zip(&published).map(|(reader, last)| {
+	let publishing = futures::future::join_all(readers.iter().zip(&published).filter(|_| publish).map(|(reader, last)| {
 		crate::every(PUBLISH_EVERY, shutdown.clone(), "publishing an account's definition", move || async move {
 			panel.publish_definition(reader, &mut *last.lock().await, Timestamp::now()).await
 		})
@@ -78,7 +78,10 @@ pub async fn run(panel: Panel, readers: Vec<impl Reader + Sync>, shutdown: watch
 			Ok(())
 		})
 	}));
-	futures::future::join(publish, read).await;
+	if !publish {
+		tracing::warn!("not production: no definition is published, the guard holds prod's");
+	}
+	futures::future::join(publishing, read).await;
 }
 
 /// The vendor's count of a meter, as last read.
