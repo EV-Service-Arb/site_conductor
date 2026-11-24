@@ -249,7 +249,7 @@ and is read as the conductor starts: refused, restart the stack. Google's mail i
 
 ## Browsers
 
-Alerts go out by Telegram with `SERVICE_ARB_TELEGRAM_BOT_TOKEN` in the shell (not under `--port`: a bot has one poller), and
+Alerts go out by Telegram through the test bot, with `TELEGRAM_TEST_BOT_TOKEN` in the shell (not under `--port`: a bot has one poller), and
 by mail with `SMTP_HOST`, `SMTP_USERNAME`, `SMTP_PASSWORD` and `MAIL_FROM`.
 
 With `MULTILOGIN_TOKEN` or `GOLOGIN_TOKEN` in the shell (a paid plan's: neither runs without
