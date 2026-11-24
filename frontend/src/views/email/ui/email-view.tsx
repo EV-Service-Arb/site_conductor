@@ -2,11 +2,11 @@
 
 import { Button, Skeleton, Tabs, TabsList, TabsTrigger, cn, useBinding } from "@evinvest/uikit";
 import { ArrowLeft } from "lucide-react";
-import type { KeyboardEvent } from "react";
+import { type KeyboardEvent, useEffect, useRef } from "react";
 
 import { useGmails } from "@/entities/gmb";
-import { CaseRow, type Show, mail, over, shownIn, unnamed, useCases } from "@/entities/mail";
-import { WhichGbp } from "@/features/answer-mail";
+import { CaseRow, type Goes, type Show, mail, over, shownIn, stuckOf, unnamed, useCases, useGoes } from "@/entities/mail";
+import { Mend, WhichGbp } from "@/features/answer-mail";
 import { AutoReplies } from "@/features/auto-mail";
 import type { MailCase } from "@/shared/api/schema";
 import { type T, nav, useT } from "@/shared/i18n";
@@ -38,9 +38,8 @@ export function EmailView() {
         </Tabs>
       </header>
       {automatic ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-5">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5">
           <AutoReplies />
-          <Inboxes />
         </div>
       ) : (
         <Threads sought={at.params} show={show ?? "needs_you"} />
@@ -72,11 +71,20 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
   const t = useT();
   const { case: opened } = sought;
   const read = useCases();
-  const listed = read.shown === null ? [] : shownIn(read.shown, show);
+  const goes = useGoes();
+  const listed = read.shown === null ? [] : shownIn(read.shown, show, goes);
+  // where the opened one stood: marked done, it leaves the list, and its neighbours stay next to it
+  const stood = useRef(0);
+  const here = listed.findIndex((c) => c.id === opened);
+  useEffect(() => {
+    if (here !== -1) stood.current = here;
+  }, [here]);
   const step = (by: number) => {
-    const here = listed.findIndex((c) => c.id === opened);
-    const next = listed[here === -1 ? (by > 0 ? 0 : listed.length - 1) : (here + by + listed.length) % listed.length];
-    if (next !== undefined) go(threads(show, next.id), "replace");
+    const n = listed.length;
+    const from = opened === undefined ? (by > 0 ? 0 : -1) : here !== -1 ? here + by : by > 0 ? stood.current : stood.current - 1;
+    const next = listed[(from + n) % n];
+    if (next === undefined) throw new Error("a step among no threads");
+    go(threads(show, next.id), "replace");
   };
   const other = listed.some((c) => c.id !== opened);
   useBinding({ on: { key: "ArrowDown" }, id: "mail-next", run: { label: t(mail.next, "Next thread"), run: other ? () => step(1) : null } });
@@ -84,11 +92,11 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
   return (
     <div className="flex min-h-0 flex-1">
       <div className={cn("flex min-h-0 min-w-0 flex-1 flex-col @3xl:max-w-80 @3xl:border-r @3xl:border-border @5xl:max-w-110", opened !== undefined && "@max-3xl:hidden")}>
-        <div className="flex gap-2 overflow-x-auto border-b border-border px-3 py-2.5">
+        <div role="group" aria-label={t(mail.show, "Threads listed")} className="flex gap-2 overflow-x-auto border-b border-border px-3 py-2.5">
           {SHOWS.map((s) => (
             <button key={s} type="button" aria-pressed={s === show} className={CHIP} onClick={() => go(threads(s), "replace")}>
               {SHOW_NAME[s](t)}
-              {read.shown !== null && <span className="text-ink-soft tabular-nums">{shownIn(read.shown, s).length}</span>}
+              {read.shown !== null && <span className="text-ink-soft tabular-nums">{shownIn(read.shown, s, goes).length}</span>}
             </button>
           ))}
         </div>
@@ -101,7 +109,7 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
           ) : read.shown === null ? (
             <Skeleton className="m-3 h-60" />
           ) : (
-            <List cases={listed} all={read.shown.length} show={show} opened={opened} reload={read.reload} />
+            <List cases={listed} read={read.data} all={read.shown.length} show={show} opened={opened} goes={goes} reload={read.reload} />
           )}
         </div>
       </div>
@@ -110,11 +118,11 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
           <p className="px-4 py-16 text-center text-sm text-ink-soft">{t(mail.pick, "Pick a thread to read it here.")}</p>
         ) : (
           <>
-            <div className="flex items-center gap-1 border-b border-border px-2 py-1.5 @3xl:hidden">
-              <Button type="button" variant="ghost" size="touch" icon aria-label={t(mail.back, "Back to the threads")} onClick={() => go(threads(show), "replace")}>
+            <div className="border-b border-border px-2 py-1.5 @3xl:hidden">
+              <Button type="button" variant="ghost" size="touch" onClick={() => go(threads(show), "replace")}>
                 <ArrowLeft aria-hidden className="size-5" />
+                {t(mail.tab.threads, "Threads")}
               </Button>
-              <p className="text-base font-semibold text-ink">{SHOW_NAME[show](t)}</p>
             </div>
             <CaseDetail key={opened} id={opened} />
           </>
@@ -124,9 +132,23 @@ function Threads({ sought, show }: { sought: Sought; show: Show }) {
   );
 }
 
-function List({ cases, all, show, opened, reload }: { cases: readonly MailCase[]; all: number; show: Show; opened: number | undefined; reload: () => void }) {
+/** `read`: the answer `cases` are of. */
+function List({ cases, read, all, show, opened, goes, reload }: { cases: readonly MailCase[]; read: unknown; all: number; show: Show; opened: number | undefined; goes: Goes; reload: () => void }) {
   const t = useT();
   const gmails = useGmails();
+  const box = useRef<HTMLDivElement>(null);
+  const picked = useRef<number | null>(null);
+  useEffect(() => {
+    if (opened !== undefined) box.current?.querySelector(`[data-case="${opened}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [opened]);
+  // its GBP picked, the picker is gone, and its case may be: the row in its place has the focus
+  useEffect(() => {
+    if (picked.current === null || box.current === null) return;
+    const rows = rowsOf(box.current);
+    const row = rows[Math.min(picked.current, rows.length - 1)];
+    picked.current = null;
+    if (document.activeElement === document.body) row?.focus();
+  }, [read]);
   if (cases.length === 0)
     return (
       <EmptyState
@@ -135,23 +157,51 @@ function List({ cases, all, show, opened, reload }: { cases: readonly MailCase[]
         description={all === 0 ? t(mail.nothing.why, "It is read from each gmail's inbox every minute, once its IMAP is set.") : t(mail.nothing.elsewhere, "{n} in All", { n: all })}
       />
     );
-  const gbp = (c: MailCase) => (gmails.status === "ok" ? (gmails.data.gmbs.find((g) => g.id === c.gmb_id)?.name ?? null) : null);
+  if (gmails.status !== "ok") return <Skeleton className="m-3 h-60" />;
+  const { gmails: accounts, gmbs } = gmails.data;
+  const of = (c: MailCase) => gmbs.find((g) => g.id === c.gmb_id)?.name ?? accounts.find((g) => g.id === c.gmail_id)?.gmail;
+  const waits = show === "needs_you" ? cases.map(stuckOf).filter((why) => why !== null) : [];
+  const [why] = waits;
   return (
-    <div className="flex flex-col gap-0.5 p-1.5" onKeyDown={arrows}>
-      {cases.map((c) => (
-        <div key={c.id} className="flex flex-col">
-          <CaseRow c={c} gbp={gbp(c)} current={c.id === opened} to={threads(show, c.id)} />
-          {unnamed(c) && !over(c) && <WhichGbp c={c} onChanged={reload} className="mb-2 ml-2.5 w-60 max-w-[calc(100%-1.25rem)]" />}
-        </div>
-      ))}
+    <div ref={box} className="flex flex-col gap-2 p-1.5" onKeyDown={arrows}>
+      {why !== undefined && (
+        <section className="flex flex-col gap-2 rounded-md border border-border p-2.5 text-sm">
+          <p className="break-words text-ink">{t(mail.stuck, "{n, plural, one {# thread waits} other {# threads wait}}: {why}", { n: waits.length, why })}</p>
+          <Mend />
+        </section>
+      )}
+      <ul className="flex flex-col gap-0.5">
+        {cases.map((c, i) => {
+          const whose = of(c);
+          // its gmail removed, here or in another tab: the read that follows is without it
+          if (whose === undefined) return null;
+          return (
+            <li key={c.id} className="flex flex-col">
+              <CaseRow c={c} of={whose} goes={goes} current={c.id === opened} to={threads(show, c.id)} />
+              {unnamed(c) && !over(c) && (
+                <WhichGbp
+                  c={c}
+                  onChanged={() => {
+                    picked.current = i;
+                    reload();
+                  }}
+                  className="mb-2 ml-2.5 w-60 max-w-[calc(100%-1.25rem)]"
+                />
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
 
+const rowsOf = (list: HTMLElement) => [...list.querySelectorAll<HTMLElement>("a[data-case]")];
+
 /** Arrow keys go from row to row. */
 function arrows(e: KeyboardEvent<HTMLElement>) {
   if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-  const rows = [...e.currentTarget.querySelectorAll<HTMLElement>("a[data-case]")];
+  const rows = rowsOf(e.currentTarget);
   const here = rows.indexOf(document.activeElement as HTMLElement);
   if (here === -1) return;
   e.preventDefault();

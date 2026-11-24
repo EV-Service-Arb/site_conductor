@@ -1,17 +1,23 @@
 "use client";
 
-import { NativeSelect, NativeSelectOption, useUndo } from "@evinvest/uikit";
+import { NativeSelect, NativeSelectOption, toast, useUndo } from "@evinvest/uikit";
 import { useState } from "react";
 
-import { under, useGmails } from "@/entities/gmb";
-import { editCase, mail, subjectOf } from "@/entities/mail";
-import type { MailCase } from "@/shared/api/schema";
-import { useT } from "@/shared/i18n";
+import { useNow } from "@/entities/alerts";
+import { STATE_NAME, under, useGmails } from "@/entities/gmb";
+import { editCase, mail, settledText, standing, subjectOf, useGoes } from "@/entities/mail";
+import type { Gmb, MailCase } from "@/shared/api/schema";
+import { useLocale, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
+import { useControlSize } from "@/shared/ui/touch";
 
-/** Picks which of its gmail's GBPs a case is about, where its mail names none. */
+/** Picks which of its gmail's GBPs a case is about, where its mail names none; `onChanged`: of a pick, its undo and its redo. */
 export function WhichGbp({ c, onChanged, className }: { c: MailCase; onChanged: () => void; className: string }) {
   const t = useT();
+  const locale = useLocale();
+  const now = useNow(60_000);
+  const goes = useGoes();
+  const control = useControlSize();
   const gmails = useGmails();
   const push = useUndo();
   const [busy, setBusy] = useState(false);
@@ -19,11 +25,12 @@ export function WhichGbp({ c, onChanged, className }: { c: MailCase; onChanged: 
   const gbps = under(gmails.data, c.gmail_id);
   if (gbps.length === 0) return null;
   const set = (gmb: number | null) => editCase(c.id, { gmb }).finally(onChanged);
-  const pick = async (gmb: number) => {
+  const pick = async (gbp: Gmb) => {
     setBusy(true);
     try {
-      await set(gmb);
-      push({ label: t(mail.which.label, "{subject} given its GBP", { subject: subjectOf(c, t) }), undo: async () => void (await set(null)), redo: async () => void (await set(gmb)) });
+      const { case: named } = await set(gbp.id);
+      toast(t(mail.which.named, "{subject}: {gbp}", { subject: subjectOf(c, t), gbp: gbp.name }), { description: named.state.is === "done" ? settledText(named, gbp.name, t) : standing(named, goes, t, locale, now).text });
+      push({ label: t(mail.which.label, "{subject} given its GBP", { subject: subjectOf(c, t) }), undo: async () => void (await set(null)), redo: async () => void (await set(gbp.id)) });
     } catch (e) {
       notifyFailure(e, t);
     } finally {
@@ -31,13 +38,13 @@ export function WhichGbp({ c, onChanged, className }: { c: MailCase; onChanged: 
     }
   };
   return (
-    <NativeSelect size="sm" wrapperClassName={className} aria-label={t(mail.which, "Which GBP?")} disabled={busy} value="" onChange={(e) => void pick(Number(e.target.value))}>
+    <NativeSelect size={control === "lg" ? "lg" : "sm"} wrapperClassName={className} aria-label={t(mail.which, "Which GBP?")} disabled={busy} value="" onChange={(e) => void pick(gbps.find((g) => g.id === Number(e.target.value))!)}>
       <NativeSelectOption value="" disabled>
         {t(mail.which, "Which GBP?")}
       </NativeSelectOption>
       {gbps.map((g) => (
         <NativeSelectOption key={g.id} value={g.id}>
-          {g.name}
+          {`${g.name} · ${STATE_NAME[g.state](t)}`}
         </NativeSelectOption>
       ))}
     </NativeSelect>

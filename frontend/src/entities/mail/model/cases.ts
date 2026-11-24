@@ -10,21 +10,54 @@ import type { Locale, T } from "@/shared/i18n";
 import { age, when } from "@/shared/lib/time";
 
 import { mail } from "./i18n";
-import { KIND_ASKS, KIND_NAME } from "./names";
+import { KIND_ASKS, KIND_NAME, KIND_TONE } from "./names";
 
 export type Show = "needs_you" | "waiting" | "all";
 
 /** Whom a case waits on: the operator, or Google or the panel; neither, it is in All alone. */
 const STANDS: Record<MailStanding, Exclude<Show, "all"> | null> = { needs_you: "needs_you", reply_ready: "needs_you", sending: "waiting", reply_due: "waiting", waiting: "waiting", done: null, quiet: null };
 
-export function shownIn(cases: readonly MailCase[], show: Show): MailCase[] {
-  const of = cases.filter((c) => show === "all" || STANDS[c.state.is] === show);
-  if (show === "all") return of;
-  // a deadline that runs first, the soonest of them; the rest as they came
-  return of.sort((a, b) => due(a) - due(b));
+const held = (c: MailCase) => c.state.is === "sending" && c.draft?.state === "held";
+
+/** Whether a held reply goes by itself. */
+export type Goes = (c: MailCase) => boolean;
+
+export function useGoes(): Goes {
+  const auto = useResource(api, "/mail/auto");
+  return (c) => {
+    if (!held(c)) return false;
+    // not known yet: it may, and Stop is shown
+    if (auto.status !== "ok") return true;
+    return auto.data.by_itself && auto.data.on.some((x) => x.gmail_id === c.gmail_id && x.topic === c.topic);
+  };
 }
 
-const due = (c: MailCase) => (c.deadline === null ? Number.MAX_SAFE_INTEGER : Date.parse(c.deadline));
+/** Neither read nor answered until the model is back: one cause of them all. */
+export const stuckOf = (c: MailCase): string | null => (c.state.is === "needs_you" && c.state.why.code === "stuck" ? c.state.why.error : null);
+
+/** What is to be done first: a reply that goes unless stopped, Google's dates, what only a person can do, a reply to check, what waits for the model. */
+function rank(c: MailCase, goes: Goes): number {
+  if (goes(c)) return 0;
+  if (deadlineOf(c) !== null) return 1;
+  if (c.state.is !== "needs_you") return 4;
+  const { why } = c.state;
+  if (why.code === "stuck") return 5;
+  if (why.code === "failed" || why.code === "may_have_gone_out") return 2;
+  if (why.code === "kind" && why.kind === "asks") return 4;
+  return why.code === "kind" && KIND_TONE[why.kind] !== undefined ? 2 : 3;
+}
+
+export function shownIn(cases: readonly MailCase[], show: Show, goes: Goes): MailCase[] {
+  if (show === "all") return [...cases];
+  const of = cases.filter((c) => (held(c) ? "needs_you" : STANDS[c.state.is]) === show);
+  const until = (c: MailCase) => Date.parse(deadlineOf(c) ?? (c.state.is === "waiting" ? c.state.until : c.last.at));
+  return of.sort((a, b) => (show === "needs_you" ? rank(a, goes) - rank(b, goes) : 0) || until(a) - until(b));
+}
+
+export function deadlineOf(c: MailCase): string | null {
+  if (c.state.is === "needs_you" && c.state.why.code === "deadline") return c.state.why.at;
+  return c.state.is === "done" ? null : c.deadline;
+}
 
 /** The caller's cases, and those of the outline's scope: of a selected GBP, or of none and a gmail in scope. */
 export function useCases() {
@@ -44,23 +77,27 @@ export function useGmbMail(gmb: number) {
 const DAY_MS = 24 * 3600 * 1000;
 
 /** How a case stands, in a chip's words. */
-export function standing(c: MailCase, t: T, locale: Locale, now: Date): { text: string; tone: Tone } {
+export function standing(c: MailCase, goes: Goes, t: T, locale: Locale, now: Date): { text: string; tone: Tone } {
   const since = age(c.last.at, locale);
-  if (c.deadline !== null && c.state.is !== "done") {
-    const soon = Date.parse(c.deadline) - now.getTime() < DAY_MS;
-    return { text: t(mail.state.deadline, "by {at}", { at: when(c.deadline, locale, now) }), tone: soon ? "error" : "warn" };
+  if (c.state.is === "sending" && goes(c)) return { text: Date.parse(c.state.at) > now.getTime() ? t(mail.state.held, "goes at {at}", { at: when(c.state.at, locale, now) }) : t(mail.held.due, "due"), tone: "info" };
+  const deadline = deadlineOf(c);
+  if (deadline !== null) {
+    const left = Date.parse(deadline) - now.getTime();
+    const at = when(deadline, locale, now);
+    return { text: left > 0 ? t(mail.state.deadline, "by {at}", { at }) : t(mail.state.overdue, "overdue since {at}", { at }), tone: left < DAY_MS ? "error" : "warn" };
   }
+  const ready = { text: t(mail.state.reply_ready, "reply ready · {since}", { since }), tone: "warn" } as const;
   switch (c.state.is) {
-    case "needs_you":
+    case "needs_you": {
+      const { why } = c.state;
       // what Google asks, its reply written: there to check
-      if (c.state.why.code === "kind" && c.state.why.kind === "asks") return { text: t(mail.state.reply_ready, "reply ready · {since}", { since }), tone: "warn" };
-      if (c.state.why.code === "asked_often" && c.said === "routed") return { text: `${NEEDS.unanswered(t)} · ${since}`, tone: "warn" };
-      return { text: `${NEEDS[c.state.why.code](t)} · ${since}`, tone: c.state.why.code === "failed" || c.state.why.code === "may_have_gone_out" ? "error" : "warn" };
+      if (why.code === "kind" && why.kind === "asks") return ready;
+      return { text: `${chip(c, why, t)} · ${since}`, tone: TONE[why.code] ?? (why.code === "kind" ? KIND_TONE[why.kind] : undefined) ?? "warn" };
+    }
     case "reply_ready":
-      return { text: t(mail.state.reply_ready, "reply ready · {since}", { since }), tone: "warn" };
+      return ready;
     case "sending":
-      if (c.draft?.state !== "held") return { text: t(mail.state.sending, "sending"), tone: "info" };
-      return { text: Date.parse(c.state.at) > now.getTime() ? t(mail.state.held, "goes at {at}", { at: when(c.state.at, locale, now) }) : t(mail.held.due, "due"), tone: "info" };
+      return held(c) ? ready : { text: t(mail.state.sending, "sending"), tone: "info" };
     case "reply_due":
       return { text: t(mail.state.reply_due, "reply due · {since}", { since }), tone: "neutral" };
     case "waiting":
@@ -72,19 +109,34 @@ export function standing(c: MailCase, t: T, locale: Locale, now: Date): { text: 
   }
 }
 
-const NEEDS: Record<MailWhy["code"], (t: T) => string> = {
-  kind: (t) => t(mail.needs.kind, "needs you"),
-  deadline: (t) => t(mail.needs.kind, "needs you"),
-  needs: (t) => t(mail.needs.needs, "needs reply"),
-  asked_often: (t) => t(mail.needs.asked_often, "asked often"),
-  unanswered: (t) => t(mail.needs.unanswered, "no answer"),
-  no_reply: (t) => t(mail.needs.no_reply, "takes no reply"),
-  unread: (t) => t(mail.needs.unread, "not read"),
-  stuck: (t) => t(mail.needs.stuck, "stuck"),
-  nothing_to_say: (t) => t(mail.needs.kind, "needs you"),
-  may_have_gone_out: (t) => t(mail.needs.may_have_gone_out, "check the thread"),
-  failed: (t) => t(mail.needs.failed, "not sent"),
-};
+const TONE: Partial<Record<MailWhy["code"], Tone>> = { failed: "error", may_have_gone_out: "error", stuck: "neutral" };
+
+function chip(c: MailCase, why: MailWhy, t: T): string {
+  switch (why.code) {
+    case "kind":
+      return KIND_NAME[why.kind](t);
+    case "deadline":
+      throw new Error(`case ${c.id}'s deadline is its chip`);
+    case "needs":
+      return t(mail.needs.needs, "needs {n} from you", { n: why.needs.length });
+    case "asked_often":
+      return c.said === "routed" ? t(mail.needs.unanswered, "no answer") : t(mail.needs.asked_often, "nothing new");
+    case "unanswered":
+      return t(mail.needs.unanswered, "no answer");
+    case "no_reply":
+      return t(mail.needs.no_reply, "takes no reply");
+    case "unread":
+      return t(mail.needs.unread, "not read");
+    case "stuck":
+      return t(mail.needs.stuck, "waits for Claude");
+    case "nothing_to_say":
+      return t(mail.needs.nothing_to_say, "no reply written");
+    case "may_have_gone_out":
+      return t(mail.needs.may_have_gone_out, "check the thread");
+    case "failed":
+      return t(mail.needs.failed, "not sent");
+  }
+}
 
 /** Why case `c` is the operator's. */
 export function whyText(c: MailCase, why: MailWhy, t: T, locale: Locale, now: Date): string {
@@ -94,7 +146,7 @@ export function whyText(c: MailCase, why: MailWhy, t: T, locale: Locale, now: Da
     case "deadline":
       return t(mail.why.deadline, "Google set a date: {at}.", { at: when(why.at, locale, now) });
     case "needs":
-      return t(mail.why.needs, "Google wants what only you have: {what}.", { what: why.needs.join(", ") });
+      return t(mail.why.needs, "Needs from you: {what}", { what: why.needs.join(", ") });
     case "asked_often":
       return c.said === "routed" ? t(mail.why.silent, "Google's specialist stayed silent past the time given, and when asked again.") : t(mail.why.asked_often, "Google answers nothing new, however often it was asked.");
     case "unanswered":
@@ -112,6 +164,12 @@ export function whyText(c: MailCase, why: MailWhy, t: T, locale: Locale, now: Da
     case "failed":
       return t(mail.why.failed, "The reply did not go: {error}", { error: why.error });
   }
+}
+
+/** What made a case done that nobody marked so. */
+export function settledText(c: MailCase, gbp: string | null, t: T): string {
+  const here = c.said === "closed" || (c.said !== null && KIND_TONE[c.said] === "positive");
+  return here || gbp === null ? t(mail.settled.here, "Settled by what Google last said here.") : t(mail.settled.later, "Settled by later mail of {gbp}, or by its being verified.", { gbp });
 }
 
 /** A case's subject, without the numbers it is told by elsewhere. */

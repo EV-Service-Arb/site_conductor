@@ -56,7 +56,7 @@ function Review({ r }: { r: Extract<MailGone, { state: "read" }>["reviews"][numb
         )}
         <span className="text-xs text-ink-soft tabular-nums">{r.rating === null ? t(mail.gone.unrated, "no stars") : `★${r.rating}`}</span>
         <span className="text-xs text-ink-soft" title={formatDateTime(r.gone_at, locale)}>
-          {t(mail.gone.since, "gone {since}", { since: age(r.gone_at, locale) })}
+          {t(mail.gone.since, "missing {since}", { since: age(r.gone_at, locale) })}
         </span>
         {r.reinstatement_requested_at !== null && <span className="text-xs text-ink-soft">{t(mail.gone.asked, "asked back {since}", { since: age(r.reinstatement_requested_at, locale) })}</span>}
         {r.replied && <span className="text-xs text-ink-soft">{t(mail.gone.replied, "replied to")}</span>}

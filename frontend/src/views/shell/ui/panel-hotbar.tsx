@@ -1,10 +1,11 @@
 "use client";
 
-import { Hotbar, type HotbarAction, StatusItem, type StatusTone, useBinding } from "@evinvest/uikit";
-import { Layers, MapPin, Maximize2, QrCode, Satellite } from "lucide-react";
+import { Hotbar, type HotbarAction, StatusItem, type StatusTone, useBinding, useKeymap } from "@evinvest/uikit";
+import { ArrowDown, Layers, MapPin, Maximize2, QrCode, Satellite } from "lucide-react";
 import { useState } from "react";
 
 import { closeWindow, floatWindow, hideWindow, openWindow, subjectOf, useOpenWindows, useShown } from "@/entities/gmb";
+import { mail } from "@/entities/mail";
 import { useAt } from "@/shared/lib/location";
 
 import { type T, useT, hotbar, placement } from "@/shared/i18n";
@@ -40,6 +41,7 @@ export function PanelHotbar() {
   const label = useWindowLabel();
   useTrackOpen();
   const takeover = useTakeover();
+  const keymap = useKeymap();
   const [kits, showKits] = useState(false);
   const satellite = useBase() === "satellite";
   const togglePlaces = () => showPlaces(!places);
@@ -67,6 +69,8 @@ export function PanelHotbar() {
           { id: "places", label: t(hotbar.places, "Google's places"), icon: MapPin, binding: "places", pressed: places, onSelect: togglePlaces },
         ]
       : []),
+    // the email view's
+    ...(keymap.bound.has("mail-next") ? [{ id: "mail-next", label: t(mail.next, "Next thread"), icon: ArrowDown, binding: "mail-next", onSelect: () => keymap.run("mail-next") }] : []),
     {
       id: "kit-list",
       label: t(hotbar.kits, "Review kits"),
