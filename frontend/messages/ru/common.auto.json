@@ -2499,6 +2499,10 @@
     "en": "Leave out",
     "t": "Убрать"
   },
+  "gmbs.documents.attach": {
+    "en": "Attach files",
+    "t": "Прикрепить файлы"
+  },
   "gmbs.edit": {
     "en": "Edit…",
     "t": "Изменить…"
@@ -3639,18 +3643,6 @@
     "en": "This browser gives no location here",
     "t": "Этот браузер не предоставляет данные о местоположении здесь"
   },
-  "mail.asks": {
-    "en": "Google asks",
-    "t": "Google спрашивает"
-  },
-  "mail.auto.confirm": {
-    "en": "{topic}: let replies from {gmail} go by themselves?",
-    "t": "{topic}: пусть ответы от {gmail} уходят сами?"
-  },
-  "mail.auto.confirm.how": {
-    "en": "Each goes 15 minutes after it is written unless you stop it, again after 48 h of silence, at most 6 unanswered. Those already written, and any that needs something of yours, stay by hand.",
-    "t": "Каждый уходит через 15 минут после написания, если вы его не остановите, повторно после 48 ч молчания, не более 6 без ответа. Уже написанные и те, которым нужно что-то от вас, остаются на ручной отправке."
-  },
   "mail.auto.confirm.on": {
     "en": "Switch on",
     "t": "Включить"
@@ -3667,21 +3659,9 @@
     "en": "Review reinstatement",
     "t": "Восстановление отзывов"
   },
-  "mail.auto.reviews.goes": {
-    "en": "They ask Google support for the missing reviews of its {n, plural, one {# verified GBP} other {# verified GBPs}}.",
-    "t": "Они просят поддержку Google вернуть пропавшие отзывы для {n, plural, one {# подтверждённого профиля GBP} few {# подтверждённых профилей GBP} many {# подтверждённых профилей GBP} other {# подтверждённого профиля GBP}}."
-  },
-  "mail.auto.switch": {
-    "en": "{topic} replies from {gmail} go by themselves",
-    "t": "Ответы {topic} от {gmail} уходят сами"
-  },
   "mail.auto.verification": {
     "en": "Live verification",
     "t": "Живая верификация"
-  },
-  "mail.auto.verification.goes": {
-    "en": "They ask Google support for the live call of its {n, plural, one {# verifying GBP} other {# verifying GBPs}}.",
-    "t": "Они просят поддержку Google о живом звонке для {n, plural, one {# профиля GBP на верификации} few {# профилей GBP на верификации} many {# профилей GBP на верификации} other {# профиля GBP на верификации}}."
   },
   "mail.cancel": {
     "en": "Cancel",
@@ -3694,10 +3674,6 @@
   "mail.correct.asSaid": {
     "en": "As its mail says",
     "t": "Как сказано в письме"
-  },
-  "mail.correct.elsewhere": {
-    "en": "Under another gmail",
-    "t": "Под другим gmail"
   },
   "mail.correct.gbp": {
     "en": "GBP",
@@ -3743,10 +3719,6 @@
     "en": "{subject}: draft dismissed",
     "t": "{subject}: черновик отклонён"
   },
-  "mail.draft.needs": {
-    "en": "From you: attach it, or say it in the text",
-    "t": "От вас: приложите это или напишите в тексте"
-  },
   "mail.draft.restore": {
     "en": "Bring the dismissed draft back",
     "t": "Вернуть отклонённый черновик"
@@ -3758,10 +3730,6 @@
   "mail.draft.text": {
     "en": "The reply's text",
     "t": "Текст ответа"
-  },
-  "mail.files.attach": {
-    "en": "Attach files",
-    "t": "Прикрепить файлы"
   },
   "mail.files.remove": {
     "en": "Take {name} off",
@@ -4103,10 +4071,6 @@
     "en": "Not read",
     "t": "Не прочитано"
   },
-  "mail.message.us": {
-    "en": "You",
-    "t": "Вы"
-  },
   "mail.method.call": {
     "en": "Live call",
     "t": "Живой звонок"
@@ -4386,10 +4350,6 @@
   "mail.tab.automatic": {
     "en": "Automatic replies",
     "t": "Автоответы"
-  },
-  "mail.tab.automatic.description": {
-    "en": "Which gmails answer Google by themselves",
-    "t": "Какие gmail отвечают Google сами"
   },
   "mail.tab.threads": {
     "en": "Threads",
@@ -6651,10 +6611,6 @@
     "en": "Documents",
     "t": "Документы"
   },
-  "window.appeal.documents.what": {
-    "en": "The documents of the appeal, each checked for the profile's exact name and address",
-    "t": "Документы апелляции, каждый проверен на точное совпадение с названием и адресом профиля"
-  },
   "window.appeal.linked": {
     "en": "Linked to it",
     "t": "Связано с ним"
@@ -7531,10 +7487,6 @@
     "en": "New reviews per day",
     "t": "Новые отзывы в день"
   },
-  "window.reviews.reinstatement": {
-    "en": "With Google support",
-    "t": "В поддержке Google"
-  },
   "window.reviews.reinstating": {
     "en": "Reinstating",
     "t": "Восстанавливаются"
@@ -7799,14 +7751,6 @@
     "en": "Its own page",
     "t": "Своя страница"
   },
-  "window.verification.after": {
-    "en": "Live call asked of support",
-    "t": "Живой звонок, о котором попросили поддержку"
-  },
-  "window.verification.after.none": {
-    "en": "No open thread asks for it.",
-    "t": "Ни одна открытая переписка этого не просит."
-  },
   "window.verification.attempts": {
     "en": "Attempts",
     "t": "Попытки"
@@ -7830,10 +7774,6 @@
   "window.verification.banner.state": {
     "en": "{from} → {to} · {ago}",
     "t": "{from} → {to} · {ago}"
-  },
-  "window.verification.emails": {
-    "en": "Google's other emails",
-    "t": "Другие письма Google"
   },
   "window.verification.kit": {
     "en": "Verification kit",
@@ -7874,6 +7814,10 @@
   "window.verification.shows.what": {
     "en": "What Google shows of it now, read every 6 h, and how that changed",
     "t": "Что Google показывает о нём сейчас, читается каждые 6 ч, и как это менялось"
+  },
+  "window.verification.support": {
+    "en": "With Google support",
+    "t": "В поддержке Google"
   },
   "window.verification.waits": {
     "en": "Waits for Verified",

@@ -5,8 +5,8 @@ import { Button, Input, Planned, Skeleton, cn, toast } from "@evinvest/uikit";
 import { ChevronRight, ExternalLink, RefreshCw, Search } from "lucide-react";
 import { useState } from "react";
 
-import { LiveReviews, type Listed, useGmbTags, windowKeys } from "@/entities/gmb";
-import { CaseLinks, over, useGmbMail } from "@/entities/mail";
+import { LiveReviews, type Listed, gmbsOf, useGmbTags, useMailCases, windowKeys } from "@/entities/gmb";
+import { over } from "@/entities/mail";
 import { useSpendConfirm } from "@/entities/tokens";
 import { ok, reviewArchive } from "@/shared/api";
 import type { MailCase } from "@/shared/api/schema";
@@ -24,33 +24,11 @@ const WEEK_MS = 7 * 24 * 3600 * 1000;
 type Filter = "non_five" | "unresponded" | "new_7d";
 const FILTERS: readonly Filter[] = ["non_five", "unresponded", "new_7d"];
 
-/** Its reviews as review_archive tracks them (02c), and what Google says of those asked back. */
+/** Its reviews as review_archive tracks them (02c). */
 export function ReviewsTab({ listed }: { listed: Listed }) {
-  const mail = useGmbMail(listed.gmb.id);
-  const cases = mail.status === "ok" ? mail.data.cases.filter((c) => c.topic === "reviews") : [];
-  const open = cases.filter((c) => !over(c));
-  return (
-    <>
-      {mail.status === "error" && (
-        <div className="px-5 pt-5">
-          <ErrorState failure={mail.failure} onRetry={mail.reload} />
-        </div>
-      )}
-      <Reinstatement cases={cases.filter((c) => c.state.is !== "quiet")} />
-      <Archived listed={listed} asked={open.length === 1 ? open[0] : undefined} />
-    </>
-  );
-}
-
-function Reinstatement({ cases }: { cases: readonly MailCase[] }) {
-  const t = useT();
-  if (cases.length === 0) return null;
-  return (
-    <section className="mx-5 mt-5 flex flex-col gap-1 rounded-lg border border-border px-4 py-2">
-      <h3 className="text-xs text-ink-soft">{t(windowKeys.reviews.reinstatement, "With Google support")}</h3>
-      <CaseLinks cases={cases} />
-    </section>
-  );
+  const cases = useMailCases();
+  const open = cases.status === "ok" ? cases.data.cases.filter((c) => c.topic === "reviews" && gmbsOf(c).includes(listed.gmb.id) && !over(c)) : [];
+  return <Archived listed={listed} asked={open.length === 1 ? open[0] : undefined} />;
 }
 
 /** `asked`: the case its gone reviews are asked back in. */

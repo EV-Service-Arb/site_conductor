@@ -1,6 +1,6 @@
 import type { Tone } from "@evinvest/uikit";
 
-import { type MailKind, type MailTopic, type MailWho, type VerificationMethod, type VerificationOutcome, mailKindValues } from "@/shared/api/schema";
+import { type MailKind, type MailSentBy, type MailTopic, type MailWho, type VerificationMethod, type VerificationOutcome, mailKindValues } from "@/shared/api/schema";
 import type { T } from "@/shared/i18n";
 
 import { mail } from "./i18n";
@@ -20,11 +20,14 @@ export const TOPIC_NAME: Named<MailTopic> = {
 export const TOPIC_TONE: Record<MailTopic, Tone> = { verification: "warn", suspension: "error", reviews: "info", activity: "warn", access: "neutral", profile: "neutral", other: "neutral" };
 
 export const WHO_NAME: Named<MailWho> = {
-  us: (t) => t(mail.message.us, "You"),
+  us: (t) => t(mail.message.us, "Us"),
   support: (t) => t(mail.who.support, "Google support"),
   google: (t) => t(mail.who.google, "Google"),
   unproven: (t) => t(mail.kind.impersonation, "Not from Google"),
 };
+
+/** Who sent one of ours. */
+export const sentBy = (by: MailSentBy, t: T) => (by.is === "person" ? by.name : by.is === "itself" ? t(mail.sentBy.itself, "by itself") : t(mail.sentBy.gmail, "in Gmail"));
 
 /** A topic's kinds, as a person picks one; `null`: of any topic. */
 export const KINDS: readonly { topic: MailTopic | null; kinds: readonly MailKind[] }[] = [

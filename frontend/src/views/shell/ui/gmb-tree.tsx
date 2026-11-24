@@ -1,10 +1,11 @@
 "use client";
 
-import { toast, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn, useBinding } from "@evinvest/uikit";
-import { CircleMinus, CirclePlus, Link2, Pencil, RefreshCw, Search, Trash2 } from "lucide-react";
+import { toast, Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, InputGroup, InputGroupAddon, InputGroupInput, Skeleton, Switch, cn } from "@evinvest/uikit";
+import { CircleMinus, CirclePlus, Link2, Mail, Pencil, RefreshCw, Search, Trash2 } from "lucide-react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openWindow, readyCount, useShown, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, useGmails, useGmbTags, useOnMap, usePeeked, useScope, useSelection, TradePicker, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
+import { useNow } from "@/entities/alerts";
+import { byView, chooseGmailScope, ISSUE_NAME, issueCounts, issueOf, ISSUES, issueText, type Listed, LiveReviews, openOrFocus, openWindow, readyCount, useShown, select, setFilter, setOnly, setOnMap, setTrades, type SiteTag, STATE_NAME, switchGmbs, syncGmb, type Tags, gmbsOf, needsOf, useGmails, useGmbTags, useMailCases, useOnMap, usePeeked, useScope, useSelection, TradePicker, useTrash, useUndoable, gmbs as gmbsKeys, trash as trashKeys, trades as tradesKeys } from "@/entities/gmb";
 import { useMe } from "@/entities/session";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { AddGmbButton } from "@/features/add-gmb";
@@ -14,7 +15,8 @@ import { PlaceButton } from "@/features/place-gmb";
 import { api, ok, sites as sitesApi } from "@/shared/api";
 import { type Gmb, type State, mustHaveValues } from "@/shared/api/schema";
 import { ViewLink, useAt } from "@/shared/lib/location";
-import { useT } from "@/shared/i18n";
+import { useLocale, useT } from "@/shared/i18n";
+import { when } from "@/shared/lib/time";
 import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
@@ -48,6 +50,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
   const at = useAt();
   const { sites, tags } = useGmbTags();
   const linked = sitesApi.mayCall("put", "/places/{brand}/{slug}/gmb", me.permissions) ? tags.sites : null;
+  const mail = useMailCases();
   const selection = useSelection();
   const undoable = useUndoable();
 
@@ -78,6 +81,11 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
     found.map((l) => l.gmb),
     tags,
   );
+  // mail of no known GBP is its gmail's
+  const unplaced = gmails.data.gmails
+    .filter((g) => scope === null || scope.has(g.id))
+    .map((g) => ({ g, cases: mail.status !== "ok" ? [] : mail.data.cases.filter((c) => c.gmail_id === g.id && gmbsOf(c).length === 0 && needsOf(c) !== null) }))
+    .filter(({ cases }) => cases.length > 0);
   const onMap = at.view === "home" && inView !== null;
   const pointed = at.view === "review_archive.mine.gmb" ? at.params.gmb : null;
   const row = (l: Listed) => (
@@ -112,7 +120,7 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
         </InputGroupAddon>
         <InputGroupInput type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={t(gmbsKeys.filter, "Name, address, place id, gmail")} aria-label={t(gmbsKeys.filter, "Name, address, place id, gmail")} />
       </InputGroup>
-      {counts.size > 0 && (
+      {counts.size + unplaced.length > 0 && (
         <div role="group" aria-label={t(gmbsKeys.issues, "What needs you")} className="flex flex-wrap gap-1 px-0.5 pt-1">
           {ISSUES.filter((i) => counts.has(i)).map((i) => (
             <button
@@ -128,6 +136,19 @@ export function GmbTree({ onNavigate }: { onNavigate?: () => void }) {
             >
               {ISSUE_NAME[i](t)} <span className="tabular-nums">{counts.get(i)}</span>
             </button>
+          ))}
+          {unplaced.map(({ g, cases }) => (
+            <ViewLink
+              key={g.id}
+              to={{ view: "email", params: cases.length === 1 ? { case: cases[0]!.id } : {} }}
+              onClick={() => onNavigate?.()}
+              title={t(gmbsKeys.unplaced, "Google's mail to {gmail}, its GBP not known", { gmail: g.gmail })}
+              className="flex max-w-full items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-accent-error outline-none hover:bg-hover/50 focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Mail aria-hidden className="size-3 shrink-0" />
+              <span className="truncate">{g.gmail}</span>
+              <span className="tabular-nums">{cases.length}</span>
+            </ViewLink>
           ))}
         </div>
       )}
@@ -203,7 +224,6 @@ function TrashButton() {
   const button = useButtonSize();
   const n = trash.status === "ok" ? trash.data.gmails.length + trash.data.gmbs.length : null;
   const open = () => openWindow({ kind: "trash" });
-  useBinding({ on: { key: "T" }, id: "trash", run: { label: t(trashKeys.open, "Trash"), run: open } });
   const ref = useRef<HTMLButtonElement>(null);
   const was = useRef(n);
   useEffect(() => {
@@ -356,7 +376,10 @@ function GmbRow({
     });
   const page = useShown()?.page === true;
   const move = (selected ? t(gmbsKeys.deselect, "Leave out") : t(gmbsKeys.select, "Select"));
+  const locale = useLocale();
+  const now = useNow(60_000);
   const issue = issueOf(gmb, tags);
+  const replies = tags.mail?.get(gmb.id)?.held;
   const archive = tags.archive?.get(gmb.id);
   const ready = gmb.readiness === null ? null : readyCount(gmb.readiness);
   const shown = issue === "draft" ? null : issue;
@@ -373,9 +396,11 @@ function GmbRow({
       </span>
       <span className="block truncate text-xs text-ink-soft">
         {gmb.state !== "verified" && <span className={cn("font-medium", gmb.state === "suspended" && "text-accent-error")}>{STATE_NAME[gmb.state](t)}</span>}
-        {gmb.state !== "verified" && (shown || where) && " · "}
+        {gmb.state !== "verified" && (shown || replies != null || where) && " · "}
         {shown && <span className={cn("font-medium", shown === "off" || shown === "no_category" ? "text-ink-soft" : "text-accent-error")}>{issueText(shown, { gmb, gmail }, tags, t)}</span>}
-        {shown && where && " · "}
+        {shown && replies != null && " · "}
+        {replies != null && <span className="font-medium text-accent-info">{t(gmbsKeys.tag.held, "replies {at}", { at: when(replies, locale, now) })}</span>}
+        {(shown || replies != null) && where && " · "}
         {where}
       </span>
     </>

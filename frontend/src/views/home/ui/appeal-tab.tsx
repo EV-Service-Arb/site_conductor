@@ -1,15 +1,18 @@
 "use client";
 
-import { Badge, Button, Planned, Skeleton } from "@evinvest/uikit";
-import { ShieldAlert } from "lucide-react";
+import { Badge, Button, ConfirmDialog, Planned, Skeleton } from "@evinvest/uikit";
+import { ShieldAlert, Trash2 } from "lucide-react";
+import { useState } from "react";
 
-import { type Listed, STATE_NAME, STATE_TONE, openWindow, useGmails, useGmbTags, windowKeys } from "@/entities/gmb";
+import { AttachFiles, type Listed, STATE_NAME, STATE_TONE, keepDocument, fileSize, openWindow, removeDocument, saveDocument, useDocuments, useGmails, useGmbTags, windowKeys } from "@/entities/gmb";
 import { MailLines, useGmbMail } from "@/entities/mail";
-import type { Gmb, MailKind, MailLine } from "@/shared/api/schema";
+import type { Gmb, GmbDocument, MailKind, MailLine } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { ViewLink } from "@/shared/lib/location";
 import { ErrorState } from "@/shared/ui/error-state";
+import { notifyFailure } from "@/shared/ui/notify";
+import { useButtonSize } from "@/shared/ui/touch";
 
 const host = (site: string | null) => (site !== null && /^https?:\/\//.test(site) ? new URL(site).hostname.replace(/^www\./, "") : null);
 
@@ -62,27 +65,13 @@ export function AppealTab({ listed: { gmb, gmail } }: { listed: Listed }) {
       </section>
       <div className="grid grid-cols-1 gap-4 @3xl:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <div className="flex flex-col gap-4">
-          <Planned what={t(windowKeys.appeal.documents.what, "The documents of the appeal, each checked for the profile's exact name and address")}>
-            <h3 className="text-sm font-semibold text-ink">{t(windowKeys.appeal.documents, "Documents")}</h3>
-            <p className="rounded-md bg-hover px-3 py-2 font-mono text-xs text-ink">profile · {gmb.name}{gmb.address && ` · ${gmb.address}`}</p>
-            {[
-              ["Kbis extract", true],
-              ["EDF bill, Oct", false],
-              ["Signage + business card photo", true],
-            ].map(([doc, named]) => (
-              <p key={String(doc)} className="flex items-center gap-2 text-sm text-ink">
-                <span className="flex-1">{doc}</span>
-                <span className={named ? "text-positive" : "text-accent-error"}>name</span>
-                <span className="text-positive">address</span>
-              </p>
-            ))}
-          </Planned>
+          <Documents gmb={gmb} />
           <section className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3">
             <h3 className="text-sm font-semibold text-ink">{t(windowKeys.appeal.sent, "Appeals")}</h3>
             {mail.status === "loading" && <Skeleton className="h-12" />}
             {mail.status === "error" && <ErrorState failure={mail.failure} onRetry={mail.reload} />}
             {mail.status === "ok" && rest.length === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.appeal.sent.none, "No appeal in Google's mail.")}</p>}
-            <MailLines lines={rest} cases={cases} />
+            <MailLines lines={rest} />
           </section>
         </div>
         <div className="flex flex-col gap-4">
@@ -117,5 +106,68 @@ function Decision({ l }: { l: MailLine }) {
         </p>
       ))}
     </>
+  );
+}
+
+/** What is kept for the GBP: what it gave Google before, and what its appeal wants. */
+function Documents({ gmb }: { gmb: Gmb }) {
+  const t = useT();
+  const locale = useLocale();
+  const button = useButtonSize();
+  const documents = useDocuments(gmb.id);
+  const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<GmbDocument | null>(null);
+  const add = async (files: File[]) => {
+    setBusy(true);
+    try {
+      for (const f of files) await keepDocument(gmb.id, f, null);
+    } catch (e) {
+      notifyFailure(e, t);
+    } finally {
+      setBusy(false);
+      documents.reload();
+    }
+  };
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-border px-4 py-3">
+      <header className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-ink">{t(windowKeys.appeal.documents, "Documents")}</h3>
+        <AttachFiles multiple busy={busy} onFiles={(files) => void add(files)} />
+      </header>
+      <p className="rounded-md bg-hover px-3 py-2 font-mono text-xs break-words text-ink">{[t(windowKeys.appeal.documents.profile, "profile"), gmb.name, gmb.address].filter(Boolean).join(" · ")}</p>
+      {documents.status === "loading" && <Skeleton className="h-12" />}
+      {documents.status === "error" && <ErrorState failure={documents.failure} onRetry={documents.reload} />}
+      {documents.status === "ok" && documents.data.documents.length === 0 && <p className="text-sm text-ink-soft">{t(windowKeys.appeal.documents.none, "None kept yet: a Kbis, a bill, a photo of the sign.")}</p>}
+      {documents.status === "ok" && (
+        <ul className="flex flex-col divide-y divide-border">
+          {documents.data.documents.map((d) => (
+            <li key={d.id} className="flex items-center gap-2 py-1.5">
+              <span className="flex min-w-0 flex-1 flex-col">
+                <button type="button" onClick={() => void saveDocument(gmb.id, d.id).catch((e: unknown) => notifyFailure(e, t))} className="max-w-full self-start truncate rounded-sm text-sm text-ink outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring">
+                  {d.name}
+                </button>
+                <span className="truncate text-xs text-ink-soft">{[d.given_for, fileSize(d.size), formatDateTime(d.added_at, locale)].filter(Boolean).join(" · ")}</span>
+              </span>
+              <Button variant="ghost" size={button("sm")} icon aria-label={t(windowKeys.appeal.documents.remove, "Remove {name}", { name: d.name })} onClick={() => setRemoving(d)}>
+                <Trash2 aria-hidden />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {removing !== null && (
+        <ConfirmDialog
+          open
+          tone="error"
+          onOpenChange={(open) => !open && setRemoving(null)}
+          title={t(windowKeys.appeal.documents.confirm, "Remove {name} for good?", { name: removing.name })}
+          description={t(windowKeys.appeal.documents.confirm.why, "What it was given as is not given any more.")}
+          confirmLabel={t(windowKeys.appeal.documents.confirm.yes, "Remove")}
+          onConfirm={async () => {
+            await removeDocument(gmb.id, removing.id).finally(documents.reload);
+          }}
+        />
+      )}
+    </section>
   );
 }

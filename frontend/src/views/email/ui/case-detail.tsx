@@ -2,13 +2,13 @@
 
 import { Badge, Button, NativeSelect, NativeSelectGroup, NativeSelectOption, Skeleton, cn, useUndo } from "@evinvest/uikit";
 import { useResource } from "@evinvest/api/react";
-import { Check, ChevronRight, ExternalLink, RotateCcw, ShieldAlert, SlidersHorizontal, TriangleAlert } from "lucide-react";
-import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { Check, ChevronRight, ExternalLink, RotateCcw, ShieldAlert, SlidersHorizontal } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { useNow } from "@/entities/alerts";
-import { pageOf, under, useGmails } from "@/entities/gmb";
-import { KINDS, KIND_NAME, Standing, TOPIC_NAME, TopicBadge, WHO_NAME, correctMail, deadlineOf, editCase, goes, mail, settledText, subjectOf, unnamed, useOpenThread, whyText } from "@/entities/mail";
-import { Held, Mend, Reply, WhichGbp } from "@/features/answer-mail";
+import { gmbsOf, goes, pageOf, useGmails, useMailCases } from "@/entities/gmb";
+import { Automation, KINDS, KIND_NAME, Standing, TOPIC_NAME, TopicBadge, WHO_NAME, correctMail, editCase, mail, over, sentBy, settledText, subjectOf, unnamed, useAutos, useOpenThread } from "@/entities/mail";
+import { GbpOptions, Held, Likely, Note, Reply, Wanted, WhichGbp, Why } from "@/features/answer-mail";
 import { api } from "@/shared/api";
 import { type Gmails, type Gmb, type MailCase, type MailCaseDetail, type MailKind, type MailMessage, type MailTopic, mailTopicValues } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
@@ -38,7 +38,8 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
   const button = useButtonSize();
   const { case: c, messages } = detail;
   const gmail = gmails.gmails.find((g) => g.id === c.gmail_id);
-  const gbp = gmails.gmbs.find((g) => g.id === c.gmb_id);
+  const gbps = gmbsOf(c).flatMap((id) => gmails.gmbs.find((g) => g.id === id) ?? []);
+  const autos = useAutos();
   const thread = useOpenThread();
   const [correcting, setCorrecting] = useState(false);
   const push = useUndo();
@@ -86,10 +87,15 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
         <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-soft">
           <TopicBadge topic={c.topic} />
           <Standing c={c} />
-          {gbp !== undefined ? <GbpLink gbp={gbp} /> : unnamed(c) ? <WhichGbp c={c} onChanged={named} className="max-w-60" /> : null}
+          {gbps.map((g) => (
+            <GbpLink key={g.id} gbp={g} />
+          ))}
+          {unnamed(c) && <WhichGbp c={c} onChanged={named} className="max-w-60" />}
           <span className="min-w-0 truncate">{gmail.gmail}</span>
           {c.numbers.length > 0 && <span className="font-mono text-xs">{c.numbers.join(" · ")}</span>}
         </p>
+        {!over(c) && <Likely c={c} onChanged={named} />}
+        {!over(c) && autos.status === "ok" && <Automation c={c} autos={autos.data} />}
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" size={button("sm")} className="@max-lg:[&>svg]:hidden" disabled={thread.opening !== null} onClick={() => void thread.open(c.gmail_id, c.thread)} title={t(mail.thread.where, "In {gmail}'s running browser", { gmail: gmail.gmail })}>
             <ExternalLink aria-hidden />
@@ -107,13 +113,13 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
           </Button>
         </div>
       </header>
-      {correcting && <Correct detail={detail} gbps={under(gmails, c.gmail_id)} reload={reload} />}
+      {correcting && <Correct detail={detail} gmails={gmails} reload={reload} />}
       {!messages.every((m) => m.sent || m.authentic) && (
         <Note tone="error" icon={<ShieldAlert aria-hidden />}>
           {t(mail.forged, "Not from Google: Gmail could not prove who sent it. Open nothing in it.")}
         </Note>
       )}
-      <Why detail={detail} />
+      <Why c={c} />
       {by !== null && !byHand && (
         <p className="text-sm text-ink-soft">
           {settledText(by, t, locale, now)}
@@ -129,17 +135,8 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
       )}
       {c.draft !== null && goes(c) && <Held draft={c.draft} {...reply} />}
       <Timeline messages={messages} reload={reload} />
-      {c.asks.length > 0 && c.last.who !== "us" && (c.draft === null || c.draft.needs.length === 0) && (
-        <section className="flex flex-col gap-2 rounded-lg bg-hover/60 px-4 py-3">
-          <h3 className="text-xs text-ink-soft">{t(mail.asks, "Google asks")}</h3>
-          <ul className="flex list-disc flex-col gap-1 pl-4 text-sm text-ink">
-            {c.asks.map((a) => (
-              <li key={a}>{a}</li>
-            ))}
-          </ul>
-        </section>
-      )}
       {detail.gone !== null && <Gone gone={detail.gone} gmb={c.gmb_id} />}
+      {!over(c) && <Wanted c={c} onChanged={reload} />}
       {!goes(c) && <Reply {...reply} />}
     </article>
   );
@@ -156,69 +153,10 @@ function GbpLink({ gbp }: { gbp: Gmb }) {
   );
 }
 
-const NOTE = { warn: "border-accent-warn/40 bg-accent-warn/5 [&>svg]:text-accent-warn", error: "border-accent-error/40 bg-accent-error/5 [&>svg]:text-accent-error" };
-
-function Note({ tone, icon, children }: { tone: keyof typeof NOTE; icon: ReactNode; children: ReactNode }) {
-  return (
-    <section className={cn("flex gap-3 rounded-lg border px-4 py-3 text-sm text-ink [&>svg]:mt-0.5 [&>svg]:size-4 [&>svg]:shrink-0", NOTE[tone])}>
-      {icon}
-      <div className="flex min-w-0 flex-1 flex-col gap-2">{children}</div>
-    </section>
-  );
-}
-
-/** Why a person decides, and the date Google set. */
-function Why({ detail: { case: c } }: { detail: MailCaseDetail }) {
-  const t = useT();
-  const locale = useLocale();
-  const now = useNow(60_000);
-  const button = useButtonSize();
-  const why = c.state.is === "needs_you" ? c.state.why : null;
-  const deadline = deadlineOf(c);
-  if (why === null && deadline === null) {
-    if (c.state.is !== "waiting" || c.said !== "routed") return null;
-    const until = when(c.state.until, locale, now);
-    return (
-      <p className="text-sm text-ink-soft">
-        {c.last.who === "us" || c.draft?.state === "sent"
-          ? t(mail.routed.pressed, "Asked again. With no answer by {until}, it needs you.", { until })
-          : t(mail.routed, "A specialist is to answer by {until}. Silent past it, one reply asks again.", { until })}
-      </p>
-    );
-  }
-  // what the draft lacks stands beside its text
-  const said = why === null || why.code === "deadline" || why.code === "needs" ? null : whyText(c, why, t, locale, now);
-  if (said === null && deadline === null) return null;
-  const reasons = why !== null && c.last.who !== "us" ? c.last.reasons : [];
-  return (
-    <Note tone={deadline !== null || why?.code === "failed" || why?.code === "may_have_gone_out" ? "error" : "warn"} icon={<TriangleAlert aria-hidden />}>
-      {deadline !== null && (
-        <p className="font-medium">
-          {Date.parse(deadline) > now.getTime() ? t(mail.deadline, "Google's deadline: {at}", { at: formatDateTime(deadline, locale) }) : t(mail.deadline.passed, "Google's deadline passed: {at}", { at: formatDateTime(deadline, locale) })}
-        </p>
-      )}
-      {said !== null && <p className="break-words">{said}</p>}
-      {reasons.map((r) => (
-        <p key={r} className="break-words text-accent-error">
-          “{r}”
-        </p>
-      ))}
-      {why?.code === "stuck" && <Mend />}
-      {/* SMTP's codes of a login refused */}
-      {why?.code === "failed" && /\b53[45]\b/.test(why.error) && (
-        <Button asChild variant="outline" size={button("sm")} className="self-start">
-          <ViewLink to={pageOf({ kind: "account", gmail: c.gmail_id, tab: "connections" })}>{t(mail.inbox.reconnect, "Reconnect")}</ViewLink>
-        </Button>
-      )}
-      {why?.code === "unread" && why.error !== null && <p className="text-ink-soft">{t(mail.unread.mend, "Read it below and set its kind.")}</p>}
-    </Note>
-  );
-}
-
 const AS_SAID = "as_said";
 
 /** The case's GBP and topic by hand, over what its mail says. */
-function Correct({ detail: { case: c }, gbps, reload }: { detail: MailCaseDetail; gbps: readonly Gmb[]; reload: () => void }) {
+function Correct({ detail: { case: c }, gmails, reload }: { detail: MailCaseDetail; gmails: Gmails; reload: () => void }) {
   const t = useT();
   const id = useId();
   const size = useControlSize() === "lg" ? "lg" : "sm";
@@ -244,13 +182,8 @@ function Correct({ detail: { case: c }, gbps, reload }: { detail: MailCaseDetail
         </label>
         <NativeSelect id={`${id}-gbp`} size={size} wrapperClassName="w-full" disabled={busy} value={c.gmb_id ?? AS_SAID} onChange={(e) => void set({ gmb: e.target.value === AS_SAID ? null : Number(e.target.value) })}>
           {c.by_hand.gmb ? <NativeSelectOption value={AS_SAID}>{t(mail.correct.asSaid, "As its mail says")}</NativeSelectOption> : c.gmb_id === null && <NativeSelectOption value={AS_SAID}>{t(mail.correct.unknown, "Not known")}</NativeSelectOption>}
-          {gbps.map((g) => (
-            <NativeSelectOption key={g.id} value={g.id}>
-              {g.name}
-            </NativeSelectOption>
-          ))}
-          {/* moved to another gmail since */}
-          {c.gmb_id !== null && !gbps.some((g) => g.id === c.gmb_id) && <NativeSelectOption value={c.gmb_id}>{t(mail.correct.elsewhere, "Under another gmail")}</NativeSelectOption>}
+          <GbpOptions gmail={c.gmail_id} />
+          {c.gmb_id !== null && !gmails.gmbs.some((g) => g.id === c.gmb_id) && <NativeSelectOption value={c.gmb_id}>{t(mail.correct.trashed, "In the trash")}</NativeSelectOption>}
         </NativeSelect>
       </div>
       <div className="flex min-w-0 flex-col gap-1">
@@ -280,7 +213,7 @@ function Join({ c, reload }: { c: MailCase; reload: () => void }) {
   const size = useControlSize() === "lg" ? "lg" : "sm";
   const push = useUndo();
   const [busy, setBusy] = useState(false);
-  const read = useResource(api, "/mail/cases");
+  const read = useMailCases();
   if (read.status !== "ok") return null;
   const others = read.data.cases.filter((x) => x.gmail_id === c.gmail_id && x.id !== c.id && x.last.who !== "unproven");
   const act = async (write: () => Promise<unknown>) => {
@@ -358,6 +291,7 @@ function Message({ m, opened, reload }: { m: MailMessage; opened: boolean; reloa
           {when(m.at, locale, now)}
         </time>
         <span className="shrink-0 text-ink">{who}</span>
+        {m.sent_by !== null && <span className="shrink-0 text-ink-soft">· {sentBy(m.sent_by, t)}</span>}
         {m.spam && <Badge tone="warn">{t(mail.spam, "in Spam")}</Badge>}
         {!m.sent && <Badge tone="neutral">{m.reading === null ? t(mail.message.unread, "Not read") : KIND_NAME[m.reading.kind](t)}</Badge>}
         <span className="min-w-0 flex-1 basis-40 truncate text-ink-soft">{m.reading?.summary ?? m.text?.replace(/\s+/g, " ")}</span>

@@ -1,5 +1,5 @@
 import { api, ok } from "@/shared/api";
-import type { MailCaseEdit, MailFile, MailReadingEdit, MailTopic } from "@/shared/api/schema";
+import type { MailCaseEdit, MailReadingEdit, MailSend, MailTopic } from "@/shared/api/schema";
 
 const path = (id: number) => ({ params: { path: { id } } });
 
@@ -22,6 +22,9 @@ export const dismissDraft = (id: number) => ok(api.DELETE("/mail/drafts/{id}", p
 export const restoreDraft = (id: number) => ok(api.POST("/mail/drafts/{id}/restore", path(id)));
 
 /** To Google, once; `as_is`: with no file, whatever it lacks. */
-export const sendDraft = (id: number, body: string, files: MailFile[], as_is: boolean) => ok(api.POST("/mail/drafts/{id}/send", { ...path(id), body: { body, files, as_is } }));
+export const sendDraft = (id: number, body: MailSend) => ok(api.POST("/mail/drafts/{id}/send", { ...path(id), body }));
 
-export const switchAuto = (gmail: number, topic: MailTopic, on: boolean) => ok(api.PUT("/mail/auto", { body: { gmail, topic, on } }));
+/** What its case wants, given by a document of its GBP's or without one, or not given. */
+export const giveMail = (id: number, item: string, given: boolean, document: number | null = null) => ok(api.PUT("/mail/cases/{id}/given", { ...path(id), body: { item, given, document } }));
+
+export const switchAuto = (gmbs: number[], topic: MailTopic, on: boolean) => ok(api.PUT("/mail/auto", { body: { gmbs, topic, on } }));

@@ -6,7 +6,7 @@ import { type KeyboardEvent, useEffect, useRef } from "react";
 
 import { useGmails } from "@/entities/gmb";
 import { CaseRow, type Show, mail, over, shownIn, stuckOf, unnamed, useCases } from "@/entities/mail";
-import { Mend, WhichGbp } from "@/features/answer-mail";
+import { Likely, Mend, WhichGbp } from "@/features/answer-mail";
 import { AutoReplies } from "@/features/auto-mail";
 import type { MailCase } from "@/shared/api/schema";
 import { type T, nav, useT } from "@/shared/i18n";
@@ -158,7 +158,8 @@ function List({ cases, read, all, show, opened, reload }: { cases: readonly Mail
     );
   if (gmails.status !== "ok") return <Skeleton className="m-3 h-60" />;
   const { gmails: accounts, gmbs } = gmails.data;
-  const of = (c: MailCase) => gmbs.find((g) => g.id === c.gmb_id)?.name ?? accounts.find((g) => g.id === c.gmail_id)?.gmail;
+  const name = (c: MailCase) => gmbs.find((g) => g.id === c.gmb_id)?.name;
+  const of = (c: MailCase) => (c.gmb_certain ? name(c) : name(c) && t(mail.likely, "Likely {name}", { name: name(c)! })) ?? accounts.find((g) => g.id === c.gmail_id)?.gmail;
   const waits = show === "needs_you" ? cases.map(stuckOf).filter((why) => why !== null) : [];
   const [why] = waits;
   return (
@@ -186,6 +187,11 @@ function List({ cases, read, all, show, opened, reload }: { cases: readonly Mail
                   }}
                   className="mb-2 ml-2.5 w-60 max-w-[calc(100%-1.25rem)]"
                 />
+              )}
+              {c.gmb_id !== null && !c.gmb_certain && !over(c) && (
+                <span className="mb-2 ml-2.5 flex max-w-[calc(100%-1.25rem)]">
+                  <Likely c={c} onChanged={reload} />
+                </span>
               )}
             </li>
           );

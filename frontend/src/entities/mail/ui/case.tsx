@@ -4,14 +4,15 @@ import { Badge, cn } from "@evinvest/uikit";
 import { ChevronRight } from "lucide-react";
 
 import { useNow } from "@/entities/alerts";
-import type { MailCase, MailLine, MailTopic } from "@/shared/api/schema";
+import type { MailAutos, MailCase, MailLine, MailTopic } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { type At, ViewLink } from "@/shared/lib/location";
 
+import { automation } from "../model/automation";
 import { over, standing, subjectOf, whyText } from "../model/cases";
 import { mail } from "../model/i18n";
-import { KIND_NAME, KIND_TONE, TOPIC_NAME, TOPIC_TONE, WHO_NAME } from "../model/names";
+import { KIND_NAME, KIND_TONE, TOPIC_NAME, TOPIC_TONE, WHO_NAME, sentBy } from "../model/names";
 
 export function TopicBadge({ topic }: { topic: MailTopic }) {
   const t = useT();
@@ -28,8 +29,15 @@ export function Standing({ c }: { c: MailCase }) {
   return <span className={cn("shrink-0 text-xs whitespace-nowrap tabular-nums", INK[tone], tone === "error" && "font-medium")}>{text}</span>;
 }
 
+/** How answering a case by itself stands. */
+export function Automation({ c, autos }: { c: MailCase; autos: MailAutos }) {
+  const t = useT();
+  const locale = useLocale();
+  return <span className="text-xs break-words text-ink-soft">{automation(c, autos, t, locale, useNow(30_000))}</span>;
+}
+
 /** Why a case is the operator's, else what Google last said in it, unless we wrote since. */
-function useGist(c: MailCase): string | null {
+export function useGist(c: MailCase): string | null {
   const t = useT();
   const locale = useLocale();
   const now = useNow(60_000);
@@ -68,60 +76,34 @@ export function CaseRow({ c, of, current, to }: { c: MailCase; of: string; curre
   );
 }
 
-/** Cases in a GBP's window: what was last said in each, how it stands, and a link to it. */
-export function CaseLinks({ cases }: { cases: readonly MailCase[] }) {
+/** Messages in a GBP's window, each with its kind, or who sent it, and a link to its case. */
+export function MailLines({ lines }: { lines: readonly MailLine[] }) {
   const t = useT();
+  const locale = useLocale();
   return (
-    <ul className="flex flex-col divide-y divide-border">
-      {cases.map((c) => (
-        <li key={c.id}>
-          <ViewLink to={{ view: "email", params: { case: c.id } }} className="flex min-w-0 items-center gap-2 rounded-md py-2 outline-none hover:bg-hover/40 focus-visible:ring-2 focus-visible:ring-ring">
+    <ol className="flex flex-col divide-y divide-border">
+      {lines.map((l) => (
+        <li key={l.id}>
+          <ViewLink to={{ view: "email", params: { case: l.case_id } }} className="flex min-w-0 items-center gap-2 rounded-md py-2 outline-none hover:bg-hover/40 focus-visible:ring-2 focus-visible:ring-ring">
             <span className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="flex min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1">
-                {c.said === null ? <TopicBadge topic={c.topic} /> : <Badge tone={KIND_TONE[c.said] ?? "neutral"}>{KIND_NAME[c.said](t)}</Badge>}
-                <Standing c={c} />
+              <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                {l.kind !== null ? <Badge tone={KIND_TONE[l.kind] ?? "neutral"}>{KIND_NAME[l.kind](t)}</Badge> : <Badge tone="neutral">{l.who === "us" ? WHO_NAME.us(t) : t(mail.message.unread, "Not read")}</Badge>}
+                <time dateTime={l.at} className="flex-1 font-mono text-xs whitespace-nowrap text-ink-soft tabular-nums">
+                  {formatDateTime(l.at, locale)}
+                </time>
+                {l.sent_by !== null && <span className="text-xs text-ink-soft">{sentBy(l.sent_by, t)}</span>}
               </span>
-              <span className="truncate text-sm text-ink">{c.last.summary ?? subjectOf(c, t)}</span>
+              <span className="truncate text-sm text-ink">{l.summary ?? l.subject ?? t(mail.noSubject, "(no subject)")}</span>
+              {l.reasons.map((r) => (
+                <span key={r} className="text-xs break-words text-accent-error">
+                  “{r}”
+                </span>
+              ))}
             </span>
             <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-soft" />
           </ViewLink>
         </li>
       ))}
-    </ul>
-  );
-}
-
-/** Messages in a GBP's window, each with its kind and a link to its case; the latest of one of `cases` with how it stands. */
-export function MailLines({ lines, cases }: { lines: readonly MailLine[]; cases: readonly MailCase[] }) {
-  const t = useT();
-  const locale = useLocale();
-  return (
-    <ol className="flex flex-col divide-y divide-border">
-      {lines.map((l) => {
-        const c = cases.find((x) => x.last.id === l.id);
-        return (
-          <li key={l.id}>
-            <ViewLink to={{ view: "email", params: { case: l.case_id } }} className="flex min-w-0 items-center gap-2 rounded-md py-2 outline-none hover:bg-hover/40 focus-visible:ring-2 focus-visible:ring-ring">
-              <span className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                  {l.kind !== null ? <Badge tone={KIND_TONE[l.kind] ?? "neutral"}>{KIND_NAME[l.kind](t)}</Badge> : <Badge tone="neutral">{l.who === "us" ? WHO_NAME.us(t) : t(mail.message.unread, "Not read")}</Badge>}
-                  <time dateTime={l.at} className="flex-1 font-mono text-xs whitespace-nowrap text-ink-soft tabular-nums">
-                    {formatDateTime(l.at, locale)}
-                  </time>
-                  {c !== undefined && !over(c) && <Standing c={c} />}
-                </span>
-                <span className="truncate text-sm text-ink">{l.summary ?? l.subject ?? t(mail.noSubject, "(no subject)")}</span>
-                {l.reasons.map((r) => (
-                  <span key={r} className="text-xs break-words text-accent-error">
-                    “{r}”
-                  </span>
-                ))}
-              </span>
-              <ChevronRight aria-hidden className="size-4 shrink-0 text-ink-soft" />
-            </ViewLink>
-          </li>
-        );
-      })}
     </ol>
   );
 }

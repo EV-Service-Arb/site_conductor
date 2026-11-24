@@ -5,6 +5,7 @@ import { mayOpen } from "@evinvest/views";
 
 import { PANEL } from "@config";
 
+import { openWindow, trash } from "@/entities/gmb";
 import { seesSites, useMe } from "@/entities/session";
 import { VIEWS } from "@/shared/api/views";
 import { type T, useT, admin, keys, nav, usage } from "@/shared/i18n";
@@ -28,11 +29,12 @@ const LABEL: Record<Keyed, (t: T) => string> = {
   kits: (t) => t(nav.kits, "Review kits"),
 };
 
-/** `leader g …`: every screen the caller may open, by its view's key. */
+/** `leader g …`: every screen the caller may open, by its view's key; `leader T`: the trash. The outline has it twice on a phone: a key of its own is bound here. */
 export function NavKeys() {
   const t = useT();
   const me = useMe();
   const opens = (view: Keyed) => (view === "sites" ? seesSites(me) : (view !== "wallet" || PANEL.walletPage) && mayOpen(VIEWS, view, me.permissions));
+  useBinding({ on: { key: "T" }, id: "trash", run: { label: t(trash.open, "Trash"), run: () => openWindow({ kind: "trash" }) } });
   useBinding({
     on: { key: "g" },
     label: t(keys.go, "Go to"),

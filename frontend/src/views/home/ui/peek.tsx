@@ -2,20 +2,25 @@
 
 import { CloseButton, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, buttonVariants, cn } from "@evinvest/uikit";
 
+import { useNow } from "@/entities/alerts";
 import { CategoryChip, GmbNote, type Listed, gmbPhotoSrc, issueOf, issueText, openWindow, useGmbTags, gmbs } from "@/entities/gmb";
 import { ViewLink } from "@/shared/lib/location";
-import { useT, home } from "@/shared/i18n";
+import { useLocale, useT, home } from "@/shared/i18n";
+import { when } from "@/shared/lib/time";
 import { useButtonSize } from "@/shared/ui/touch";
 
 /** A GMB's card over the map: its numbers, what needs the operator, and where its services show it. */
 export function Peek({ listed, onClose, className }: { listed: Listed; onClose: () => void; className?: string }) {
   const t = useT();
   const button = useButtonSize();
+  const locale = useLocale();
+  const now = useNow(30_000);
   const { tags } = useGmbTags();
   const { gmb, gmail } = listed;
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
   const issue = issueOf(gmb, tags);
+  const held = tags.mail?.get(gmb.id)?.held;
   const name = gmb.name;
   const reviewsNote = archive && (archive.suspended > 0 ? t(gmbs.tag.suspended, "{n} reviews suspended", { n: archive.suspended }) : archive.failing ? t(gmbs.issue.failing, "Failing") : null);
   const numbers = [
@@ -73,6 +78,7 @@ export function Peek({ listed, onClose, className }: { listed: Listed; onClose: 
           <p className={cn(issue === null || issue === "off" || issue === "draft" || issue === "no_category" ? "text-ink-soft" : "font-medium text-accent-error")}>
             {issue === null ? t(home.peek.fine, "Nothing needs you") : issue === "off" ? t(home.peek.off, "Switched off: the services do no work on it.") : issueText(issue, listed, tags, t)}
           </p>
+          {held != null && <p className="text-accent-info">{t(home.peek.held, "Replies to Google at {at}, by itself", { at: when(held, locale, now) })}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size={button("sm")} onClick={() => openWindow({ kind: "gbp", gmb: gmb.id, tab: gmb.tabs[0]!.tab })}>

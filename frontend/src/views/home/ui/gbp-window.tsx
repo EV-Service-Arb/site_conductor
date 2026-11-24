@@ -6,7 +6,7 @@ import { CalendarClock, ChevronLeft, ChevronRight, Copy, ExternalLink, Globe, Ha
 import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 
 import { CategoryChip, GmbNote, NewBrand, type KeyOf, type Listed, LiveReviews, ROLE_NAME, STATE_NAME, STATE_TONE, closeWindow, gmbPhotoSrc, googleName, TradeName, useGoogleList, narrowed, openWindow, readyCount, under, syncGmb, useBrands, useGmails, useGmbTags, useOnMap, gmbs as gmbsKeys, windowKeys } from "@/entities/gmb";
-import { useOpenThread } from "@/entities/mail";
+import { sentBy, useOpenThread } from "@/entities/mail";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { api, ok, reviewArchive } from "@/shared/api";
 import { type Changed, type Closed, type Country, type GbpRole, type Gmail, type Gmb, type GmbEdit, type LogDto, type LoggedDto, type Tab, gbpRoleValues, mustHaveValues } from "@/shared/api/schema";
@@ -23,6 +23,7 @@ import { useLastWord } from "../model/last-word";
 import { AppealTab } from "./appeal-tab";
 import { BrowserTab } from "./browser-tab";
 import { ConnectionsTab } from "./connections-tab";
+import { GoogleMail } from "./google-mail";
 import { Launch, TextEditor } from "./launch";
 import { RankingTab } from "./ranking-tab";
 import { ReviewsTab } from "./reviews-tab";
@@ -126,6 +127,9 @@ export function GbpBody({ k, page }: { k: Key; page: boolean }) {
   );
 }
 
+/** The tab its window opens on, or its profile. */
+const leads = (tab: Tab, { gmb }: Listed) => tab === "profile" || tab === gmb.tabs[0]?.tab;
+
 function Split({ k, listed, page }: { k: Key; listed: Listed; page: boolean }) {
   const other = k.tab === "profile" ? "log" : k.tab;
   return (
@@ -141,7 +145,7 @@ function Split({ k, listed, page }: { k: Key; listed: Listed; page: boolean }) {
         <div className="flex h-10 border-b border-border">
           <GbpTabs k={{ ...k, tab: other }} gmb={listed.gmb} except="profile" />
         </div>
-        <TabBody tab={other} listed={listed} page={page} />
+        <TabBody tab={other} first={leads(k.tab, listed)} listed={listed} page={page} />
       </section>
     </div>
   );
@@ -155,7 +159,7 @@ function Tabbed({ k, listed, page }: { k: Key; listed: Listed; page: boolean }) 
           <GbpTabs k={k} gmb={listed.gmb} />
         </div>
       )}
-      <TabBody tab={k.tab} listed={listed} page={page} />
+      <TabBody tab={k.tab} first={leads(k.tab, listed)} listed={listed} page={page} />
     </div>
   );
 }
@@ -165,7 +169,16 @@ function TabLabel({ tab }: { tab: Tab }) {
   return <>{TAB_NAME[tab](t)}</>;
 }
 
-function TabBody({ tab, listed, page }: { tab: Tab; listed: Listed; page: boolean }) {
+function TabBody({ first, ...props }: { tab: Tab; first: boolean; listed: Listed; page: boolean }) {
+  return (
+    <>
+      <GoogleMail listed={props.listed} unfolded={first} />
+      <Opened {...props} />
+    </>
+  );
+}
+
+function Opened({ tab, listed, page }: { tab: Tab; listed: Listed; page: boolean }) {
   switch (tab) {
     case "profile":
       return <Profile listed={listed} />;
@@ -892,7 +905,7 @@ function Email({ e, gmail }: { e: Extract<LoggedDto, { kind: "email" }>; gmail: 
     <Row
       mark={<Mark tone="info" icon={<Mail />} />}
       title={e.subject ?? t(windowKeys.log.noSubject, "(no subject)")}
-      detail={[e.sent ? t(windowKeys.log.emailTo, "to {who}", { who }) : t(windowKeys.log.emailFrom, "from {who}", { who }), formatDateTime(e.date, locale), e.of_gmail ? t(windowKeys.log.ofGmail, "the gmail's, {gmail}", { gmail: gmail ?? "" }) : null].filter(Boolean).join(" · ")}
+      detail={[e.sent ? t(windowKeys.log.emailTo, "to {who}", { who }) : t(windowKeys.log.emailFrom, "from {who}", { who }), e.sent_by !== null && sentBy(e.sent_by, t), formatDateTime(e.date, locale), e.of_gmail ? t(windowKeys.log.ofGmail, "the gmail's, {gmail}", { gmail: gmail ?? "" }) : null].filter(Boolean).join(" · ")}
     >
       {e.snippet && <p className="line-clamp-2 text-xs text-ink-soft">{e.snippet}</p>}
       <button type="button" disabled={thread.opening !== null} onClick={open} className="flex items-center gap-1 self-start text-xs text-ink-soft hover:text-ink disabled:opacity-50">

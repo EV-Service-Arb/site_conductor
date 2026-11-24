@@ -3,9 +3,9 @@
 import type { Tone } from "@evinvest/uikit";
 import { useResource } from "@evinvest/api/react";
 
-import { useScope, useSelection } from "@/entities/gmb";
+import { deadlineOf, goes, gmbsOf, needsOf, useMailCases, useScope, useSelection } from "@/entities/gmb";
 import { api } from "@/shared/api";
-import type { MailCase, MailSettled, MailStanding, MailWhy } from "@/shared/api/schema";
+import type { MailCase, MailSettled, MailWhy } from "@/shared/api/schema";
 import type { Locale, T } from "@/shared/i18n";
 import { age, when } from "@/shared/lib/time";
 
@@ -14,12 +14,6 @@ import { KIND_ASKS, KIND_NAME, KIND_TONE } from "./names";
 
 export type Show = "needs_you" | "waiting" | "all";
 
-/** Whom a case waits on: the operator, or Google or the panel; neither, it is in All alone. */
-const STANDS: Record<MailStanding, Exclude<Show, "all"> | null> = { needs_you: "needs_you", reply_ready: "needs_you", sending: "waiting", reply_due: "waiting", waiting: "waiting", done: null, quiet: null };
-
-/** Whether a reply goes by itself unless stopped. */
-export const goes = (c: MailCase) => c.state.is === "sending" && c.draft?.state === "held";
-
 /** Neither read nor answered until the model is back: one cause of them all. */
 export const stuckOf = (c: MailCase): string | null => (c.state.is === "needs_you" && c.state.why.code === "stuck" ? c.state.why.error : null);
 
@@ -27,7 +21,8 @@ export const stuckOf = (c: MailCase): string | null => (c.state.is === "needs_yo
 function rank(c: MailCase): number {
   if (goes(c)) return 0;
   if (deadlineOf(c) !== null) return 1;
-  if (c.state.is !== "needs_you") return 4;
+  if (c.state.is === "reply_ready") return 4;
+  if (c.state.is !== "needs_you") return 6;
   const { why } = c.state;
   if (why.code === "stuck") return 5;
   if (why.code === "failed" || why.code === "may_have_gone_out") return 2;
@@ -37,24 +32,28 @@ function rank(c: MailCase): number {
 
 export function shownIn(cases: readonly MailCase[], show: Show): MailCase[] {
   if (show === "all") return [...cases];
-  const of = cases.filter((c) => (goes(c) ? "needs_you" : STANDS[c.state.is]) === show);
-  const until = (c: MailCase) => Date.parse(deadlineOf(c) ?? (c.state.is === "waiting" ? c.state.until : c.last.at));
-  return of.sort((a, b) => (show === "needs_you" ? rank(a) - rank(b) : 0) || until(a) - until(b));
+  return pressing(cases.filter((c) => !over(c) && (needsOf(c) !== null) === (show === "needs_you")));
 }
 
-export function deadlineOf(c: MailCase): string | null {
-  if (c.state.is === "needs_you" && c.state.why.code === "deadline") return c.state.why.at;
-  return c.state.is === "done" ? null : c.deadline;
+/** What presses most first. */
+export function pressing(cases: readonly MailCase[]): MailCase[] {
+  const until = (c: MailCase) => Date.parse(deadlineOf(c) ?? (c.state.is === "waiting" ? c.state.until : c.last.at));
+  return [...cases].sort((a, b) => rank(a) - rank(b) || until(a) - until(b));
 }
 
 /** The caller's cases, and those of the outline's scope: of a selected GBP, or of none and a gmail in scope. */
 export function useCases() {
-  const read = useResource(api, "/mail/cases");
+  const read = useMailCases();
   const selection = useSelection();
   const { gmails } = useScope();
   if (read.status !== "ok" || selection === null) return { ...read, shown: null };
-  const shown = read.data.cases.filter((c) => (c.gmb_id === null ? gmails === null || gmails.has(c.gmail_id) : selection.isSelected(c.gmb_id)));
+  const shown = read.data.cases.filter((c) => (gmbsOf(c).length === 0 ? gmails === null || gmails.has(c.gmail_id) : gmbsOf(c).some(selection.isSelected)));
   return { ...read, shown };
+}
+
+/** Which topics of which GBPs are answered by themselves. */
+export function useAutos() {
+  return useResource(api, "/mail/auto");
 }
 
 /** Google's mail about a GBP. */

@@ -5,11 +5,12 @@ import { type UndoEntry, useUndo } from "@evinvest/uikit";
 import { type ReactNode, createContext, useContext, useMemo } from "react";
 
 import { type Failure, api, reviewArchive, sites as sitesApi } from "@/shared/api";
-import type { Brand, Category, Gmails, Trash } from "@/shared/api/schema";
+import type { Brand, Category, Gmails, MailCases, Trash } from "@/shared/api/schema";
 import type { MyGmbs } from "@/shared/api/services/review_archive";
 import type { GmbPlace } from "@/shared/api/services/sites";
 
 import type { Tags } from "./issues";
+import { mailTags } from "./mail";
 
 type Read<T> = Resource<T, Failure> & { reload: () => void; fresh: boolean };
 
@@ -20,11 +21,12 @@ interface Gmbs {
   archive: Read<MyGmbs>;
   sites: Read<{ [gmb: string]: GmbPlace }>;
   trash: Read<Trash>;
+  mail: Read<MailCases>;
 }
 
 const GmbsContext = createContext<Gmbs | null>(null);
 
-/** One read each of the caller's gmails, their categories and the services' tags on their GMBs, for the outline and the page beside it: a change made in one is seen by the other. */
+/** One read each of the caller's gmails, their categories, their mail with Google and the services' tags on their GMBs, for the outline and the page beside it: a change made in one is seen by the other. */
 export function GmailsProvider({ children }: { children: ReactNode }) {
   const gmails = useResource(api, "/gmails");
   const categories = useResource(api, "/categories");
@@ -33,7 +35,8 @@ export function GmailsProvider({ children }: { children: ReactNode }) {
   // refused to whoever sees no sites: their GMBs have no sites tags
   const sites = useResource(sitesApi, "/gmbs");
   const trash = useResource(api, "/trash");
-  return <GmbsContext value={{ gmails, categories, brands, archive, sites, trash }}>{children}</GmbsContext>;
+  const mail = useResource(api, "/mail/cases");
+  return <GmbsContext value={{ gmails, categories, brands, archive, sites, trash, mail }}>{children}</GmbsContext>;
 }
 
 function useGmbs(): Gmbs {
@@ -57,6 +60,11 @@ export function useTrash(): Read<Trash> {
   return useGmbs().trash;
 }
 
+/** The caller's cases of Google's mail. */
+export function useMailCases(): Read<MailCases> {
+  return useGmbs().mail;
+}
+
 export function useCategories(): Read<Category[]> {
   const categories = useGmbs().categories;
   return categories.status === "ok" ? { ...categories, data: categories.data.categories } : categories;
@@ -69,13 +77,15 @@ export function useBrands(): Read<Brand[]> {
 
 /** The services' reads, and their tags and the categories as an issue is judged by: one not answered yet has none. */
 export function useGmbTags(): { archive: Gmbs["archive"]; sites: Gmbs["sites"]; tags: Tags } {
-  const { archive, sites } = useGmbs();
+  const { archive, sites, mail } = useGmbs();
   const categories = useCategories();
   const gmbs = archive.status === "ok" ? archive.data.gmbs : null;
   const places = sites.status === "ok" ? sites.data : null;
+  const cases = mail.status === "ok" ? mail.data.cases : null;
   // the keys are GMB ids, as the schemas' patterns have them
   const byGmb = useMemo(() => (gmbs === null ? null : new Map(Object.entries(gmbs).map(([id, tag]) => [Number(id), tag]))), [gmbs]);
   const placed = useMemo(() => (places === null ? null : new Map(Object.entries(places).map(([id, tag]) => [Number(id), tag]))), [places]);
+  const mailed = useMemo(() => (cases === null ? null : mailTags(cases)), [cases]);
   return {
     archive,
     sites,
@@ -83,6 +93,7 @@ export function useGmbTags(): { archive: Gmbs["archive"]; sites: Gmbs["sites"]; 
       archive: byGmb,
       sites: placed,
       categories: categories.status === "ok" ? categories.data : null,
+      mail: mailed,
     },
   };
 }

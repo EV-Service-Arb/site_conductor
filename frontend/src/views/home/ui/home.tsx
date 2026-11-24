@@ -359,18 +359,19 @@ function styleDots(
   for (const [id, { dot, listed }] of made) {
     const lit = id === hovered || id === peeked;
     const issue = issueOf(listed.gmb, tags);
-    const tone = issue === "off" ? "ink-soft" : issue !== null && issue !== "draft" ? "negative" : "positive";
+    const off = !listed.gmb.enabled;
+    const needs = issue !== null && issue !== "off" && issue !== "draft";
     const hollow = listed.gmb.location?.placed === true;
     const state = listed.gmb.state;
     dot.className = cn(
       "block origin-bottom cursor-pointer transition-transform [&_path]:stroke-background",
-      issue === "off" ? "[&_path]:fill-ink-soft [&_[data-core]]:fill-background" : [state === "suspended" ? "[&_path]:fill-accent-error" : "[&_path]:fill-white", CORE[state]],
+      off ? "[&_path]:fill-ink-soft [&_[data-core]]:fill-background" : [state === "suspended" ? "[&_path]:fill-accent-error" : "[&_path]:fill-white", CORE[state]],
       hollow && "[&_path]:[stroke-dasharray:3_2] [&_path]:stroke-ink",
-      tone === "negative" ? "[&_[data-badge]]:fill-accent-error [&_[data-badge]]:stroke-background" : "[&_[data-badge]]:hidden",
-      issue === "off" && !lit && "opacity-60",
+      needs ? "[&_[data-badge]]:fill-accent-error [&_[data-badge]]:stroke-background" : "[&_[data-badge]]:hidden",
+      off && !lit && "opacity-60",
       lit && "scale-125",
       id === peeked && "[&_path]:stroke-ink [&_path]:[stroke-width:2.5]",
     );
-    dot.style.zIndex = lit ? "2" : issue === "off" ? "0" : "1";
+    dot.style.zIndex = lit ? "2" : off ? "0" : "1";
   }
 }

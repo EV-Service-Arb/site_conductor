@@ -134,7 +134,7 @@ export function PanelTopBar() {
 function AppItem({ app, menu }: { app: App; menu: boolean }) {
   const pathname = usePath();
   return (
-    <NavMenu label={app.label} href={app.href} current={app.here} linkComponent={ViewLink}>
+    <NavMenu label={app.badge === undefined ? app.label : <span className="flex items-center gap-1.5">{app.label}{app.badge}</span>} href={app.href} current={app.here} linkComponent={ViewLink}>
       {menu ? "content" in app.section ? app.section.content : <NavMenuList groups={[app.section]} pathname={pathname} linkComponent={ViewLink} /> : undefined}
     </NavMenu>
   );
@@ -182,7 +182,7 @@ function useSwitcherGroups(): NavGroup[] {
       label: t(appKeys.name, "Service-Arb"),
       items: [
         { id: "home", href: linkTo({ view: "home", params: {} }), label: t(nav.home, "Home"), icon: MapPin, description: t(nav.home.description, "Every GBP on one map"), match: "exact" },
-        ...apps.map((a) => ({ id: a.href, href: a.href, label: a.label, icon: a.icon, description: a.description })),
+        ...apps.map((a) => ({ id: a.href, href: a.href, label: a.label, icon: a.icon, description: a.description, badge: a.badge })),
       ],
     },
     {

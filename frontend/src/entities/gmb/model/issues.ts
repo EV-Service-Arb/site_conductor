@@ -4,6 +4,7 @@ import type { T } from "@/shared/i18n";
 
 import { categoryOf } from "./category";
 import type { ArchiveTag, SiteTag } from "./gmb";
+import type { MailIssue, MailTag } from "./mail";
 import type { Listed } from "./narrow";
 import { readyCount } from "./readiness";
 import { gmbs as gmbsKeys } from "./i18n";
@@ -15,8 +16,13 @@ export type Issue = Exclude<(typeof VIEWS.carried.properties.issue.enum)[number]
 /** What needs the operator on a GMB, most pressing first: `?issue`'s words, in `Issue`'s order (view.rs). */
 export const ISSUES = VIEWS.carried.properties.issue.enum.filter((w): w is Issue => w !== null);
 
+const MAIL: ReadonlySet<Issue> = new Set<MailIssue>(["mail_deadline", "mail_asks", "mail_reply"]);
+
 export const ISSUE_NAME = {
+  mail_deadline: (t) => t(issueKeys.mail_deadline, "Google's deadline"),
   overdue: (t) => t(issueKeys.overdue, "Overdue"),
+  mail_asks: (t) => t(issueKeys.mail_asks, "Google's mail"),
+  mail_reply: (t) => t(issueKeys.mail_reply, "Reply to confirm"),
   suspended: (t) => t(issueKeys.suspended, "Reviews suspended"),
   failing: (t) => t(issueKeys.failing, "Failing"),
   draft: (t) => t(issueKeys.draft, "Drafts"),
@@ -27,21 +33,25 @@ export const ISSUE_NAME = {
   off: (t) => t(issueKeys.off, "Off"),
 } satisfies Record<Issue, (t: T) => string>;
 
-/** The services' tags by GMB id, and the caller's categories; `null`: not read, the service did not answer, or the caller does not see it. */
+/** The services' and the mail's tags by GMB id, and the caller's categories; `null`: not read, the service did not answer, or the caller does not see it. */
 export interface Tags {
   archive: ReadonlyMap<number, ArchiveTag> | null;
   sites: ReadonlyMap<number, SiteTag> | null;
   categories: readonly Category[] | null;
+  mail: ReadonlyMap<number, MailTag> | null;
 }
 
-/** Every issue of the GMB, most pressing first. An off GMB is out of every service, so being off is all it has; a draft has no location or site yet by being one. */
+/** Every issue of the GMB, most pressing first. An off GMB is out of every service, and Google writes of it all the same; a draft has no location or site yet by being one. */
 export function issuesOf(gmb: Gmb, tags: Tags): Issue[] {
-  if (!gmb.enabled) return ["off"];
   const archive = tags.archive?.get(gmb.id);
   const site = tags.sites?.get(gmb.id);
   const draft = gmb.state === "draft";
-  const has: Record<Exclude<Issue, "off">, boolean> = {
+  const mail = tags.mail?.get(gmb.id)?.issues;
+  const has: Record<Issue, boolean> = {
+    mail_deadline: mail?.has("mail_deadline") === true,
     overdue: site !== undefined && site.overdue > 0,
+    mail_asks: mail?.has("mail_asks") === true,
+    mail_reply: mail?.has("mail_reply") === true,
     suspended: archive !== undefined && archive.suspended > 0,
     failing: archive?.failing === true,
     draft,
@@ -49,8 +59,9 @@ export function issuesOf(gmb: Gmb, tags: Tags): Issue[] {
     no_site: !draft && tags.sites !== null && site === undefined,
     no_category: tags.categories !== null && categoryOf(gmb, tags.categories).status !== "set_up",
     not_googles_primary: gmb.trade !== null && gmb.google_primary !== null && gmb.trade !== gmb.google_primary,
+    off: !gmb.enabled,
   };
-  return ISSUES.filter((i) => i !== "off" && has[i]);
+  return ISSUES.filter((i) => has[i] && (gmb.enabled || i === "off" || MAIL.has(i)));
 }
 
 /** The GMB's most pressing issue; `null` when nothing needs the operator. */

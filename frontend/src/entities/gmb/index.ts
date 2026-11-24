@@ -1,10 +1,13 @@
 export { gmbPhotoSrc, placeGmb, setTrades, switchGmbs, syncGmb } from "./api/gmbs";
 export { linkPlace } from "./api/sites";
+export { encoded, keepDocument, removeDocument, saveDocument } from "./api/documents";
+export { AttachFiles, fileSize, useDocuments } from "./ui/documents";
+export { deadlineOf, gmbsOf, goes, needsOf } from "./model/mail";
 export { browsersUnconnected, uploadFilm } from "./api/connections";
 export { type Placed, LANG, categoryName, categoryOf, normalized } from "./model/category";
 export { adoptRelease, revertCategory, setUpCategory } from "./api/categories";
 export { type Traded, rankGoogle, useGoogleList, useTrade, useTrades } from "./model/google";
-export { GmailsProvider, useBrands, useGmails, useCategories, useGmbTags, useTrash, useUndoable } from "./model/gmails-context";
+export { GmailsProvider, useBrands, useGmails, useCategories, useGmbTags, useMailCases, useTrash, useUndoable } from "./model/gmails-context";
 export { ROLE_NAME, STATE_NAME, STATE_TONE, googleName } from "./model/gmb";
 export type { ArchiveTag, SiteTag } from "./model/gmb";
 export { ISSUES, ISSUE_NAME, type Issue, type Tags, issueCounts, issueOf, issueText } from "./model/issues";

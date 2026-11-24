@@ -5,10 +5,11 @@ import { Badge, Button, Card, CardContent, Planned, Skeleton, cn } from "@evinve
 import { Check, ExternalLink, Fingerprint, ImageIcon, Mail, ShieldCheck, Sparkles, X } from "lucide-react";
 
 import { type Listed, browser as browserKeys, openWindow, photoSrc, useBrands, useGmbTags, windowKeys } from "@/entities/gmb";
+import { useAutos } from "@/entities/mail";
 import { startWith } from "@/features/assistant";
 import { AutoOf } from "@/features/auto-mail";
 import { api } from "@/shared/api";
-import { type Gmail, mustHaveValues } from "@/shared/api/schema";
+import { type Gmail, type Gmb, mustHaveValues } from "@/shared/api/schema";
 import { type T, useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { failureText } from "@/shared/ui/failure-text";
@@ -100,7 +101,7 @@ export function ConnectionsTab({ listed: { gmb, gmail } }: { listed: Listed }) {
             </CardContent>
           </Card>
         ) : (
-          <Inbox gmail={gmail} />
+          <Inbox gmb={gmb} gmail={gmail} />
         )}
 
         {gmail !== null && <Browser gmail={gmail.id} address={gmail.gmail} />}
@@ -151,11 +152,12 @@ export function ConnectionsTab({ listed: { gmb, gmail } }: { listed: Listed }) {
   );
 }
 
-function Inbox({ gmail }: { gmail: Gmail }) {
+function Inbox({ gmb, gmail }: { gmb: Gmb; gmail: Gmail }) {
   const t = useT();
   const locale = useLocale();
   const connections = useResource(api, "/gmails/{id}/connections", { params: { path: { id: gmail.id } } });
   const imap = connections.status === "ok" ? connections.data.imap : null;
+  const auto = useAutos();
   return (
     <Card className="gap-3 py-4">
       <CardContent className="flex flex-col gap-3 px-4">
@@ -180,7 +182,7 @@ function Inbox({ gmail }: { gmail: Gmail }) {
               {imap.checked.error !== null && <dd className="col-span-2 text-xs text-accent-error">{imap.checked.error}</dd>}
             </dl>
           ))}
-        <AutoOf g={gmail} />
+        {gmb.state !== "draft" && <AutoOf gmb={gmb} gmail={gmail} auto={auto} />}
       </CardContent>
     </Card>
   );
