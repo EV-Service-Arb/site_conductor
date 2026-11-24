@@ -3162,6 +3162,99 @@ export interface components {
             running: components["schemas"]["Running"] | null;
             set_at: string;
         };
+        /**
+         * @description Why the conductor closed the socket: its close frame's code.
+         * @enum {integer}
+         */
+        BrowserClose: 4401 | 4404 | 4409 | 4410 | 1000 | 1001 | 1003 | 1007;
+        /** @description A frame from the viewer; at most [`FRAME_MAX`] bytes. Points are in the last frame's space. */
+        BrowserIn: {
+            phase: components["schemas"]["TouchPhase"];
+            /** @constant */
+            type: "touch";
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+        } | {
+            /** Format: double */
+            dx: number;
+            /** Format: double */
+            dy: number;
+            /** @constant */
+            type: "wheel";
+            /** Format: double */
+            x: number;
+            /** Format: double */
+            y: number;
+        } | {
+            ctrl: boolean;
+            key: string;
+            /** @constant */
+            type: "key";
+        } | {
+            text: string;
+            /** @constant */
+            type: "text";
+        } | {
+            /** @constant */
+            type: "navigate";
+            url: string;
+        } | {
+            /** Format: int32 */
+            delta: number;
+            /** @constant */
+            type: "history";
+        } | {
+            id: string;
+            /** @constant */
+            type: "activate";
+        } | {
+            /** @constant */
+            type: "new_tab";
+        } | {
+            id: string;
+            /** @constant */
+            type: "close_tab";
+        } | {
+            accept: boolean;
+            text?: string | null;
+            /** @constant */
+            type: "dialog";
+        };
+        /** @description A frame to the viewer. */
+        BrowserOut: {
+            data: string;
+            /** Format: double */
+            height: number;
+            /** @constant */
+            type: "frame";
+            /** Format: double */
+            width: number;
+        } | {
+            active?: string | null;
+            tabs: components["schemas"]["BrowserTab"][];
+            /** @constant */
+            type: "tabs";
+        } | {
+            default?: string | null;
+            kind: string;
+            message: string;
+            /** @constant */
+            type: "dialog";
+        } | {
+            /** @constant */
+            type: "dialog_closed";
+        } | {
+            message: string;
+            /** @constant */
+            type: "error";
+        };
+        BrowserTab: {
+            id: string;
+            title: string;
+            url: string;
+        };
         Business: {
             /** @description `null`: Google not asked since the client was set. */
             checked: components["schemas"]["Checked"] | null;
@@ -5947,6 +6040,8 @@ export interface components {
          * @enum {string}
          */
         ToldState: "pending" | "sent" | "dead" | "dropped";
+        /** @enum {string} */
+        TouchPhase: "start" | "move" | "end";
         /** @description A trade as its log names it. */
         Traded: string | number;
         /** @description `GET /trash`. */
@@ -6156,101 +6251,6 @@ export interface components {
          * @enum {string}
          */
         Why: "edit" | "adopt" | "update" | "revert";
-        /**
-         * @description Why the conductor closed the socket: its close frame's code.
-         * @enum {integer}
-         */
-        BrowserClose: 4401 | 4404 | 4409 | 4410 | 1000 | 1001 | 1003 | 1007;
-        /** @description A frame from the viewer; at most [`FRAME_MAX`] bytes. Points are in the last frame's space. */
-        BrowserIn: {
-            phase: components["schemas"]["TouchPhase"];
-            /** @constant */
-            type: "touch";
-            /** Format: double */
-            x: number;
-            /** Format: double */
-            y: number;
-        } | {
-            /** Format: double */
-            dx: number;
-            /** Format: double */
-            dy: number;
-            /** @constant */
-            type: "wheel";
-            /** Format: double */
-            x: number;
-            /** Format: double */
-            y: number;
-        } | {
-            ctrl: boolean;
-            key: string;
-            /** @constant */
-            type: "key";
-        } | {
-            text: string;
-            /** @constant */
-            type: "text";
-        } | {
-            /** @constant */
-            type: "navigate";
-            url: string;
-        } | {
-            /** Format: int32 */
-            delta: number;
-            /** @constant */
-            type: "history";
-        } | {
-            id: string;
-            /** @constant */
-            type: "activate";
-        } | {
-            /** @constant */
-            type: "new_tab";
-        } | {
-            id: string;
-            /** @constant */
-            type: "close_tab";
-        } | {
-            accept: boolean;
-            text?: string | null;
-            /** @constant */
-            type: "dialog";
-        };
-        /** @description A frame to the viewer. */
-        BrowserOut: {
-            data: string;
-            /** Format: double */
-            height: number;
-            /** @constant */
-            type: "frame";
-            /** Format: double */
-            width: number;
-        } | {
-            active?: string | null;
-            tabs: components["schemas"]["BrowserTab"][];
-            /** @constant */
-            type: "tabs";
-        } | {
-            default?: string | null;
-            kind: string;
-            message: string;
-            /** @constant */
-            type: "dialog";
-        } | {
-            /** @constant */
-            type: "dialog_closed";
-        } | {
-            message: string;
-            /** @constant */
-            type: "error";
-        };
-        BrowserTab: {
-            id: string;
-            title: string;
-            url: string;
-        };
-        /** @enum {string} */
-        TouchPhase: "start" | "move" | "end";
     };
     responses: never;
     parameters: never;
@@ -6312,6 +6312,10 @@ export type BrandPhotos = components['schemas']['BrandPhotos'];
 export type BrandReads = components['schemas']['BrandReads'];
 export type Brands = components['schemas']['Brands'];
 export type Browser = components['schemas']['Browser'];
+export type BrowserClose = components['schemas']['BrowserClose'];
+export type BrowserIn = components['schemas']['BrowserIn'];
+export type BrowserOut = components['schemas']['BrowserOut'];
+export type BrowserTab = components['schemas']['BrowserTab'];
 export type Business = components['schemas']['Business'];
 export type Cadence = components['schemas']['Cadence'];
 export type Cadences = components['schemas']['Cadences'];
@@ -6560,6 +6564,7 @@ export type TokenHolders = components['schemas']['TokenHolders'];
 export type Tokens = components['schemas']['Tokens'];
 export type Told = components['schemas']['Told'];
 export type ToldState = components['schemas']['ToldState'];
+export type TouchPhase = components['schemas']['TouchPhase'];
 export type Traded = components['schemas']['Traded'];
 export type Trash = components['schemas']['Trash'];
 export type TrashSettings = components['schemas']['TrashSettings'];
@@ -6578,11 +6583,6 @@ export type VerificationMethod = components['schemas']['VerificationMethod'];
 export type VerificationOutcome = components['schemas']['VerificationOutcome'];
 export type Viewport = components['schemas']['Viewport'];
 export type Why = components['schemas']['Why'];
-export type BrowserClose = components['schemas']['BrowserClose'];
-export type BrowserIn = components['schemas']['BrowserIn'];
-export type BrowserOut = components['schemas']['BrowserOut'];
-export type BrowserTab = components['schemas']['BrowserTab'];
-export type TouchPhase = components['schemas']['TouchPhase'];
 export type $defs = Record<string, never>;
 export interface operations {
     request_access: {
@@ -30066,6 +30066,7 @@ export const answerStateValues: ReadonlyArray<FlattenedDeepRequired<components>[
 export const approvalValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Approval"]> = ["ask", "spend", "act"];
 export const baseCountryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BaseCountry"]> = ["FR"];
 export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Bill"]> = ["ours", "theirs"];
+export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];
 export const cadenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Cadence"]> = ["now", "off", "unread", "hourly", "daily"];
 export const closedValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Closed"]> = ["until_verified", "frozen_while_verifying", "off_maps"];
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
@@ -30109,9 +30110,8 @@ export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schema
 export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["profile", "log", "launch", "browser", "connections", "stats", "ranking", "reviews", "verification", "appeal"];
 export const tierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tier"]> = ["info", "important", "urgent"];
 export const toldStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ToldState"]> = ["pending", "sent", "dead", "dropped"];
+export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
 export const verificationMethodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationMethod"]> = ["video", "call", "unknown"];
 export const verificationOutcomeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["VerificationOutcome"]> = ["in_review", "rejected", "offered", "failed", "verified"];
 export const whyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Why"]> = ["edit", "adopt", "update", "revert"];
-export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];
-export const touchPhaseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["TouchPhase"]> = ["start", "move", "end"];

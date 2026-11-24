@@ -89,13 +89,13 @@ export const VIEWS = {
   },
   "views": {
     "access": {
-      "path": "/access",
       "description": "Asking for a permission the caller lacks, then on to where they were going.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/access",
       "query": {
         "properties": {
           "continue": {
@@ -114,13 +114,14 @@ export const VIEWS = {
       }
     },
     "account": {
-      "path": "/user/account",
       "description": "The caller's account: their sign-in, their Claude, what they spend.",
+      "key": "y",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/user/account",
       "query": {
         "properties": {
           "section": {
@@ -133,17 +134,16 @@ export const VIEWS = {
         },
         "required": [],
         "type": "object"
-      },
-      "key": "y"
+      }
     },
     "adding": {
-      "path": "/gbps/add",
       "description": "The Add a GBP panel as a page, with what it starts from: a gmail (`account`), a trade.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/gbps/add",
       "query": {
         "properties": {
           "account": {
@@ -165,29 +165,29 @@ export const VIEWS = {
       }
     },
     "admin_tokens": {
-      "path": "/admin/tokens",
       "description": "Everyone's tokens, prices and flows.",
+      "key": "a",
+      "needs": "sa:admin:tokens:grant",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/admin/tokens",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:admin:tokens:grant",
-      "key": "a"
+      }
     },
     "alert_settings": {
-      "path": "/user/alerts/settings",
       "description": "Where the caller's alerts go, when, and which count as what.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/user/alerts/settings",
       "query": {
         "properties": {
           "confirm": {
@@ -203,13 +203,14 @@ export const VIEWS = {
       }
     },
     "alerts": {
-      "path": "/user/alerts",
       "description": "The caller's alerts, newest first.",
+      "key": "e",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/user/alerts",
       "query": {
         "properties": {
           "family": {
@@ -256,17 +257,16 @@ export const VIEWS = {
         },
         "required": [],
         "type": "object"
-      },
-      "key": "e"
+      }
     },
     "assistant": {
-      "path": "/assistant",
       "description": "The assistant, full screen.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/assistant",
       "query": {
         "properties": {
           "chat": {
@@ -282,7 +282,6 @@ export const VIEWS = {
       }
     },
     "brand": {
-      "path": "/brand/{brand}",
       "description": "A brand's window as its own page.",
       "params": {
         "properties": {
@@ -296,6 +295,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/brand/{brand}",
       "query": {
         "properties": {},
         "required": [],
@@ -303,13 +303,13 @@ export const VIEWS = {
       }
     },
     "categories": {
-      "path": "/gbps/categories",
       "description": "Every category of the caller's, as a page.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/gbps/categories",
       "query": {
         "properties": {},
         "required": [],
@@ -317,7 +317,6 @@ export const VIEWS = {
       }
     },
     "category": {
-      "path": "/gbps/categories/{trade}",
       "description": "A category's window as its own page: a gcid, on `country`'s tab.",
       "params": {
         "properties": {
@@ -330,6 +329,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/gbps/categories/{trade}",
       "query": {
         "properties": {
           "country": {
@@ -352,13 +352,14 @@ export const VIEWS = {
       }
     },
     "email": {
-      "path": "/email",
       "description": "Google's mail about the caller's GBPs, as cases.",
+      "key": "i",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/email",
       "query": {
         "properties": {
           "case": {
@@ -386,11 +387,9 @@ export const VIEWS = {
         },
         "required": [],
         "type": "object"
-      },
-      "key": "i"
+      }
     },
     "gbp": {
-      "path": "/gbps/{gmb}",
       "description": "A GBP's window as its own page.",
       "params": {
         "properties": {
@@ -404,6 +403,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/gbps/{gmb}",
       "query": {
         "properties": {
           "log_at": {
@@ -446,7 +446,6 @@ export const VIEWS = {
       }
     },
     "gmail": {
-      "path": "/gmail/{account}",
       "description": "A gmail's window as its own page.",
       "params": {
         "properties": {
@@ -460,6 +459,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/gmail/{account}",
       "query": {
         "properties": {
           "tab": {
@@ -487,13 +487,14 @@ export const VIEWS = {
       }
     },
     "home": {
-      "path": "/",
       "description": "The map of the caller's GBPs, and every window over it.",
+      "key": "h",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/",
       "query": {
         "properties": {
           "account": {
@@ -724,11 +725,9 @@ export const VIEWS = {
         },
         "required": [],
         "type": "object"
-      },
-      "key": "h"
+      }
     },
     "kit": {
-      "path": "/reviews/kit/{slug}",
       "description": "A review kit: what it collected, its GBPs, its pools; on a phone, its GBPs nearest first.",
       "params": {
         "properties": {
@@ -741,6 +740,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/reviews/kit/{slug}",
       "query": {
         "properties": {},
         "required": [],
@@ -748,7 +748,6 @@ export const VIEWS = {
       }
     },
     "kit_gmb": {
-      "path": "/reviews/kit/{slug}/{gmb}",
       "description": "A kit's GBP: its QR's target, drafts, photos and tally.",
       "params": {
         "properties": {
@@ -766,6 +765,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/reviews/kit/{slug}/{gmb}",
       "query": {
         "properties": {},
         "required": [],
@@ -773,7 +773,6 @@ export const VIEWS = {
       }
     },
     "kit_pool": {
-      "path": "/reviews/kit/{slug}/pool/{trade}/{country}",
       "description": "A category's drafts and photos, from a kit.",
       "params": {
         "properties": {
@@ -801,6 +800,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/reviews/kit/{slug}/pool/{trade}/{country}",
       "query": {
         "properties": {},
         "required": [],
@@ -808,7 +808,6 @@ export const VIEWS = {
       }
     },
     "kit_qr": {
-      "path": "/reviews/kit/{slug}/{gmb}/qr",
       "description": "A kit's GBP's QR, full screen, for the reviewer; a swipe goes through the kit.",
       "params": {
         "properties": {
@@ -826,6 +825,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/reviews/kit/{slug}/{gmb}/qr",
       "query": {
         "properties": {},
         "required": [],
@@ -833,28 +833,28 @@ export const VIEWS = {
       }
     },
     "kits": {
-      "path": "/reviews/kit",
       "description": "The caller's review kits.",
+      "key": "k",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/reviews/kit",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
-      },
-      "key": "k"
+      }
     },
     "library": {
-      "path": "/gbps/library",
       "description": "The library's window as its own page, on a listing.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/gbps/library",
       "query": {
         "properties": {
           "listing": {
@@ -870,24 +870,25 @@ export const VIEWS = {
       }
     },
     "members": {
-      "path": "/admin/members",
       "description": "Everyone, to act as; and the way back while acting.",
+      "key": "m",
+      "needs": "sa:members:act_as",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/admin/members",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:members:act_as",
-      "key": "m"
+      }
     },
     "review_archive": {
-      "path": "/reviews/archive",
       "description": "The review archive's dashboard.",
+      "key": "r",
+      "nest": "review_archive",
       "params": {
         "properties": {
           "below": {
@@ -899,16 +900,14 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/reviews/archive",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
-      },
-      "key": "r",
-      "nest": "review_archive"
+      }
     },
     "review_archive.mine.gmail": {
-      "path": "/reviews/archive/gmails/{gmail}",
       "description": "A gmail's GMBs.",
       "params": {
         "properties": {
@@ -923,6 +922,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/reviews/archive/gmails/{gmail}",
       "query": {
         "properties": {},
         "required": [],
@@ -930,7 +930,6 @@ export const VIEWS = {
       }
     },
     "review_archive.mine.gmb": {
-      "path": "/reviews/archive/gmbs/{gmb}",
       "description": "A GMB's board: its place's reviews in lanes.",
       "params": {
         "properties": {
@@ -945,6 +944,7 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/reviews/archive/gmbs/{gmb}",
       "query": {
         "properties": {},
         "required": [],
@@ -952,13 +952,13 @@ export const VIEWS = {
       }
     },
     "review_archive.mine.home": {
-      "path": "/reviews/archive",
       "description": "Every GMB of the member's, by gmail.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/reviews/archive",
       "query": {
         "properties": {},
         "required": [],
@@ -966,13 +966,13 @@ export const VIEWS = {
       }
     },
     "review_archive.mine.settings": {
-      "path": "/reviews/archive/settings",
       "description": "The member's settings.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/reviews/archive/settings",
       "query": {
         "properties": {},
         "required": [],
@@ -980,8 +980,9 @@ export const VIEWS = {
       }
     },
     "sites": {
-      "path": "/sites",
       "description": "sites' pages, its element's to route.",
+      "key": "s",
+      "nest": "sites",
       "params": {
         "properties": {
           "below": {
@@ -993,23 +994,23 @@ export const VIEWS = {
         ],
         "type": "object"
       },
+      "path": "/sites",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
       },
-      "key": "s",
-      "nest": "sites",
       "scope": "v"
     },
     "sites.experiments": {
-      "path": "/sites/experiments",
       "description": "The landings' experiments and their overrides, of every brand or one.",
+      "needs": "sa:sites:analysis:read",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/sites/experiments",
       "query": {
         "properties": {
           "brand": {
@@ -1026,32 +1027,32 @@ export const VIEWS = {
         },
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:sites:analysis:read"
+      }
     },
     "sites.invoices": {
-      "path": "/sites/invoices",
       "description": "The invoices asked of banking, and a new one.",
+      "needs": "sa:sites:work:read",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/sites/invoices",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:sites:work:read"
+      }
     },
     "sites.leads": {
-      "path": "/sites/leads",
       "description": "The leads, filtered, and one of them open.",
+      "needs": "sa:sites:work:read",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/sites/leads",
       "query": {
         "properties": {
           "booking": {
@@ -1194,17 +1195,17 @@ export const VIEWS = {
         },
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:sites:work:read"
+      }
     },
     "sites.overview": {
-      "path": "/sites/overview",
       "description": "The funnel over a period, of every brand or one.",
+      "needs": "sa:sites:analysis:read",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/sites/overview",
       "query": {
         "properties": {
           "brand": {
@@ -1234,17 +1235,17 @@ export const VIEWS = {
         },
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:sites:analysis:read"
+      }
     },
     "sites.places": {
-      "path": "/sites/places",
       "description": "The places, their settings and history; one of them open.",
+      "needs": "sa:sites:work:read",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/sites/places",
       "query": {
         "properties": {
           "brand": {
@@ -1271,17 +1272,17 @@ export const VIEWS = {
         },
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:sites:work:read"
+      }
     },
     "sites.pricing": {
-      "path": "/sites/pricing",
       "description": "The brands' price lists; one brand's open.",
+      "needs": "sa:sites:work:read",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/sites/pricing",
       "query": {
         "properties": {
           "brand": {
@@ -1298,17 +1299,16 @@ export const VIEWS = {
         },
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:sites:work:read"
+      }
     },
     "sites.start": {
-      "path": "/sites",
       "description": "Where the base leads: the leads for who works them, else the funnel.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/sites",
       "query": {
         "properties": {},
         "required": [],
@@ -1316,44 +1316,44 @@ export const VIEWS = {
       }
     },
     "sources": {
-      "path": "/admin/sources",
       "description": "Source keys and the sites they connect.",
+      "key": "c",
+      "needs": "sa:admin:sources:manage",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/admin/sources",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:admin:sources:manage",
-      "key": "c"
+      }
     },
     "tokens": {
-      "path": "/user/tokens",
       "description": "The caller's tokens: balance, ledger, what they used.",
+      "key": "t",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/user/tokens",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
-      },
-      "key": "t"
+      }
     },
     "trash": {
-      "path": "/gbps/trash",
       "description": "What the caller removed, as a page.",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/gbps/trash",
       "query": {
         "properties": {},
         "required": [],
@@ -1361,35 +1361,35 @@ export const VIEWS = {
       }
     },
     "usage": {
-      "path": "/user/usage",
       "description": "What the caller's actions cost.",
+      "key": "u",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/user/usage",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
-      },
-      "key": "u"
+      }
     },
     "wallet": {
-      "path": "/user/wallet",
       "description": "The caller's wallet.",
+      "key": "w",
+      "needs": "sa:own:payments",
       "params": {
         "properties": {},
         "required": [],
         "type": "object"
       },
+      "path": "/user/wallet",
       "query": {
         "properties": {},
         "required": [],
         "type": "object"
-      },
-      "needs": "sa:own:payments",
-      "key": "w"
+      }
     }
   }
 } as const;
