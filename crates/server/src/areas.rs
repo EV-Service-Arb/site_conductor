@@ -180,7 +180,7 @@ async fn cities(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest,
 	}))
 }
 
-/// The city or town a suggestion is: its point and the rectangle that frames it (Places, paid by
+/// The place a suggestion is: its point and the rectangle that frames it (Places, paid by
 /// the caller).
 async fn city(State(panel): State<Panel>, Spends(_, by): Spends<PlacesRequest, Caller>, Ids(PlaceIn { place_id }): Ids<PlaceIn>) -> ApiResult<Json<LocalityDto>> {
 	Ok(Json(panel.locality(by, &place_id).await??.into()))

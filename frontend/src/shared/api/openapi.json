@@ -18528,7 +18528,7 @@
         "tags": [
           "areas"
         ],
-        "summary": "The city or town a suggestion is: its point and the rectangle that frames it (Places, paid by the caller).",
+        "summary": "The place a suggestion is: its point and the rectangle that frames it (Places, paid by the caller).",
         "operationId": "city",
         "parameters": [
           {

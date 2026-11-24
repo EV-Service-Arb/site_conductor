@@ -6,6 +6,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { type Listed, type Tags, issueOf, narrowed, openOrFocus, peek, setOnMap, move, useGmails, useGmbTags, useKitEdit, useOnMap, usePeeked, useSelection, useShown } from "@/entities/gmb";
+import { FindPlace } from "@/features/find-place";
 import { PlacingBar } from "@/features/place-gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
 import { PlacementOverlay, StudyAreaWindow } from "@/features/placement-overlay";
@@ -250,6 +251,7 @@ function GmbMap({ config }: { config: MapConfig }) {
       {map.status === "ok" && <StreetView map={map.map} account={map.account} spend={(open) => spend.ask(panorama, open)} />}
       {spend.dialog}
       {map.status === "ok" && <Locate map={map.map} />}
+      {map.status === "ok" && <FindPlace map={map.map} />}
       {map.status === "error" && (
         <div className="absolute inset-x-6 top-6">
           <ErrorState failure={map.failure} />

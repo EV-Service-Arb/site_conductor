@@ -25,7 +25,7 @@ const placesShown = () => localStorage.getItem(PLACES_KEY) === "shown";
 const mapTypeId = (base: Base) => (base === "satellite" ? "hybrid" : "roadmap");
 
 // on globalThis: a hot update re-running this module keeps the page's (billed) map, on the account it loaded on
-const kept = globalThis as typeof globalThis & { saMap?: { account: string; element: HTMLDivElement; map: Promise<google.maps.Map> } };
+const kept = globalThis as typeof globalThis & { saMap?: { account: string; element: HTMLDivElement; map: Promise<google.maps.Map> }; saCorner?: Map<string, HTMLDivElement> };
 const styles = () => (placesShown() ? [] : PLACES_HIDDEN);
 
 // Maps JS takes one key a page load: a config naming another account after is for the next load
@@ -179,6 +179,20 @@ export function pin(
     },
     remove: () => overlay.setMap(null),
   };
+}
+
+/** The box of the control named, over the zoom in the bottom-right corner: pushed once per page session, in the order first asked for. */
+export function corner(map: google.maps.Map, name: string): HTMLDivElement {
+  kept.saCorner ??= new Map();
+  const held = kept.saCorner.get(name);
+  if (held !== undefined) return held;
+  const box = document.createElement("div");
+  box.style.margin = "0 10px 10px 0";
+  const controls = map.controls[google.maps.ControlPosition.RIGHT_BOTTOM];
+  if (controls === undefined) throw new Error("the map has no bottom-right controls");
+  controls.push(box);
+  kept.saCorner.set(name, box);
+  return box;
 }
 
 const EARTH_M = 6_371_008.8;

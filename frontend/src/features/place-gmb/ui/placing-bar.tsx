@@ -1,12 +1,11 @@
 "use client";
 
 import { Button } from "@evinvest/uikit";
-import { importLibrary } from "@googlemaps/js-api-loader";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
-import { peek, placeGmb, setOnMap, useGmails, useUndoable, move } from "@/entities/gmb";
+import { SuggestSearch, frameOf, peek, placeGmb, placesLike, setOnMap, useGmails, useUndoable, move } from "@/entities/gmb";
 import type { Gmb, LatLng } from "@/shared/api/schema";
-import { useT, home } from "@/shared/i18n";
+import { find, home, useT } from "@/shared/i18n";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize } from "@/shared/ui/touch";
 
@@ -16,42 +15,7 @@ export function PlacingBar({ gmb, map, at, onMove }: { gmb: Gmb; map: google.map
   const button = useButtonSize();
   const gmails = useGmails();
   const undoable = useUndoable();
-  const search = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
-  // the search box is built once per map; it reads these as they are now
-  const latest = useRef({ onMove, t });
-  useEffect(() => {
-    latest.current = { onMove, t };
-  });
-
-  useEffect(() => {
-    const box = search.current;
-    if (box === null) throw new Error("PlacingBar: its search box is not rendered");
-    let live = true;
-    let element: google.maps.places.PlaceAutocompleteElement | null = null;
-    void importLibrary("places").then(({ PlaceAutocompleteElement }) => {
-      if (!live) return;
-      element = new PlaceAutocompleteElement({});
-      element.className = "w-full";
-      element.addEventListener("gmp-select", (e) => {
-        const place = e.placePrediction.toPlace();
-        place.fetchFields({ fields: ["location", "viewport"] }).then(
-          () => {
-            if (!place.location) throw new Error(`Places gave ${place.id} no location`);
-            if (place.viewport) map.fitBounds(place.viewport);
-            else map.panTo(place.location);
-            latest.current.onMove(place.location.toJSON());
-          },
-          (failed: unknown) => notifyFailure(failed, latest.current.t),
-        );
-      });
-      box.appendChild(element);
-    });
-    return () => {
-      live = false;
-      element?.remove();
-    };
-  }, [map]);
 
   const set = async () => {
     setBusy(true);
@@ -70,7 +34,21 @@ export function PlacingBar({ gmb, map, at, onMove }: { gmb: Gmb; map: google.map
   return (
     <div className="absolute inset-x-4 bottom-4 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-background p-3 shadow-overlay">
       <p className="min-w-0 flex-1 basis-60 text-sm text-ink">{t(home.placing, "Placing {name} · click the map or drag the pin", { name: gmb.name ?? gmb.place_id })}</p>
-      <div ref={search} className="min-w-0 flex-1 basis-60" />
+      <SuggestSearch
+        placeholder={t(find.placeholder, "An address, a town or a business")}
+        none={t(find.none, "No place found.")}
+        ask={placesLike}
+        onPick={(s) =>
+          void frameOf(s.place_id).then(
+            ({ location, viewport }) => {
+              map.fitBounds(viewport);
+              onMove(location);
+            },
+            (e: unknown) => notifyFailure(e, t),
+          )
+        }
+        className="min-w-0 flex-1 basis-60"
+      />
       <Button variant="outline" size={button()} onClick={() => setOnMap({ placing: null })}>
         {t(move.cancel, "Cancel")}
       </Button>

@@ -11,6 +11,7 @@ export const wallet = scope("wallet");
 export const placement = scope("placement");
 export const streetView = scope("streetView");
 export const locate = scope("locate");
+export const find = scope("find");
 export const usage = scope("usage");
 export const reviewArchive = scope("reviewArchive");
 export const links = scope("links");

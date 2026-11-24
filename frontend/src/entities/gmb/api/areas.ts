@@ -1,7 +1,13 @@
 import { Refused, api, ok } from "@/shared/api";
-import type { LatLng, Locality } from "@/shared/api/schema";
+import type { LatLng, Locality, Suggestion } from "@/shared/api/schema";
 
 import type { Drawn } from "../ui/area-draw";
+
+export const citiesLike = (input: string): Promise<Suggestion[]> => ok(api.GET("/kit/cities", { params: { query: { input } } })).then((r) => r.suggestions);
+
+export const placesLike = (input: string): Promise<Suggestion[]> => ok(api.GET("/gmbs/suggest", { params: { query: { input, gmail: null } } })).then((r) => r.suggestions);
+
+export const frameOf = (place_id: string): Promise<Locality> => ok(api.GET("/kit/cities/{place_id}", { params: { path: { place_id } } }));
 
 /** `null`: the point is in no locality. */
 export async function localityAt(at: LatLng): Promise<Locality | null> {

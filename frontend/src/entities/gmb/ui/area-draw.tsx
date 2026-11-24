@@ -1,12 +1,12 @@
 "use client";
 
 import { useResource } from "@evinvest/api/react";
-import { Button, Command, CommandInput, CommandItem, CommandList, Input, Skeleton, ToggleGroup, ToggleGroupItem, cn } from "@evinvest/uikit";
-import { Crosshair, MapPin, Search, X } from "lucide-react";
+import { Button, Input, Skeleton, ToggleGroup, ToggleGroupItem } from "@evinvest/uikit";
+import { Crosshair, Search, X } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
-import { api, ok } from "@/shared/api";
-import type { Area, LatLng, Locality, Suggestion } from "@/shared/api/schema";
+import { api } from "@/shared/api";
+import type { Area, LatLng, Locality } from "@/shared/api/schema";
 import { useLocale, useT } from "@/shared/i18n";
 import { formatDistance } from "@/shared/lib/format";
 import { distanceM, pin } from "@/shared/map";
@@ -14,12 +14,11 @@ import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
-import { localityAt } from "../api/areas";
+import { citiesLike, frameOf, localityAt } from "../api/areas";
 import { isSlug, slugOf } from "../model/areas";
 import { areaKeys } from "../model/i18n";
+import { SuggestSearch } from "./suggest-search";
 
-const PAUSE_MS = 350;
-const MIN_INPUT = 2;
 const RADII = [1000, 2000, 5000, 10000, 20000];
 const FIRST_RADIUS = 5000;
 const M_PER_DEG = 111_320;
@@ -215,9 +214,12 @@ function Drawing({ map, left, seed, areas, reread, render }: { map: google.maps.
             </Button>
           </div>
         ) : (
-          <CitySearch
+          <SuggestSearch
+            placeholder={t(areaKeys.search, "City or town")}
+            none={t(areaKeys.noneFound, "No city found.")}
+            ask={citiesLike}
             onPick={(s) =>
-              void ok(api.GET("/kit/cities/{place_id}", { params: { path: { place_id: s.place_id } } })).then(
+              void frameOf(s.place_id).then(
                 (locality) => pickCity(locality, s.secondary),
                 (e: unknown) => notifyFailure(e, t),
               )
@@ -269,54 +271,5 @@ function Drawing({ map, left, seed, areas, reread, render }: { map: google.maps.
       </div>
       {render(drawn, reread)}
     </>
-  );
-}
-
-/** Google's cities and towns as one types. */
-function CitySearch({ onPick }: { onPick: (s: Suggestion) => void }) {
-  const t = useT();
-  const [input, setInput] = useState("");
-  const [answered, setAnswered] = useState<{ q: string; found: Suggestion[] } | null>(null);
-  const q = input.trim();
-  const found = answered !== null && answered.q === q ? answered.found : null;
-  useEffect(() => {
-    if (q.length < MIN_INPUT) return;
-    let live = true;
-    const timer = setTimeout(() => {
-      ok(api.GET("/kit/cities", { params: { query: { input: q } } })).then(
-        ({ suggestions: found }) => live && setAnswered({ q, found }),
-        (e: unknown) => live && notifyFailure(e, t),
-      );
-    }, PAUSE_MS);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [q, t]);
-  return (
-    <Command shouldFilter={false} search={input} onSearchChange={setInput} className={cn("h-auto overflow-visible rounded-md border border-border")}>
-      <CommandInput placeholder={t(areaKeys.search, "City or town")} autoCapitalize="none" />
-      {found !== null && (
-        <CommandList>
-          {found.length === 0 && <p className="px-3 py-2 text-sm text-ink-soft">{t(areaKeys.noneFound, "No city found.")}</p>}
-          {found.map((s) => (
-            <CommandItem
-              key={s.place_id}
-              value={s.place_id}
-              onSelect={() => {
-                onPick(s);
-                setInput("");
-              }}
-            >
-              <MapPin aria-hidden className="text-ink-soft" />
-              <span className="flex min-w-0 flex-col">
-                <span className="truncate text-sm text-ink">{s.main}</span>
-                {s.secondary !== null && <span className="truncate text-xs text-ink-soft">{s.secondary}</span>}
-              </span>
-            </CommandItem>
-          ))}
-        </CommandList>
-      )}
-    </Command>
   );
 }

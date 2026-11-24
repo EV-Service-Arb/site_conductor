@@ -5,28 +5,14 @@ import { createPortal } from "react-dom";
 
 import { locate, useT } from "@/shared/i18n";
 
-import { pin } from "./the-map";
+import { corner, pin } from "./the-map";
 
 const CLOSE_ZOOM = 15;
-
-// on globalThis beside the kept map: its controls are pushed once per page session
-const kept = globalThis as typeof globalThis & { saLocate?: HTMLDivElement };
-
-function control(map: google.maps.Map) {
-  if (kept.saLocate !== undefined) return kept.saLocate;
-  const box = document.createElement("div");
-  box.style.margin = "0 10px 10px 0";
-  const corner = map.controls[google.maps.ControlPosition.RIGHT_BOTTOM];
-  if (corner === undefined) throw new Error("the map has no bottom-right controls");
-  corner.push(box);
-  kept.saLocate = box;
-  return box;
-}
 
 /** The map's "where am I": the browser's position (asking for it the first time), centred on and marked. */
 export function Locate({ map }: { map: google.maps.Map }) {
   const t = useT();
-  const box = control(map);
+  const box = corner(map, "locate");
   const [busy, setBusy] = useState(false);
   const mark = useRef<{ move: (to: google.maps.LatLngLiteral) => void; remove: () => void } | null>(null);
   useEffect(

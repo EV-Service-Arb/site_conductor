@@ -1559,7 +1559,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The city or town a suggestion is: its point and the rectangle that frames it (Places, paid by the caller). */
+        /** The place a suggestion is: its point and the rectangle that frames it (Places, paid by the caller). */
         get: operations["city"];
         put?: never;
         post?: never;

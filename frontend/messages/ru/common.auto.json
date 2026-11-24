@@ -1823,6 +1823,22 @@
     "en": "unknown",
     "t": "неизвестно"
   },
+  "find": {
+    "en": "Find a place",
+    "t": "Найти место"
+  },
+  "find.none": {
+    "en": "No place found.",
+    "t": "Место не найдено."
+  },
+  "find.placeholder": {
+    "en": "An address, a town or a business",
+    "t": "Адрес, город или организация"
+  },
+  "find.unmark": {
+    "en": "{name} · click to remove the mark",
+    "t": "{name} · нажмите, чтобы убрать отметку"
+  },
   "gmbs.actions": {
     "en": "{name}: actions",
     "t": "{name}: действия"
