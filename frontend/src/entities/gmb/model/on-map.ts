@@ -3,6 +3,7 @@
 import { useSyncExternalStore } from "react";
 
 import type { Gmb, LatLng } from "@/shared/api/schema";
+import { viewed } from "@/shared/lib/location";
 
 import { cardOnly, peek } from "./windows";
 
@@ -16,13 +17,15 @@ export interface OnMap {
   placing: number | null;
   /** A point being picked on the map: a click gives it to `onPick` and ends the picking, Escape ends it. */
   picking: { label: string; onPick: (at: LatLng) => void } | null;
+  /** Where a draft is being started on the map. */
+  drafting: LatLng | null;
   /** What an open form has picked, drawn numbered on the map. */
   marks: readonly LatLng[];
   /** The GMB the map is asked to go to, until it has. */
   focus: number | null;
 }
 
-const NONE: OnMap = { inView: null, hovered: null, placing: null, picking: null, marks: [], focus: null };
+const NONE: OnMap = { inView: null, hovered: null, placing: null, picking: null, drafting: null, marks: [], focus: null };
 let state = NONE;
 const listeners = new Set<() => void>();
 
@@ -39,6 +42,14 @@ export function useOnMap<T>(part: (s: OnMap) => T): T {
 export function setOnMap(change: Partial<OnMap>): void {
   state = { ...state, ...change };
   for (const l of listeners) l();
+}
+
+/** A draft started at a point marked on the map, unless a mode has the map: placing, picking, a kit's editor, an area drawn. */
+export function draftAt(at: LatLng): void {
+  const { at: here } = viewed();
+  if (here.view !== "home") throw new Error(`the map marked on ${here.view}`);
+  if (state.placing !== null || state.picking !== null || here.params.kit_edit === true || here.params.area === "") return;
+  setOnMap({ drafting: at });
 }
 
 /** A GBP clicked on the map or in the outline beside it: the first click shows its card, the next goes to it on the map, its card alone. */

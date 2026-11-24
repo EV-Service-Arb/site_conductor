@@ -105,6 +105,8 @@
   "add.country.byHand": "Not on Maps: its country is said by hand.",
   "add.country.none": "Google gives this place no country.",
   "add.country.pick": "Pick its country",
+  "add.draft.here": "A draft here",
+  "add.draft.note": "A note, optional: only you see it",
   "add.find": "Find it on Google",
   "add.find.placeholder": "Its name and city, a Maps link or a place id",
   "add.gmail.add": "Add",

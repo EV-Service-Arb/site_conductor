@@ -289,7 +289,9 @@ second block below to it.
   browser), with their switches, each row, pin and card with what needs the operator, from the
   services' tags on the GMBs (review_archive `/me/gmbs`, sites `/gmbs`). `/` is the map of them:
   one Google map per page session, kept while the page is away (each built is a billed load), its
-  viewport splitting the outline's list; placing a GMB's point is a mode of it.
+  viewport splitting the outline's list; placing a GMB's point is a mode of it. A right click on it,
+  out of any mode, starts a draft there (the overlay's `mark`): a name and a note, its trade the shown
+  study's, its country and its spot's label the shown area's, if the point is in it.
 - **The pages.** `/sites` mounts `<mfe-sites-panel api="/api/sites" base="/sites" csrf-cookie>`
   from `/mfe/sites/`; `/reviews/archive` mounts
   `<mfe-review-archive-dashboard grafana="/grafana/" ui>` from `/mfe/review_archive/`, `ui` its

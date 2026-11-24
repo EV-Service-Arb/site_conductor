@@ -138,7 +138,7 @@ export function MapPanel() {
 type Picked = { trade: GoogleCategory; country: Country; version: CategoryVersion; head: Category | null; published: PublishedStudy | null };
 
 /** `?study` read for what draws on it; `null` while none is picked or it is not read yet. */
-function Resolve({ view, studied, children }: { view: MapView; studied: Extract<Studied, { status: "ok" }>; children: (p: Picked | null) => ReactNode }) {
+export function Resolve({ view, studied, children }: { view: MapView; studied: Extract<Studied, { status: "ok" }>; children: (p: Picked | null) => ReactNode }) {
   const { study } = view;
   if (study === null) return children(null);
   if (study.kind === "head") {

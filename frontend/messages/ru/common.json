@@ -3,6 +3,14 @@
     "en": "Last 30 days",
     "t": "Последние 30 дней"
   },
+  "add.draft.here": {
+    "en": "A draft here",
+    "t": "Черновик здесь"
+  },
+  "add.draft.note": {
+    "en": "A note, optional: only you see it",
+    "t": "Заметка, необязательно: видите только вы"
+  },
   "area.centre": {
     "en": "The area's centre: drag it",
     "t": "Центр области: перетащите его"

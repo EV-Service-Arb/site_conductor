@@ -3,10 +3,10 @@
 import { useState, useSyncExternalStore } from "react";
 
 import { Refused, api, ok } from "@/shared/api";
-import { covers, useCategories, useScope } from "@/entities/gmb";
+import { covers, draftAt, useCategories, useScope } from "@/entities/gmb";
 import { type Area, type Category, type Country, countryValues } from "@/shared/api/schema";
 import type { Event, Legend, Notice, Overlay, Summary, Tune } from "@/shared/placement_overlay/placement_overlay";
-import { type Home, setHome, useHome } from "@/shared/lib/location";
+import { setHome, useHome } from "@/shared/lib/location";
 import { useResource } from "@evinvest/api/react";
 
 export type { Legend, Tune };
@@ -74,6 +74,8 @@ export function attach(map: google.maps.Map): Promise<Overlay | null> {
           return update({ legend: e.detail });
         case "notice":
           return update({ notice: e.detail.text === null ? null : { ...e.detail, text: e.detail.text } });
+        case "mark":
+          return draftAt(e.detail);
       }
     });
   })().catch((e: unknown) => {

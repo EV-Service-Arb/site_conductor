@@ -6,10 +6,11 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { type Listed, type Tags, issueOf, narrowed, openOrFocus, peek, setOnMap, move, useGmails, useGmbTags, useKitEdit, useOnMap, usePeeked, useSelection, useShown } from "@/entities/gmb";
+import { DraftHere } from "@/features/add-gmb";
 import { FindPlace } from "@/features/find-place";
 import { PlacingBar } from "@/features/place-gmb";
 import { useSpendConfirm, useTokens } from "@/entities/tokens";
-import { PlacementOverlay, StudyAreaWindow } from "@/features/placement-overlay";
+import { PlacementOverlay, StudyAreaWindow, StudyAt } from "@/features/placement-overlay";
 import type { LatLng, MapConfig, State } from "@/shared/api/schema";
 import { api, takeReturnPage } from "@/shared/api";
 import { useT, home } from "@/shared/i18n";
@@ -57,6 +58,7 @@ function GmbMap({ config }: { config: MapConfig }) {
   const hovered = useOnMap((s) => s.hovered);
   const placing = useOnMap((s) => s.placing);
   const picking = useOnMap((s) => s.picking);
+  const drafting = useOnMap((s) => s.drafting);
   const marks = useOnMap((s) => s.marks);
   const shownWindow = useShown();
   const adding = shownWindow?.key.kind === "add";
@@ -65,7 +67,8 @@ function GmbMap({ config }: { config: MapConfig }) {
   const button = useButtonSize();
   const peeked = usePeeked();
   // `?at` as the page opened: what it says after is where the map has since moved
-  const [left] = useState(useHome()?.at ?? null);
+  const view = useHome();
+  const [left] = useState(view?.at ?? null);
   const { tags } = useGmbTags();
   const { host, map } = useTheMap(config);
   const listed = selection?.selected ?? [];
@@ -82,7 +85,7 @@ function GmbMap({ config }: { config: MapConfig }) {
     styling.current = { hovered, peeked, tags };
   });
 
-  useEffect(() => () => setOnMap({ inView: null, hovered: null }), []);
+  useEffect(() => () => setOnMap({ inView: null, hovered: null, drafting: null }), []);
 
   useEffect(() => {
     if (map.status !== "ok") return;
@@ -261,6 +264,12 @@ function GmbMap({ config }: { config: MapConfig }) {
         </OnPin>
       )}
       {peekedListed && windows && !windowed && !peekedListed.gmb.location && <Peek listed={peekedListed} onClose={() => peek(null)} className="absolute top-4 right-4" />}
+      {drafting !== null && windows && editing === null && view?.area !== "" && map.status === "ok" && (
+        <OnPin map={map.map} at={drafting}>
+          <StudyAt at={drafting}>{(said) => <DraftHere at={drafting} {...said} onClose={() => setOnMap({ drafting: null })} />}</StudyAt>
+          <span aria-hidden className="absolute bottom-0 left-1/2 -translate-x-1/2 [&_[data-badge]]:hidden [&_[data-core]]:fill-positive [&_path]:fill-white [&_path]:stroke-ink" dangerouslySetInnerHTML={{ __html: TEARDROP }} />
+        </OnPin>
+      )}
       {map.status === "ok" && windows && editing !== null && <KitEdit map={map.map} slug={editing} />}
       {map.status === "ok" && windows && <StudyAreaWindow map={map.map} />}
       {picking !== null && (
@@ -286,6 +295,7 @@ function OnPin({ map, at, children }: { map: google.maps.Map; at: LatLng; childr
     const made = document.createElement("div");
     made.style.zIndex = "4";
     made.style.pointerEvents = "none"; // the pin under its padding stays clickable
+    made.addEventListener("contextmenu", (e) => e.stopPropagation()); // a right click on it marks nothing under it
     return made;
   });
   const { lat, lng } = at;
