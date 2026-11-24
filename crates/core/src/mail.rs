@@ -788,7 +788,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	}
 }
 
-/// Whether a reply is to be written: one is due, or past [`MAX_ASKS`] there for its operator.
+/// Whether a reply is to be written: one is due, or past `MAX_ASKS` there for its operator.
 pub fn due(c: &Case<'_>, now: Timestamp) -> bool {
 	let last = heard(c).last().map(|m| m.id);
 	let written = c.draft.is_some_and(|d| Some(d.answers) == last && d.state != DraftState::Superseded);
