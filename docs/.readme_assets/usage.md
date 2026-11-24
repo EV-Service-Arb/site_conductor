@@ -19,6 +19,8 @@ panel migrate
 # and the forward — all four or none: PANEL_ASSERTION_KEY (`cargo r -p sa_auth --example keygen`),
 #   PANEL_SITES_URL, PANEL_REVIEW_ARCHIVE_URL, PANEL_PLAYBOOK_URL
 # TELEGRAM_BOT_TOKEN turns the bot on (it needs the forward; TELEGRAM_BOT_USERNAME spares a
-# getMe, TELEGRAM_LOCALE=ru|en picks its language, ru by default).
+# getMe, TELEGRAM_LOCALE=ru|en picks its language, ru by default). Alerts by mail: SMTP_HOST,
+#   SMTP_USERNAME, SMTP_PASSWORD, MAIL_FROM; by Discord's direct messages: DISCORD_BOT_TOKEN,
+#   DISCORD_CLIENT_ID, DISCORD_CLIENT_SECRET. Discord and Slack channels, push and webhooks need nothing.
 panel serve
 ```
