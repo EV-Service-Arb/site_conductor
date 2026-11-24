@@ -10,8 +10,8 @@
 //! idempotently (a link token redeems once, a button's press carries the same Idempotency-Key),
 //! so an update handled twice across a takeover does nothing twice.
 //!
-//! Without `TELEGRAM_BOT_TOKEN` none of this runs: `serve` warns, and the Alerts page answers
-//! that Telegram is not configured.
+//! Without `TELEGRAM_BOT_TOKEN` none of this runs: `serve` warns, and Telegram is not among the
+//! methods the Alerts page offers.
 
 use std::{
 	sync::{Arc, OnceLock},
@@ -21,7 +21,7 @@ use std::{
 use jiff::{SignedDuration, Timestamp};
 use sa_core::notify::{ChatId, Failure, Rendered};
 use sa_panel::{
-	alerts::{Feeds, Hub},
+	alerts::{Feeds, Hub, Outlets},
 	telegram::{Account, Bot, CallbackId, Chat, ChatInfo, InlineButton, Target, Update},
 };
 use serde::Deserialize;
@@ -196,11 +196,11 @@ impl BotName {
 
 /// Polls for updates and handles them until `shutdown` turns true, on the replica holding the
 /// poller's lease; first learns the bot's name, which the link waits for.
-pub async fn poll<F: Feeds>(hub: &Hub<BotApi, Concierge, F>, name: &BotName, mut shutdown: watch::Receiver<bool>) {
+pub async fn poll<O: Outlets, F: Feeds>(hub: &Hub<O, Concierge, F>, api: &BotApi, name: &BotName, mut shutdown: watch::Receiver<bool>) {
 	let holder = Uuid::now_v7();
 	let stopped = |s: &watch::Receiver<bool>| *s.borrow();
 	while name.get().is_none() && !stopped(&shutdown) {
-		match hub.bot.username().await {
+		match api.username().await {
 			Ok(username) => {
 				tracing::info!(username, "telegram: the bot is up");
 				name.learn(username);
@@ -232,7 +232,7 @@ pub async fn poll<F: Feeds>(hub: &Hub<BotApi, Concierge, F>, name: &BotName, mut
 			}
 		};
 		let updates = tokio::select! {
-			u = hub.bot.updates(offset, Duration::from_secs(POLL_SECONDS)) => u,
+			u = api.updates(offset, Duration::from_secs(POLL_SECONDS)) => u,
 			_ = shutdown.changed() => break,
 		};
 		let updates = match updates {
@@ -297,9 +297,9 @@ async fn answer(method: &str, req: reqwest::RequestBuilder) -> Result<Value, Fai
 			let secs = answer.and_then(|a| a.parameters).and_then(|p| p.retry_after).unwrap_or(1);
 			Failure::RetryAfter(SignedDuration::from_secs(secs.clamp(1, 3600)))
 		}
-		403 => Failure::Blocked,
+		403 => Failure::Gone("the bot is blocked, or the chat is gone".into()),
 		// The chat is gone as surely as a blocked one: no try will reach it.
-		400 if why.contains("chat not found") || why.contains("user is deactivated") => Failure::Blocked,
+		400 if why.contains("chat not found") || why.contains("user is deactivated") => Failure::Gone(why),
 		500..=599 => Failure::Transient(format!("{method}: {status} {why}")),
 		_ => Failure::Refused(format!("{method}: {status} {why}")),
 	})

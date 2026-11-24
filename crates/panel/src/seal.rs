@@ -1,5 +1,5 @@
 //! Encryption at rest for what the database must not hold in the clear: a source's HMAC secret,
-//! a session's tokens, a queued Telegram message, a gmail's IMAP password, Maps key, proxy and
+//! a session's tokens, an alert's note, a destination's address, a gmail's IMAP password, Maps key, proxy and
 //! Business Profile client and grant.
 //!
 //! XChaCha20-Poly1305 with a random 24-byte nonce per seal, so there is no nonce
@@ -23,6 +23,12 @@ use zeroize::Zeroizing;
 
 /// Associated data of a Business Profile consent's `state`.
 pub const BUSINESS_STATE_AAD: &[u8] = b"sa-panel/business-state/v1";
+
+/// Associated data of the link mailed to an address to prove it.
+pub const EMAIL_TOKEN_AAD: &[u8] = b"sa-panel/alerts-email/v1";
+
+/// Associated data of a message's unsubscribe token.
+pub const UNSUBSCRIBE_AAD: &[u8] = b"sa-panel/alerts-unsubscribe/v1";
 
 const NONCE_LEN: usize = 24;
 
@@ -80,6 +86,22 @@ impl DataKey {
 		let mut mac = <hmac::Hmac<Sha256> as KeyInit>::new_from_slice(key.as_slice()).expect("HMAC accepts any key length");
 		mac.update(normalized.as_bytes());
 		mac.finalize().into_bytes().into()
+	}
+
+	/// What tells a destination's address apart without it sitting anywhere in the clear.
+	pub fn alert_address_tag(&self, method: &str, address: &str) -> [u8; 32] {
+		use hmac::{KeyInit, Mac};
+		let key = self.derive(b"sa-panel/alert-address-tag-key/v1");
+		let mut mac = <hmac::Hmac<Sha256> as KeyInit>::new_from_slice(key.as_slice()).expect("HMAC accepts any key length");
+		mac.update(method.as_bytes());
+		mac.update(&[0]);
+		mac.update(address.as_bytes());
+		mac.finalize().into_bytes().into()
+	}
+
+	/// The seed of the key Web Push knows the conductor by (VAPID).
+	pub fn push_seed(&self) -> Zeroizing<[u8; 32]> {
+		self.derive(b"sa-panel/push-vapid-key/v1")
 	}
 
 	/// A key for one purpose, named by `label`, that says nothing of this one or the others.
@@ -160,19 +182,14 @@ pub fn gmail_browser_aad(gmail_id: i64) -> Vec<u8> {
 	[b"sa-panel/gmail-browser/v1/".as_slice(), &gmail_id.to_be_bytes()].concat()
 }
 
-/// Associated data of a queued Telegram message's text. A chat without a topic binds as it did
-/// before topics, so what was queued then still opens.
-pub fn telegram_text_aad(rule: &str, event_id: uuid::Uuid, chat_id: i64, topic_id: Option<i64>) -> Vec<u8> {
-	let topic = topic_id.map(i64::to_be_bytes);
-	[
-		b"sa-panel/tg-text/v1/".as_slice(),
-		rule.as_bytes(),
-		b"/",
-		event_id.as_bytes(),
-		&chat_id.to_be_bytes(),
-		topic.as_ref().map_or(&[][..], |t| t.as_slice()),
-	]
-	.concat()
+/// Associated data of a note's body.
+pub fn alert_note_aad(rule: &str, event_id: uuid::Uuid) -> Vec<u8> {
+	[b"sa-panel/alert-note/v1/".as_slice(), rule.as_bytes(), b"/", event_id.as_bytes()].concat()
+}
+
+/// Associated data of a destination's address.
+pub fn alert_address_aad(user: uuid::Uuid, method: &str) -> Vec<u8> {
+	[b"sa-panel/alert-address/v1/".as_slice(), user.as_bytes(), method.as_bytes()].concat()
 }
 
 #[cfg(test)]

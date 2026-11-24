@@ -3,6 +3,7 @@
 //!
 //! - [`gbp`]: a GBP's states and moves, its country and language, and the snapshot the services
 //!   are told;
+//! - [`alerts`]: when a destination is told of a note, and which notes are for it;
 //! - [`agent`]: how far an agent acts on its own; (feature `api`) an operation that is its own agent tool;
 //! - [`dashboards`] (feature `api`): a service's Grafana dashboards, over its document;
 //! - [`feeds`]: what the conductor's hubs read of a service and push to it, path and page;
@@ -18,6 +19,7 @@
 //! - [`usage`]: what was spent on vendors, as a service's feed tells it.
 
 pub mod agent;
+pub mod alerts;
 #[cfg(feature = "api")]
 pub mod dashboards;
 pub mod feeds;

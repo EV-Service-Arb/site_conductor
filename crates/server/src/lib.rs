@@ -37,6 +37,7 @@ mod oauth;
 pub mod placement;
 mod queries_cache;
 pub mod signin;
+pub mod outlets;
 pub mod telegram;
 #[cfg(feature = "testing")]
 pub mod testing;

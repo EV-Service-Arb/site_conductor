@@ -246,7 +246,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's alert destinations, each with its rules, and the rules open to them. */
+        /** How the caller's alerts are set: their destinations, each rule's tier, their hours. */
         get: operations["alerts"];
         put?: never;
         post?: never;
@@ -264,44 +264,11 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Sets what a destination is told, when, and of what. 400 a rule not open to the caller. */
+        put: operations["set_destination"];
         post?: never;
         /** Removes a destination. */
         delete: operations["remove_destination"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/alerts/destinations/{id}/gmail": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Scopes a destination's GMB rules to one of the caller's gmails. 404 not theirs. */
-        put: operations["set_destination_gmail"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/alerts/destinations/{id}/rules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Turns rules on or off at a destination. 400 a rule not open to the caller. */
-        put: operations["set_destination_rules"];
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -316,8 +283,164 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Sends a test message to a destination; one that arrives revives it. 400 with what Telegram said. */
+        /** Sends a test message to a destination; one that arrives revives it. 400 with what its network said. */
         post: operations["test_destination"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds the caller's own verified address as a destination; any other is mailed a link that does. */
+        post: operations["add_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds the address the mailed token proves. 400 another's token, or one out of date. */
+        post: operations["confirm_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/hours": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets the caller's hours. */
+        put: operations["set_alert_hours"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/inbox": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The caller's alerts, newest first, 50 at a time. */
+        get: operations["alert_inbox"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/inbox/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Marks alerts read: what was still waiting to go out of them is given up. */
+        post: operations["read_alerts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/inbox/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of the caller's alerts, and where it went. */
+        get: operations["alert"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/inbox/{id}/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** An alert's photo. */
+        get: operations["alert_photo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/inbox/{id}/press": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Presses an alert's button, as under its message: the buttons left.
+         * @description 409 recorded before, 404 what it acts on is gone.
+         */
+        post: operations["press_alert"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/rules/{rule}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Sets how much a rule's notes matter to the caller. 400 a rule not open to them. */
+        put: operations["set_alert_tier"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2390,11 +2513,9 @@ export interface components {
         AddChat: {
             /** @description `@channel`, `-100<id>`, or `<group>/<topic>` for a forum topic. */
             chat: string;
-            /**
-             * Format: int64
-             * @description The GMB rules only for this gmail's GMBs.
-             */
-            gmail_id?: number | null;
+        };
+        AddEmail: {
+            address: string;
         };
         AddSource: {
             /** @description At least one. */
@@ -2429,15 +2550,109 @@ export interface components {
             /** @description One of the GBP's `next`. */
             state: components["schemas"]["State"];
         };
-        /** @description The caller's alerts, and what every change answers. */
+        Alert: {
+            /** Format: date-time */
+            at: string;
+            /** @description Those still to press. */
+            buttons: components["schemas"]["AlertButton"][];
+            family: components["schemas"]["Family"];
+            /** @description The GBPs it is about. */
+            gmbs: number[];
+            /** Format: int64 */
+            id: number;
+            /** @description What opens it in the panel: a path on this origin. */
+            link: string | null;
+            /** @description Elsewhere. */
+            links: components["schemas"]["AlertLink"][];
+            /** @description `/alerts/inbox/{id}/photo` answers one. */
+            photo: boolean;
+            /** Format: date-time */
+            read_at: string | null;
+            rule: components["schemas"]["Rule"];
+            /** @description Its first line says it, short. */
+            text: string;
+            tier: components["schemas"]["Tier"];
+        };
+        AlertButton: {
+            id: string;
+            label: string;
+        };
+        /** @description A person's hours as they set them, in minutes since midnight in `tz`. */
+        AlertHours: {
+            /**
+             * Format: uint16
+             * @description When the daily message goes out.
+             */
+            daily: number;
+            quiet: [
+                number,
+                number
+            ] | null;
+            /** Format: date-time */
+            snoozed_until: string | null;
+            /** @description An IANA time zone. */
+            tz: string;
+        };
+        /** @description A page of the caller's inbox, newest first. */
+        AlertInbox: {
+            alerts: components["schemas"]["Alert"][];
+            /** @description How many are unread, whatever was asked for. */
+            unread: components["schemas"]["AlertsUnread"];
+        };
+        AlertLink: {
+            label: string;
+            url: string;
+        };
+        /** @description One note, and where it went. */
+        AlertOpened: {
+            alert: components["schemas"]["Alert"];
+            told: components["schemas"]["Told"][];
+        };
+        AlertPress: {
+            button: string;
+        };
+        AlertRule: {
+            /** @description Its notes' tier, where neither the note nor the caller says another. */
+            default: components["schemas"]["Tier"];
+            family: components["schemas"]["Family"];
+            rule: components["schemas"]["Rule"];
+            /** @description The caller's own. */
+            tier: components["schemas"]["Tier"] | null;
+        };
+        AlertTier: {
+            /** @description `null`: the notes' own. */
+            tier?: components["schemas"]["Tier"] | null;
+        };
+        /** @description How the caller's alerts are set, and what every change answers. */
         Alerts: {
             /** @description The bot's `@username`, once known: what a channel adds as an admin. */
             bot: string | null;
             destinations: components["schemas"]["Destination"][];
-            /** @description A bot is configured: Telegram destinations can be added. */
-            enabled: boolean;
+            /** @description The caller's own address, when it is verified. */
+            email: string | null;
+            /** @description `null` until set: the daily message then goes out at 9:00 UTC. */
+            hours: components["schemas"]["AlertHours"] | null;
+            /** @description The methods a destination can be added by on this server. */
+            methods: components["schemas"]["Method"][];
             /** @description The rules open to the caller: their permissions', and the GMB rules once they hold a GMB. */
-            rules: components["schemas"]["Rule"][];
+            rules: components["schemas"]["AlertRule"][];
+        };
+        AlertsRead: {
+            /** @description `null`: all of them. */
+            ids?: number[] | null;
+            /**
+             * Format: int64
+             * @description Nothing newer than this one: what came since was not on the caller's screen.
+             */
+            up_to: number;
+        };
+        AlertsUnread: {
+            /** Format: int64 */
+            important: number;
+            /** Format: int64 */
+            info: number;
+            /** Format: int64 */
+            urgent: number;
         };
         /** @description Real money a slice may spend past free units and credits, in the account's currency. */
         Allow: {
@@ -2681,6 +2896,21 @@ export interface components {
             redirect_uri: string;
             set_at: string;
         };
+        /**
+         * @description When a destination is told.
+         *
+         *     - `unread`: Once it has stayed unread in the panel for 10 minutes.
+         *     - `hourly`: One message an hour, with what came in it.
+         *     - `daily`: One message a day, at the person's hour.
+         * @enum {string}
+         */
+        Cadence: "now" | "off" | "unread" | "hourly" | "daily";
+        /** @description A cadence for each tier. */
+        Cadences: {
+            important: components["schemas"]["Cadence"];
+            info: components["schemas"]["Cadence"];
+            urgent: components["schemas"]["Cadence"];
+        };
         /** @description One operation of the catalog, as `search` names it, the caller's to run. */
         CallInput: {
             /** @description The JSON body, for an operation that takes one. */
@@ -2864,6 +3094,10 @@ export interface components {
             expr: string;
             name: string;
         };
+        ConfirmEmail: {
+            /** @description The mailed link's. */
+            token: string;
+        };
         ConnectedSites: {
             internal_reads: components["schemas"]["ReadInternalReads"];
             received: components["schemas"]["ReadMap_of_Timestamp"];
@@ -2921,31 +3155,22 @@ export interface components {
             layers: components["schemas"]["Layer"][];
         };
         Destination: {
+            cadences: components["schemas"]["Cadences"];
             /** @description Why nothing reaches it: a test that arrives clears it. */
             dead: string | null;
-            /**
-             * Format: int64
-             * @description The GMB rules only for this gmail's GMBs.
-             */
-            gmail_id: number | null;
+            filter: components["schemas"]["Filter"];
             /** Format: int64 */
             id: number;
-            kind: components["schemas"]["DestinationKind"];
-            /** @description Every rule open to the caller, on or off here. */
+            /** @description A Telegram one's. */
+            kind: components["schemas"]["DestinationKind"] | null;
+            method: components["schemas"]["Method"];
+            /** @description Read by the caller alone: the only ones contact details and buttons go to. */
+            private: boolean;
+            /** @description The rules at a cadence of their own there. */
             rules: {
-                access_requested?: boolean;
-                booked?: boolean;
-                contact_overdue?: boolean;
-                new_lead?: boolean;
-                payment_received?: boolean;
-                review_changed?: boolean;
-                review_gone?: boolean;
-                review_new?: boolean;
-                review_reappeared?: boolean;
-                scan_failed?: boolean;
-                source_silent?: boolean;
+                [key: string]: components["schemas"]["Cadence"];
             };
-            /** @description A private chat's account, a channel's or group's title. */
+            /** @description What the caller knows it by. */
             title: string | null;
             /** Format: int64 */
             topic_id: number | null;
@@ -3060,10 +3285,23 @@ export interface components {
             /** Format: uuid */
             sub?: string | null;
         };
+        /**
+         * @description What a rule is about, as a person sorts their alerts.
+         * @enum {string}
+         */
+        Family: "leads" | "reviews" | "profiles" | "money" | "panel" | "team";
         /** @enum {string} */
         Feedback: "up" | "down";
         /** @enum {string} */
         Field: "name" | "place_id" | "address" | "phone" | "website" | "hours" | "google_primary" | "country" | "point" | "photos" | "areas" | "hidden_address" | "customers_visit" | "spots" | "role" | "owner_gmail";
+        /** @description Which notes a destination is for. A facet left empty takes all. */
+        Filter: {
+            brands: number[];
+            gmails: number[];
+            gmbs: number[];
+            /** @description Google categories, `gcid:…`. */
+            trades: string[];
+        };
         /** @description One flow: `tokens` what the balance moved by, a grant's amount for `granted`. */
         Flow: {
             /** @description RFC 3339. */
@@ -3124,13 +3362,6 @@ export interface components {
             id: number;
             /** @description Its window's tabs, in order. */
             tabs: components["schemas"]["Tab"][];
-        };
-        GmailBody: {
-            /**
-             * Format: int64
-             * @description `null`: every GMB of the caller's.
-             */
-            gmail_id?: number | null;
         };
         GmailForPerson: {
             /** @description The email the person signs in with: they have signed in to the conductor already. */
@@ -4022,6 +4253,18 @@ export interface components {
             /** @description The slices a hold names, in the config's order. */
             slices: string[];
         };
+        /**
+         * @description A network, and what of it an address is.
+         *
+         *     - `telegram`: A chat with the bot, a channel, a group or a topic of one.
+         *     - `discord`: The bot's direct message.
+         *     - `discord_channel`: A channel's webhook.
+         *     - `slack`: A channel's incoming webhook.
+         *     - `push`: One browser's Web Push.
+         *     - `webhook`: An https URL of theirs.
+         * @enum {string}
+         */
+        Method: "email" | "telegram" | "discord" | "discord_channel" | "slack" | "push" | "webhook";
         /** @description The model's tokens, by how Anthropic bills them ([`sa_core::prices::ModelTokens`]). */
         ModelUsed: {
             /** Format: int64 */
@@ -4415,24 +4658,18 @@ export interface components {
          * @enum {string}
          */
         Role: "owner" | "member" | "viewer";
-        /** @enum {string} */
-        Rule: "new_lead" | "contact_overdue" | "payment_received" | "source_silent" | "booked" | "access_requested" | "review_new" | "review_changed" | "review_gone" | "review_reappeared" | "scan_failed";
-        RulesBody: {
-            /** @description `{"new_lead": true, "review_gone": false, …}`: the rules to change. */
-            rules: {
-                access_requested?: boolean;
-                booked?: boolean;
-                contact_overdue?: boolean;
-                new_lead?: boolean;
-                payment_received?: boolean;
-                review_changed?: boolean;
-                review_gone?: boolean;
-                review_new?: boolean;
-                review_reappeared?: boolean;
-                scan_failed?: boolean;
-                source_silent?: boolean;
-            };
-        };
+        /**
+         * @description - `gbp_state`: A GBP moved to another state, by Google or by someone else than its owner.
+         *     - `google_mail`: Mail from Google in a gmail's inbox.
+         *     - `connection_lost`: A gmail's inbox, Business Profile grant or proxy no longer answers.
+         *     - `assistant_waiting`: The assistant holds a call until the person agrees to it.
+         *     - `release_out`: A newer version of a listing a category was taken from.
+         *     - `trash_purge`: What was removed is about to be deleted for good.
+         *     - `feed_stalled`: A service's feed keeps failing.
+         *     - `meter_held`: A Google account's meter reached its stop.
+         * @enum {string}
+         */
+        Rule: "new_lead" | "contact_overdue" | "booked" | "payment_received" | "review_new" | "review_changed" | "review_gone" | "review_reappeared" | "scan_failed" | "tokens_low" | "browser_stopped" | "kickback" | "access_granted" | "access_requested" | "source_silent" | "gbp_state" | "google_mail" | "connection_lost" | "assistant_waiting" | "release_out" | "trash_purge" | "feed_stalled" | "meter_held";
         Running: {
             /** Format: int64 */
             gmb: number | null;
@@ -4453,6 +4690,28 @@ export interface components {
          * @enum {string}
          */
         Scope: "conductor" | "review_archive" | "browsers" | "placement";
+        SetAlertHours: {
+            /**
+             * Format: uint16
+             * @description When the daily message goes out, in minutes since midnight there.
+             */
+            daily: number;
+            /**
+             * @description From and to, the same; past midnight when they end before they begin. Nothing but urgent goes
+             *     out in them, the rest as one message after.
+             */
+            quiet?: [
+                number,
+                number
+            ] | null;
+            /**
+             * Format: date-time
+             * @description Nothing but urgent goes out before this.
+             */
+            snoozed_until?: string | null;
+            /** @description An IANA time zone. */
+            tz: string;
+        };
         SetBrands: {
             /**
              * Format: int64
@@ -4474,6 +4733,16 @@ export interface components {
         };
         SetCountry: {
             country: components["schemas"]["Country"];
+        };
+        SetDestination: {
+            cadences: components["schemas"]["Cadences"];
+            filter: components["schemas"]["Filter"];
+            /** @description The rules at a cadence of their own there. */
+            rules: {
+                [key: string]: components["schemas"]["Cadence"];
+            };
+            /** @description `null`: as it is. */
+            title?: string | null;
         };
         SetGeneral: {
             general: components["schemas"]["GeneralAccess"];
@@ -4849,6 +5118,15 @@ export interface components {
             /** @description `https://t.me/<bot>?start=<token>`, alive 10 min. */
             url: string;
         };
+        /**
+         * @description How much a note matters: what it may interrupt.
+         *
+         *     - `info`: Nice to know.
+         *     - `important`: Today, by the person told.
+         *     - `urgent`: Minutes cost money.
+         * @enum {string}
+         */
+        Tier: "info" | "important" | "urgent";
         Title: {
             /** @description Empty or null unnames it. */
             title?: string | null;
@@ -4945,6 +5223,24 @@ export interface components {
              */
             token_usd: number;
         };
+        /** @description What became of a note's message to one of a person's destinations. */
+        Told: {
+            /**
+             * Format: date-time
+             * @description When it was sent, or will be.
+             */
+            at: string;
+            /** Format: int64 */
+            destination_id: number;
+            error: string | null;
+            state: components["schemas"]["ToldState"];
+        };
+        /**
+         * @description - `dead`: No try reached it.
+         *     - `dropped`: Given up before a try: read first, or stale.
+         * @enum {string}
+         */
+        ToldState: "pending" | "sent" | "dead" | "dropped";
         /** @description A trade as its log names it. */
         Traded: string | number;
         /** @description `GET /trash`. */
@@ -5249,11 +5545,23 @@ export type Action = components['schemas']['Action'];
 export type ActionState = components['schemas']['ActionState'];
 export type Actor = components['schemas']['Actor'];
 export type AddChat = components['schemas']['AddChat'];
+export type AddEmail = components['schemas']['AddEmail'];
 export type AddSource = components['schemas']['AddSource'];
 export type AdditionalCategory = components['schemas']['AdditionalCategory'];
 export type AdditionalIn = components['schemas']['AdditionalIn'];
 export type Advance = components['schemas']['Advance'];
+export type Alert = components['schemas']['Alert'];
+export type AlertButton = components['schemas']['AlertButton'];
+export type AlertHours = components['schemas']['AlertHours'];
+export type AlertInbox = components['schemas']['AlertInbox'];
+export type AlertLink = components['schemas']['AlertLink'];
+export type AlertOpened = components['schemas']['AlertOpened'];
+export type AlertPress = components['schemas']['AlertPress'];
+export type AlertRule = components['schemas']['AlertRule'];
+export type AlertTier = components['schemas']['AlertTier'];
 export type Alerts = components['schemas']['Alerts'];
+export type AlertsRead = components['schemas']['AlertsRead'];
+export type AlertsUnread = components['schemas']['AlertsUnread'];
 export type Allow = components['schemas']['Allow'];
 export type AnswerState = components['schemas']['AnswerState'];
 export type Approval = components['schemas']['Approval'];
@@ -5277,6 +5585,8 @@ export type BrandReads = components['schemas']['BrandReads'];
 export type Brands = components['schemas']['Brands'];
 export type Browser = components['schemas']['Browser'];
 export type Business = components['schemas']['Business'];
+export type Cadence = components['schemas']['Cadence'];
+export type Cadences = components['schemas']['Cadences'];
 export type CallInput = components['schemas']['CallInput'];
 export type Caller = components['schemas']['Caller'];
 export type Candidates = components['schemas']['Candidates'];
@@ -5296,6 +5606,7 @@ export type Claude = components['schemas']['Claude'];
 export type ClaudeConnect = components['schemas']['ClaudeConnect'];
 export type Closed = components['schemas']['Closed'];
 export type Column = components['schemas']['Column'];
+export type ConfirmEmail = components['schemas']['ConfirmEmail'];
 export type ConnectedSites = components['schemas']['ConnectedSites'];
 export type Connections = components['schemas']['Connections'];
 export type Consent = components['schemas']['Consent'];
@@ -5317,8 +5628,10 @@ export type ExportGmail = components['schemas']['ExportGmail'];
 export type ExportGmb = components['schemas']['ExportGmb'];
 export type ExportKickback = components['schemas']['ExportKickback'];
 export type ExportPerson = components['schemas']['ExportPerson'];
+export type Family = components['schemas']['Family'];
 export type Feedback = components['schemas']['Feedback'];
 export type Field = components['schemas']['Field'];
+export type Filter = components['schemas']['Filter'];
 export type Flow = components['schemas']['Flow'];
 export type FlowKindDto = components['schemas']['FlowKindDto'];
 export type Flows = components['schemas']['Flows'];
@@ -5326,7 +5639,6 @@ export type GbpCountry = components['schemas']['GbpCountry'];
 export type GbpRole = components['schemas']['GbpRole'];
 export type GeneralAccess = components['schemas']['GeneralAccess'];
 export type Gmail = components['schemas']['Gmail'];
-export type GmailBody = components['schemas']['GmailBody'];
 export type GmailForPerson = components['schemas']['GmailForPerson'];
 export type Gmails = components['schemas']['Gmails'];
 export type Gmb = components['schemas']['Gmb'];
@@ -5393,6 +5705,7 @@ export type MeterReadings = components['schemas']['MeterReadings'];
 export type MeterTotal = components['schemas']['MeterTotal'];
 export type MeterUse = components['schemas']['MeterUse'];
 export type Meters = components['schemas']['Meters'];
+export type Method = components['schemas']['Method'];
 export type ModelUsed = components['schemas']['ModelUsed'];
 export type Multiplier = components['schemas']['Multiplier'];
 export type MustHave = components['schemas']['MustHave'];
@@ -5439,14 +5752,15 @@ export type ReportSources = components['schemas']['ReportSources'];
 export type ReviewArchiveExport = components['schemas']['ReviewArchiveExport'];
 export type Role = components['schemas']['Role'];
 export type Rule = components['schemas']['Rule'];
-export type RulesBody = components['schemas']['RulesBody'];
 export type Running = components['schemas']['Running'];
 export type Scale = components['schemas']['Scale'];
 export type Scope = components['schemas']['Scope'];
+export type SetAlertHours = components['schemas']['SetAlertHours'];
 export type SetBrands = components['schemas']['SetBrands'];
 export type SetBrowser = components['schemas']['SetBrowser'];
 export type SetBusiness = components['schemas']['SetBusiness'];
 export type SetCountry = components['schemas']['SetCountry'];
+export type SetDestination = components['schemas']['SetDestination'];
 export type SetGeneral = components['schemas']['SetGeneral'];
 export type SetImap = components['schemas']['SetImap'];
 export type SetKit = components['schemas']['SetKit'];
@@ -5481,10 +5795,13 @@ export type Tab = components['schemas']['Tab'];
 export type TabDto = components['schemas']['TabDto'];
 export type Target = components['schemas']['Target'];
 export type TelegramLink = components['schemas']['TelegramLink'];
+export type Tier = components['schemas']['Tier'];
 export type Title = components['schemas']['Title'];
 export type TokenHolder = components['schemas']['TokenHolder'];
 export type TokenHolders = components['schemas']['TokenHolders'];
 export type Tokens = components['schemas']['Tokens'];
+export type Told = components['schemas']['Told'];
+export type ToldState = components['schemas']['ToldState'];
 export type Traded = components['schemas']['Traded'];
 export type Trash = components['schemas']['Trash'];
 export type TrashSettings = components['schemas']['TrashSettings'];
@@ -7371,7 +7688,141 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's alerts, and what every change answers. */
+            /** @description How the caller's alerts are set, and what every change answers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_destination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetDestination"];
+            };
+        };
+        responses: {
+            /** @description How the caller's alerts are set, and what every change answers. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -7618,274 +8069,6 @@ export interface operations {
             };
         };
     };
-    set_destination_gmail: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GmailBody"];
-            };
-        };
-        responses: {
-            /** @description The caller's alerts, and what every change answers. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Alerts"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    set_destination_rules: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RulesBody"];
-            };
-        };
-        responses: {
-            /** @description The caller's alerts, and what every change answers. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Alerts"];
-                };
-            };
-            /** @description `bad_request` */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unauthenticated` */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `unaffordable` */
-            402: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `csrf`, `forbidden` */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `not_found` */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `conflict` */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_large` */
-            413: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `another_country`, `unreleased_category`, `unstudied` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `too_many` */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `internal` */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `bad_gateway` */
-            502: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description `browsers_not_connected`, `unavailable` */
-            503: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     test_destination: {
         parameters: {
             query?: never;
@@ -8014,6 +8197,1194 @@ export interface operations {
             };
         };
     };
+    add_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddEmail"];
+            };
+        };
+        responses: {
+            /** @description How the caller's alerts are set, and what every change answers. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    confirm_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmEmail"];
+            };
+        };
+        responses: {
+            /** @description How the caller's alerts are set, and what every change answers. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_alert_hours: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetAlertHours"];
+            };
+        };
+        responses: {
+            /** @description How the caller's alerts are set, and what every change answers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    alert_inbox: {
+        parameters: {
+            query?: {
+                /** @description Older than this one. */
+                before?: number | null;
+                /** @description About this GBP. */
+                gmb?: number | null;
+                tier?: components["schemas"]["Tier"] | null;
+                unread?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the caller's inbox, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertInbox"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    read_alerts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertsRead"];
+            };
+        };
+        responses: {
+            /** @description no content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    alert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One note, and where it went. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AlertOpened"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    alert_photo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A PNG. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    press_alert: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertPress"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alert"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_alert_tier: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule: components["schemas"]["Rule"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AlertTier"];
+            };
+        };
+        responses: {
+            /** @description How the caller's alerts are set, and what every change answers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     add_chat: {
         parameters: {
             query?: never;
@@ -8027,7 +9398,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The caller's alerts, and what every change answers. */
+            /** @description How the caller's alerts are set, and what every change answers. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -25693,11 +27064,13 @@ export const answerStateValues: ReadonlyArray<FlattenedDeepRequired<components>[
 export const approvalValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Approval"]> = ["ask", "spend", "act"];
 export const baseCountryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BaseCountry"]> = ["FR"];
 export const billValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Bill"]> = ["ours", "theirs"];
+export const cadenceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Cadence"]> = ["now", "off", "unread", "hourly", "daily"];
 export const closedValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Closed"]> = ["until_verified", "frozen_while_verifying", "off_maps"];
 export const countryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Country"]> = ["FR", "US", "CA", "GB"];
 export const destinationKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["DestinationKind"]> = ["channel", "private", "group"];
 export const deviceValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Device"]> = ["pixel_7", "galaxy_s23", "redmi_note_14"];
 export const errorCodeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ErrorCode"]> = ["another_country", "bad_gateway", "bad_request", "browsers_not_connected", "conflict", "csrf", "forbidden", "internal", "not_found", "too_large", "too_many", "unaffordable", "unauthenticated", "unavailable", "unreleased_category", "unstudied"];
+export const familyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Family"]> = ["leads", "reviews", "profiles", "money", "panel", "team"];
 export const feedbackValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Feedback"]> = ["up", "down"];
 export const fieldValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Field"]> = ["name", "place_id", "address", "phone", "website", "hours", "google_primary", "country", "point", "photos", "areas", "hidden_address", "customers_visit", "spots", "role", "owner_gmail"];
 export const flowKindDtoValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["FlowKindDto"]> = ["renewal", "purchase", "set", "spend", "grant_claimed", "refund", "granted"];
@@ -25710,6 +27083,7 @@ export const kitHappeningValues: ReadonlyArray<FlattenedDeepRequired<components>
 export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitTarget"]> = ["google", "drafts", "one_tap"];
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
 export const mentionKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MentionKind"]> = ["location"];
+export const methodValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Method"]> = ["email", "telegram", "discord", "discord_channel", "slack", "push", "webhook"];
 export const mustHaveValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MustHave"]> = ["name", "areas", "phone", "film", "gmail", "category", "site", "hidden_address", "profile"];
 export const needValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Need"]> = ["sa:admin:sources:manage", "sa:admin:tokens:grant", "sa:admin:trash:keep", "sa:members:act_as", "sa:own:credentials", "sa:own:payments", "sa:placement:library:curate", "sa:placement:study:read", "sa:placement:study:spend", "sa:playbook:mcp:use", "sa:review_archive:archive:operate", "sa:sites:analysis:experiments:edit", "sa:sites:analysis:read", "sa:sites:work:invoices:create", "sa:sites:work:leads:edit", "sa:sites:work:pii:see", "sa:sites:work:places:edit", "sa:sites:work:pricing:edit", "sa:sites:work:read", "sa:admin", "sa:everyone", "sa:operator"];
 export const onGoogleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["OnGoogle"]> = ["verifying", "verified", "suspended"];
@@ -25717,7 +27091,7 @@ export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["
 export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "places.profile", "places.photo", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
-export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "payment_received", "source_silent", "booked", "access_requested", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed"];
+export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "booked", "payment_received", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed", "tokens_low", "browser_stopped", "kickback", "access_granted", "access_requested", "source_silent", "gbp_state", "google_mail", "connection_lost", "assistant_waiting", "release_out", "trash_purge", "feed_stalled", "meter_held"];
 export const scaleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scale"]> = ["linear", "percentile"];
 export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive", "browsers", "placement"];
 export const sortValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Sort"]> = ["rank", "recent", "used"];
@@ -25725,6 +27099,8 @@ export const sourceKindValues: ReadonlyArray<FlattenedDeepRequired<components>["
 export const stateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["State"]> = ["draft", "verifying", "verified", "suspended"];
 export const stopValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Stop"]> = ["at_free", "never"];
 export const tabValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tab"]> = ["profile", "log", "launch", "browser", "connections", "stats", "ranking", "reviews", "verification", "appeal"];
+export const tierValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Tier"]> = ["info", "important", "urgent"];
+export const toldStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ToldState"]> = ["pending", "sent", "dead", "dropped"];
 export const vendorValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Vendor"]> = ["google"];
 export const whyValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Why"]> = ["edit", "adopt", "update", "revert"];
 export const browserCloseValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BrowserClose"]> = [4401, 4404, 4409, 4410, 1000, 1001, 1003, 1007];

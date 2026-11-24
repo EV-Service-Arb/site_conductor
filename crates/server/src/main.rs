@@ -13,14 +13,16 @@ use clap::{Parser, Subcommand};
 use ev_lib::error_monitoring;
 use eyre::WrapErr;
 use sa_auth::Catalog;
+use sa_core::notify::Locale;
 use sa_panel::{Panel, alerts::Hub, seal::DataKey, store::Store};
 use sa_server::{
-	alerts::{self, Telegram},
+	alerts::{self, Alerting},
 	concierge::{Concierge, DevIdentity},
 	forward::{Forward, Services},
 	grafana::Grafana,
 	http, live,
 	signin::{SignIn, SignInConfig},
+	outlets::Networks,
 	telegram::{self, BotApi, BotName},
 	tokens, trash,
 	web::{self, Files},
@@ -362,6 +364,7 @@ async fn serve(
 	let (stop, stopped) = tokio::sync::watch::channel(false);
 	let bus = panel.bus().clone();
 	let cabinet = config.concierge_origin.clone();
+	let origin = config.panel_origin.clone();
 	let hub_panel = panel.clone();
 	let hub_concierge = concierge.clone();
 	let engine = panel.clone();
@@ -376,27 +379,32 @@ async fn serve(
 			None
 		}
 	};
-	let bot = match (telegram, &forward) {
-		(Some(tg), Some(forward)) => {
+	let alerting = match &forward {
+		Some(forward) => {
+			let (bot, locale) = match telegram {
+				Some(tg) => (Some((BotApi::try_new(telegram::API_BASE, zeroize::Zeroizing::new(tg.token))?, BotName::new(tg.username))), tg.locale),
+				None => {
+					tracing::warn!("TELEGRAM_BOT_TOKEN unset: no alerts by Telegram");
+					(None, Locale::En)
+				}
+			};
+			let (telegram, bot) = bot.unzip();
 			let hub = Hub {
 				panel: hub_panel,
-				bot: BotApi::try_new(telegram::API_BASE, zeroize::Zeroizing::new(tg.token))?,
+				outlets: Networks { telegram },
 				concierge: hub_concierge,
 				feeds: forward.clone(),
-				locale: tg.locale,
+				locale,
 				cabinet: cabinet.parse().wrap_err("the concierge origin is not a URL")?,
+				origin: origin.parse().wrap_err("the panel's origin is not a URL")?,
 			};
-			tracing::info!("alerts on, by Telegram");
-			Some(Telegram {
+			tracing::info!(methods = ?hub.outlets.methods(), "alerts on");
+			Some(Alerting {
 				hub,
-				name: BotName::new(tg.username),
+				bot: bot.unwrap_or_default(), // without a bot, never learned
 			})
 		}
-		(Some(_), None) => unreachable!("refused before serve"),
-		(None, _) => {
-			tracing::warn!("TELEGRAM_BOT_TOKEN unset: alerts off");
-			None
-		}
+		None => None,
 	};
 	let grafana = match (grafana, &forward) {
 		(Some(g), Some(forward)) => {
@@ -429,7 +437,7 @@ async fn serve(
 		forward,
 		grafana.as_ref().map(|(g, _)| g),
 		http::Limits::default(),
-		bot.clone(),
+		alerting.clone(),
 		browsers,
 		Some(model),
 		sandbox.clone(),
@@ -455,9 +463,9 @@ async fn serve(
 		served
 	};
 	let hubs = async {
-		let bot = async {
-			if let Some(t) = bot {
-				alerts::run(t, stopped.clone()).await;
+		let alerting = async {
+			if let Some(a) = alerting {
+				alerts::run(a, stopped.clone()).await;
 			}
 		};
 		let feed = async {
@@ -485,7 +493,7 @@ async fn serve(
 		};
 		let meters = sa_server::meters::run(metered, readers, publish, stopped.clone());
 		let workers = sandbox.run(stopped.clone());
-		tokio::join!(bot, feed, usage, inboxes, tokens, grafana, purge, meters, catalog, workers);
+		tokio::join!(alerting, feed, usage, inboxes, tokens, grafana, purge, meters, catalog, workers);
 	};
 	let (served, ()) = tokio::join!(server, hubs);
 	served

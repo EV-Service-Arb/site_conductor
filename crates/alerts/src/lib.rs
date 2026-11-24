@@ -1,112 +1,156 @@
 //! Alerts' shared, I/O-free contract: rules and the notes publishing services expose to the
 //! conductor.
 
-use std::{fmt, str::FromStr};
-
 use jiff::Timestamp;
 use sa_auth::{Leads, PermissionSet, SA_ADMIN, Service, Sources};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use strum::{AsRefStr, Display, EnumString, VariantArray};
 use uuid::Uuid;
 
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-pub enum Audience {
-	Permission,
-	GmbOwners,
+/// How much a note matters: what it may interrupt.
+#[derive(AsRefStr, Clone, Copy, Debug, Deserialize, EnumString, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, VariantArray)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum Tier {
+	/// Nice to know.
+	Info,
+	/// Today, by the person told.
+	Important,
+	/// Minutes cost money.
+	Urgent,
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, schemars::JsonSchema)]
+/// Whom a rule's note is for.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Audience {
+	/// Everyone holding what opens the rule.
+	Permission,
+	/// The owners of the GMBs the note names.
+	GmbOwners,
+	/// The one person it is about.
+	Person,
+}
+
+/// What a rule is about, as a person sorts their alerts.
+#[derive(AsRefStr, Clone, Copy, Debug, Deserialize, EnumString, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, VariantArray)]
 #[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+pub enum Family {
+	Leads,
+	Reviews,
+	Profiles,
+	Money,
+	Panel,
+	Team,
+}
+
+#[derive(AsRefStr, Clone, Copy, Debug, Deserialize, Display, EnumString, Eq, Hash, JsonSchema, Ord, PartialEq, PartialOrd, Serialize, VariantArray)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
 pub enum Rule {
 	NewLead,
 	ContactOverdue,
-	PaymentReceived,
-	SourceSilent,
 	Booked,
-	AccessRequested,
+	PaymentReceived,
 	ReviewNew,
 	ReviewChanged,
 	ReviewGone,
 	ReviewReappeared,
 	ScanFailed,
+	/// A GBP moved to another state, by Google or by someone else than its owner.
+	GbpState,
+	/// Mail from Google in a gmail's inbox.
+	GoogleMail,
+	/// A gmail's inbox, Business Profile grant or proxy no longer answers.
+	ConnectionLost,
+	TokensLow,
+	BrowserStopped,
+	Kickback,
+	/// The assistant holds a call until the person agrees to it.
+	AssistantWaiting,
+	AccessGranted,
+	/// A newer version of a listing a category was taken from.
+	ReleaseOut,
+	/// What was removed is about to be deleted for good.
+	TrashPurge,
+	AccessRequested,
+	SourceSilent,
+	/// A service's feed keeps failing.
+	FeedStalled,
+	/// A Google account's meter reached its stop.
+	MeterHeld,
 }
 
 impl Rule {
-	pub const ALL: [Self; 11] = [
-		Self::NewLead,
-		Self::ContactOverdue,
-		Self::PaymentReceived,
-		Self::SourceSilent,
-		Self::Booked,
-		Self::AccessRequested,
-		Self::ReviewNew,
-		Self::ReviewChanged,
-		Self::ReviewGone,
-		Self::ReviewReappeared,
-		Self::ScanFailed,
-	];
-
-	pub const fn as_str(self) -> &'static str {
-		match self {
-			Self::NewLead => "new_lead",
-			Self::ContactOverdue => "contact_overdue",
-			Self::PaymentReceived => "payment_received",
-			Self::SourceSilent => "source_silent",
-			Self::Booked => "booked",
-			Self::AccessRequested => "access_requested",
-			Self::ReviewNew => "review_new",
-			Self::ReviewChanged => "review_changed",
-			Self::ReviewGone => "review_gone",
-			Self::ReviewReappeared => "review_reappeared",
-			Self::ScanFailed => "scan_failed",
+	/// The service whose feed publishes it; `None`: the conductor's own.
+	pub const fn feed(self) -> Option<Service> {
+		match self.family() {
+			Family::Leads => Some(Service::Sites),
+			Family::Reviews => Some(Service::ReviewArchive),
+			Family::Profiles | Family::Money | Family::Panel | Family::Team => None,
 		}
 	}
 
-	/// The service whose feed publishes it; `None`: the conductor's own.
-	pub const fn feed(self) -> Option<Service> {
+	pub const fn family(self) -> Family {
 		match self {
-			Self::NewLead | Self::ContactOverdue | Self::PaymentReceived | Self::Booked => Some(Service::Sites),
-			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => Some(Service::ReviewArchive),
-			Self::SourceSilent | Self::AccessRequested => None,
+			Self::NewLead | Self::ContactOverdue | Self::Booked | Self::PaymentReceived => Family::Leads,
+			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => Family::Reviews,
+			Self::GbpState | Self::GoogleMail | Self::ConnectionLost => Family::Profiles,
+			Self::TokensLow | Self::BrowserStopped | Self::Kickback => Family::Money,
+			Self::AssistantWaiting | Self::AccessGranted | Self::ReleaseOut | Self::TrashPurge => Family::Panel,
+			Self::AccessRequested | Self::SourceSilent | Self::FeedStalled | Self::MeterHeld => Family::Team,
 		}
 	}
 
 	pub const fn audience(self) -> Audience {
 		match self {
-			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => Audience::GmbOwners,
-			_ => Audience::Permission,
+			Self::GbpState => Audience::GmbOwners,
+			_ => match self.family() {
+				Family::Leads | Family::Team => Audience::Permission,
+				Family::Reviews => Audience::GmbOwners,
+				Family::Profiles | Family::Money | Family::Panel => Audience::Person,
+			},
 		}
 	}
 
-	pub const fn on_by_default(self) -> bool {
-		matches!(self, Self::NewLead | Self::ContactOverdue | Self::Booked | Self::AccessRequested | Self::ReviewGone)
+	/// Its notes' tier, where neither the note nor the person says another.
+	pub const fn tier(self) -> Tier {
+		match self {
+			Self::NewLead | Self::ContactOverdue => Tier::Urgent,
+			Self::Booked
+			| Self::ReviewGone
+			| Self::GbpState
+			| Self::GoogleMail
+			| Self::ConnectionLost
+			| Self::TokensLow
+			| Self::BrowserStopped
+			| Self::AssistantWaiting
+			| Self::AccessRequested
+			| Self::SourceSilent
+			| Self::FeedStalled
+			| Self::MeterHeld => Tier::Important,
+			Self::PaymentReceived
+			| Self::ReviewNew
+			| Self::ReviewChanged
+			| Self::ReviewReappeared
+			| Self::ScanFailed
+			| Self::Kickback
+			| Self::AccessGranted
+			| Self::ReleaseOut
+			| Self::TrashPurge => Tier::Info,
+		}
 	}
 
+	/// Whether `permissions` open it; owning the GMB, or being the person, is the hub's to check.
 	pub fn open_to(self, permissions: &PermissionSet) -> bool {
 		match self {
 			Self::NewLead | Self::ContactOverdue | Self::Booked => permissions.may(Leads::Edit),
-			Self::PaymentReceived | Self::SourceSilent => permissions.may(Sources::Manage),
+			Self::PaymentReceived | Self::SourceSilent | Self::FeedStalled | Self::MeterHeld => permissions.may(Sources::Manage),
 			Self::AccessRequested => SA_ADMIN.members.iter().all(|member| permissions.iter().any(|held| held == *member)),
-			Self::ReviewNew | Self::ReviewChanged | Self::ReviewGone | Self::ReviewReappeared | Self::ScanFailed => true,
+			_ => true,
 		}
-	}
-}
-
-impl fmt::Display for Rule {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(self.as_str())
-	}
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, thiserror::Error)]
-#[error("unknown alert rule {0:?}")]
-pub struct UnknownRule(String);
-
-impl FromStr for Rule {
-	type Err = UnknownRule;
-
-	fn from_str(value: &str) -> Result<Self, Self::Err> {
-		Self::ALL.into_iter().find(|rule| rule.as_str() == value).ok_or_else(|| UnknownRule(value.to_owned()))
 	}
 }
 
@@ -153,6 +197,12 @@ pub struct Note {
 	pub gmbs: Vec<i64>,
 	#[serde(default, skip_serializing_if = "Option::is_none")]
 	pub photo: Option<String>,
+	/// Its own, where it is not its rule's.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub tier: Option<Tier>,
+	/// What opens it in the panel: a path on the conductor's origin.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub link: Option<String>,
 }
 impl Note {
 	/// Its shape, against the feed it came from; its buttons' calls are the conductor's to resolve.
@@ -168,10 +218,13 @@ impl Note {
 		if self.rule.feed() != Some(feed) {
 			return Err(fail(format!("rule belongs to {}, not {feed}", self.rule.feed().map_or("the conductor", Service::as_str))));
 		}
-		match self.rule.audience() {
-			Audience::GmbOwners if self.gmbs.is_empty() => return Err(fail("GMB-owned rule has no GMBs".into())),
-			Audience::Permission if !self.gmbs.is_empty() => return Err(fail("permission rule carries GMBs".into())),
-			_ => {}
+		if self.rule.audience() == Audience::GmbOwners && self.gmbs.is_empty() {
+			return Err(fail("GMB-owned rule has no GMBs".into()));
+		}
+		if let Some(link) = &self.link
+			&& !is_local_path(link)
+		{
+			return Err(fail(format!("link {link:?} is not a path on the conductor's origin")));
 		}
 		if self.photo.is_some() && self.rule != Rule::ReviewGone {
 			return Err(fail("only review_gone may carry a photo".into()));
@@ -227,6 +280,11 @@ pub fn is_button_id(value: &str) -> bool {
 	(2..=16).contains(&value.len()) && value.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
 
+/// A path, with its query if any, on this origin: never another's.
+fn is_local_path(path: &str) -> bool {
+	path.starts_with('/') && !path.starts_with("//") && path.bytes().all(|byte| byte.is_ascii_graphic() && byte != b'\\')
+}
+
 fn valid_path(path: &str) -> bool {
 	path.starts_with('/')
 		&& !path.starts_with("//")
@@ -253,20 +311,20 @@ mod tests {
 			buttons: vec![],
 			gmbs: vec![],
 			photo: None,
+			tier: None,
+			link: None,
 		}
 	}
 
 	#[test]
 	fn rules_round_trip_and_describe_their_feed() {
-		for rule in Rule::ALL {
-			assert_eq!(rule.as_str().parse::<Rule>().unwrap(), rule);
+		for rule in Rule::VARIANTS {
+			assert_eq!(rule.as_ref().parse::<Rule>().unwrap(), *rule);
 		}
 		assert!("review_low".parse::<Rule>().is_err());
 		assert_eq!(Rule::ReviewGone.feed(), Some(Service::ReviewArchive));
 		assert_eq!(Rule::SourceSilent.feed(), None);
 		assert_eq!(Rule::ReviewGone.audience(), Audience::GmbOwners);
-		assert!(Rule::ReviewGone.on_by_default());
-		assert!(!Rule::ReviewNew.on_by_default());
 	}
 
 	#[test]
@@ -274,16 +332,15 @@ mod tests {
 		let operator: PermissionSet = sa_auth::SA_OPERATOR.members.iter().copied().collect();
 		let admin: PermissionSet = SA_ADMIN.members.iter().copied().collect();
 		let nobody: PermissionSet = std::iter::empty::<&str>().collect();
-		assert!(Rule::Booked.on_by_default());
 		assert!(Rule::Booked.open_to(&operator));
 		assert!(Rule::NewLead.open_to(&operator));
 		assert!(Rule::ContactOverdue.open_to(&operator));
 		assert!(!Rule::PaymentReceived.open_to(&operator));
 		assert!(!Rule::SourceSilent.open_to(&operator));
 		assert!(!Rule::AccessRequested.open_to(&operator));
-		assert!(Rule::ALL.iter().all(|r| r.open_to(&admin)));
-		for rule in Rule::ALL {
-			assert_eq!(rule.open_to(&nobody), rule.audience() == Audience::GmbOwners, "{rule}: owning the GMB is the hub's to check");
+		assert!(Rule::VARIANTS.iter().all(|r| r.open_to(&admin)));
+		for rule in Rule::VARIANTS {
+			assert_eq!(rule.open_to(&nobody), rule.audience() != Audience::Permission, "{rule}: owning the GMB, being the person is the hub's to check");
 		}
 	}
 
@@ -297,7 +354,12 @@ mod tests {
 
 		let mut sites = note(Rule::NewLead);
 		sites.gmbs.push(7);
-		assert_eq!(sites.check(Service::Sites).unwrap_err().reason, "permission rule carries GMBs");
+		sites.link = Some("/sites/leads/aquafix/l-1?tab=log".into());
+		assert!(sites.check(Service::Sites).is_ok());
+		for elsewhere in ["https://evil.example", "//evil.example", "/\\evil.example", "/a b"] {
+			sites.link = Some(elsewhere.into());
+			assert!(sites.check(Service::Sites).is_err(), "{elsewhere}");
+		}
 	}
 
 	#[test]

@@ -25,6 +25,7 @@ pub mod kit;
 pub(crate) mod library;
 pub mod meters;
 pub mod oauth;
+pub mod outbox;
 pub(crate) mod placement;
 mod queries_cache;
 pub mod sessions;
