@@ -60,7 +60,8 @@ pub(crate) async fn logged(conn: &mut SqliteConnection, gmail: i64, message: &st
 
 /// The gmail's live GBPs, as a message may name them.
 pub(crate) async fn gmbs(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Vec<Named>> {
-	let rows: Vec<(i64, Option<String>, Option<String>, Option<String>)> =
+	type Row = (i64, Option<String>, Option<String>, Option<String>);
+	let rows: Vec<Row> =
 		sqlx::query_as("SELECT id, name, place_id, address FROM gmbs WHERE gmail_id = $1 AND removed_at IS NULL ORDER BY id")
 			.bind(gmail)
 			.fetch_all(&mut *conn)

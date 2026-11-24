@@ -50,8 +50,9 @@
       # the Bot API; the Places API (the accounts' Places keys); GoLogin's (GOLOGIN_TOKEN) and
       # Multilogin's (MULTILOGIN_TOKEN) APIs; the Claude API (CLAUDE_CODE_OAUTH_TOKEN)
       # the meters' baseline: each account's billing export, its service account's token
-      # a gmail's inbox, at whatever public host its owner set (crates/panel/src/imap.rs)
-      ports = [ 993 ];
+      # a gmail's inbox, at whatever public host its owner set (crates/panel/src/imap.rs); its replies
+      # to Google, over smtp.gmail.com (crates/panel/src/smtp.rs)
+      ports = [ 993 465 ];
       hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "bigquery.googleapis.com:443" "oauth2.googleapis.com:443" "api.anthropic.com:443" ];
     };
   };

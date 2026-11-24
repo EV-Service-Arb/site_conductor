@@ -166,7 +166,8 @@ fn json<T: serde::Serialize + ?Sized>(v: &T) -> String {
 
 /// What each case of the gmail's holds, for a message to join; a message not Google's draws none.
 pub(crate) async fn holds(conn: &mut SqliteConnection, gmail: i64) -> eyre::Result<Vec<Holds>> {
-	let rows: Vec<(i64, Json<BTreeSet<String>>, String, Option<String>, bool, Option<String>)> = sqlx::query_as(
+	type Row = (i64, Json<BTreeSet<String>>, String, Option<String>, bool, Option<String>);
+	let rows: Vec<Row> = sqlx::query_as(
 		"SELECT c.id, c.numbers, m.thread, m.message_id, m.sent, m.from_address FROM mail_cases c \
 		 JOIN mails m ON m.case_id = c.id AND (m.authentic OR m.sent) WHERE c.gmail_id = $1 ORDER BY c.id",
 	)
@@ -312,9 +313,10 @@ pub(crate) async fn owners(conn: &mut SqliteConnection) -> eyre::Result<Vec<Uuid
 		.wrap_err("listing whose mail is kept")
 }
 
+/// The model's never goes over a person's.
 pub(crate) async fn set_reading(conn: &mut SqliteConnection, mail: i64, reading: &Reading, by: ReadBy, now: Timestamp) -> eyre::Result<()> {
 	let by: &'static str = by.into();
-	sqlx::query("UPDATE mails SET reading = $2, read_by = $3, read_at = $4, read_error = NULL WHERE id = $1")
+	sqlx::query("UPDATE mails SET reading = $2, read_by = $3, read_at = $4, read_error = NULL WHERE id = $1 AND (read_by IS NOT 'person' OR $3 = 'person')")
 		.bind(mail)
 		.bind(json(reading))
 		.bind(by)

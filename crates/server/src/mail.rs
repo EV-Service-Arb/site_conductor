@@ -804,6 +804,8 @@ Answer with body and needs, nothing null; or, when no reply serves the goal, bod
 pub struct Worker {
 	pub panel: Panel,
 	pub model: Model,
+	/// Replies go by themselves: production's alone, or a copy of its database would answer Google too.
+	pub by_itself: bool,
 	/// The alerts' language and the panel's origin; none without a bot.
 	pub tell: Option<(Locale, url::Url)>,
 }
@@ -832,7 +834,9 @@ impl Worker {
 
 	/// What is held until now sent, and what turned to a person told.
 	pub async fn send_and_tell(&self) -> eyre::Result<()> {
-		self.panel.send_held_mail(Timestamp::now()).await?;
+		if self.by_itself {
+			self.panel.send_held_mail(Timestamp::now()).await?;
+		}
 		if let Some((locale, origin)) = &self.tell {
 			self.panel.tell_mail(*locale, origin, Timestamp::now()).await?;
 		}
@@ -841,7 +845,7 @@ impl Worker {
 
 	/// The person's mail; whether the model was asked anything.
 	async fn of(&self, owner: Uuid) -> Result<bool, Unanswered> {
-		let Self { panel, model, .. } = self;
+		let Self { panel, model, by_itself, .. } = self;
 		let mut asked = false;
 		for m in panel.unread_mail(owner, Timestamp::now()).await? {
 			asked = true;
@@ -864,7 +868,7 @@ impl Worker {
 				Err(Unanswered::Unread(why)) => Written::Failed(why),
 				Err(e) => return Err(e),
 			};
-			panel.draft_mail(owner, c.id, brief.case.last().said.id, written, false, Timestamp::now()).await?;
+			panel.draft_mail(owner, c.id, brief.case.last().said.id, written, !by_itself, Timestamp::now()).await?;
 		}
 		Ok(asked)
 	}

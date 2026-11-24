@@ -4204,7 +4204,7 @@ export interface components {
             files: components["schemas"]["MailFile"][];
         };
         /**
-         * @description Auto-generated discriminant enum variants
+         * @description A case's state, by its name.
          *
          *     - `reply_ready`: A draft waits for the operator.
          *     - `sending`: A draft goes by itself.

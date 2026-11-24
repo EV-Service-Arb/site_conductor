@@ -43,6 +43,8 @@ fn the_contract_is_what_the_binary_requires_mounts_and_forwards() {
 		printed(&["--print-paths", "unpublished"]),
 		"ingress.excludePathPrefixes"
 	);
+	let ports: BTreeSet<u64> = deploy["egress"]["ports"].as_array().expect("a list").iter().map(|p| p.as_u64().expect("a port")).collect();
+	assert_eq!(ports, sa_panel::mail::PORTS.map(u64::from).into(), "egress.ports");
 	let consumes: BTreeSet<String> = c["consumes"].as_object().expect("an attrset").keys().cloned().collect();
 	assert_eq!(consumes, printed(&["--print-paths", "consumed"]), "consumes");
 	let provides: BTreeSet<String> = c["provides"].as_object().expect("an attrset").values().map(|v| v.as_str().expect("a path").to_owned()).collect();

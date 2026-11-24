@@ -573,7 +573,7 @@ pub struct Case<'a> {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema, strum::EnumDiscriminants)]
 #[serde(tag = "is", rename_all = "snake_case")]
 #[schemars(rename = "MailState")]
-#[strum_discriminants(name(Standing), derive(Deserialize, schemars::JsonSchema), serde(rename_all = "snake_case"), schemars(rename = "MailStanding"))]
+#[strum_discriminants(doc = "A case's state, by its name.", name(Standing), derive(Deserialize, schemars::JsonSchema), serde(rename_all = "snake_case"), schemars(rename = "MailStanding"))]
 pub enum State {
 	NeedsYou {
 		why: Why,
