@@ -36,7 +36,9 @@ type Field = Changed["field"];
 function useListed(gmb: number): Listed | null | undefined {
   const gmails = useGmails();
   if (gmails.status !== "ok") return undefined;
-  return narrowed(gmails.data, null, "").find((l) => l.gmb.id === gmb) ?? null;
+  const listed = narrowed(gmails.data, null, "").find((l) => l.gmb.id === gmb);
+  // one added a moment ago postdates a list being read again
+  return listed ?? (gmails.fresh ? null : undefined);
 }
 
 const CLOSED_WHY = {
