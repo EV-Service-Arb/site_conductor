@@ -141,7 +141,7 @@ function List({ cases, all, show, opened, reload }: { cases: readonly MailCase[]
       {cases.map((c) => (
         <div key={c.id} className="flex flex-col">
           <CaseRow c={c} gbp={gbp(c)} current={c.id === opened} to={threads(show, c.id)} />
-          {unnamed(c) && !over(c) && <WhichGbp c={c} onChanged={reload} className="mx-2.5 mb-2" />}
+          {unnamed(c) && !over(c) && <WhichGbp c={c} onChanged={reload} className="mb-2 ml-2.5 w-60 max-w-[calc(100%-1.25rem)]" />}
         </div>
       ))}
     </div>

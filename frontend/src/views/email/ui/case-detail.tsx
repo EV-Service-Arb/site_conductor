@@ -148,8 +148,8 @@ function Why({ detail: { case: c } }: { detail: MailCaseDetail }) {
     return (
       <p className="text-sm text-ink-soft">
         {c.last.who === "us" || c.draft?.state === "sent"
-          ? t(mail.routed.pressed, "Asked again. If the specialist is still silent at {until}, it needs you.", { until })
-          : t(mail.routed, "A specialist answers by {until}. If they are silent past it, a reply asks again, once.", { until })}
+          ? t(mail.routed.pressed, "Asked again. With no answer by {until}, it needs you.", { until })
+          : t(mail.routed, "A specialist is to answer by {until}. Silent past it, one reply asks again.", { until })}
       </p>
     );
   }
@@ -282,7 +282,7 @@ function Read({ m, reload }: { m: MailMessage; reload: () => void }) {
   return (
     <div className="flex flex-col gap-2 text-xs text-ink-soft">
       {reasons.length > 0 && <p className="break-words">{t(mail.message.reasons, "Reasons: {reasons}", { reasons: reasons.join(" · ") })}</p>}
-      {m.reading?.kind === "unclear" && <p>{t(mail.message.unclear, "What it says could not be told: it is answered by asking for the goal again. Set its kind if you can tell.")}</p>}
+      {m.reading?.kind === "unclear" && <p>{t(mail.message.unclear, "What it says could not be told: the reply asks Google again. Set its kind if you can tell.")}</p>}
       {m.read_error !== null && <p className="break-words text-accent-error">{m.read_error}</p>}
       <span className="flex flex-wrap items-center gap-2">
         <label htmlFor={id}>{t(mail.message.kind, "Kind")}</label>

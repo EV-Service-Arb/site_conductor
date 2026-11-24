@@ -217,8 +217,8 @@ function Asked({ c }: { c: MailCase | undefined }) {
   const t = useT();
   if (c === undefined) return null;
   return (
-    <ViewLink to={{ view: "email", params: { case: c.id } }} className="flex items-center gap-1 rounded-sm font-sans text-xs text-ink-soft normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
-      {t(windowKeys.reviews.reinstatement, "With Google support")}
+    <ViewLink to={{ view: "email", params: { case: c.id } }} className="flex items-center gap-1 rounded-sm font-sans text-xs text-ink-soft whitespace-nowrap normal-case outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-ring">
+      {t(windowKeys.reviews.case, "Their case")}
       <ChevronRight aria-hidden className="size-3" />
     </ViewLink>
   );
