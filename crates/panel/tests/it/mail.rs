@@ -1031,6 +1031,13 @@ async fn google_is_pressed_over_days_as_far_as_it_should_be() {
 			"kind d0, us d1, us d3, us d5",
 		),
 		(
+			"the call offered, then failed by a mail naming no GBP",
+			vec![(0, says(CallOffered, LYON)), (30, of(notice("2026-10-01T09:00:00Z", 9, "Your chat", "The call failed"), CallFailed))],
+			None,
+			4,
+			"kind d0, us d1, us d3",
+		),
+		(
 			"the same under another number",
 			vec![(0, says(SelfServe, LYON)), (30, anew(Acknowledged))],
 			None,

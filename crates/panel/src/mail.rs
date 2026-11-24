@@ -1029,6 +1029,23 @@ impl Panel {
 				},
 			));
 		}
+		// a failed call's follow-up names no GBP: the gmail's one whose call stands offered
+		let offered: Vec<(i64, i64, Timestamp)> = cases
+			.iter()
+			.filter_map(|(_, c)| {
+				let m = c.google()?;
+				(m.said.reading.as_ref()?.kind == Kind::CallOffered).then_some((c.gmail, c.gmb?, m.said.at))
+			})
+			.collect();
+		for (_, c) in cases.iter_mut().filter(|(_, c)| c.gmb.is_none()) {
+			let Some(m) = c.google().filter(|m| m.said.reading.as_ref().is_some_and(|r| r.kind == Kind::CallFailed)) else {
+				continue;
+			};
+			let of: BTreeSet<i64> = offered.iter().filter(|(gmail, _, at)| *gmail == c.gmail && *at < m.said.at).map(|(_, gmb, _)| *gmb).collect();
+			if let [one] = of.into_iter().collect::<Vec<_>>().as_slice() {
+				c.gmb = Some(*one);
+			}
+		}
 		let mut elsewhere: HashMap<i64, Vec<Said>> = HashMap::new();
 		for (gmb, at, from, to) in db::moves(conn, owner).await? {
 			let as_said: &[Kind] = match (from, to) {
