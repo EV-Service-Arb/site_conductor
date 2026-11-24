@@ -130,11 +130,13 @@ pub async fn claim_due(conn: &mut SqliteConnection, now: Timestamp, lease_until:
 	Ok(due)
 }
 
-pub async fn sent(conn: &mut SqliteConnection, id: i64, remote: &str, now: Timestamp) -> eyre::Result<()> {
-	sqlx::query("UPDATE alert_outbox SET state = 'sent', sent_at = $3, remote_id = $2, leased_until = NULL, last_error = NULL WHERE id = $1")
+/// `together`: in one message with others, so no button of it is pressed.
+pub async fn sent(conn: &mut SqliteConnection, id: i64, remote: &str, together: bool, now: Timestamp) -> eyre::Result<()> {
+	sqlx::query("UPDATE alert_outbox SET state = 'sent', sent_at = $3, remote_id = $2, together = $4, leased_until = NULL, last_error = NULL WHERE id = $1")
 		.bind(id)
 		.bind(remote)
 		.bind(to_db(now))
+		.bind(together)
 		.execute(&mut *conn)
 		.await
 		.wrap_err("recording a sent message")?;
@@ -209,6 +211,56 @@ pub async fn fold_crowded(conn: &mut SqliteConnection, over: i64, now: Timestamp
 	.execute(&mut *conn)
 	.await
 	.wrap_err("folding a crowd of messages")?;
+	Ok(())
+}
+
+/// A message not tried yet, held until later.
+pub struct Waiting {
+	pub id: i64,
+	pub destination_id: i64,
+	pub rule: Rule,
+	pub tier: Tier,
+}
+
+/// What waits of the user's past `now`.
+pub async fn waiting(conn: &mut SqliteConnection, user: Uuid, now: Timestamp) -> eyre::Result<Vec<Waiting>> {
+	let rows: Vec<(i64, i64, String, String)> =
+		sqlx::query_as("SELECT id, destination_id, rule, tier FROM alert_outbox WHERE user_id = $1 AND state = 'pending' AND attempts = 0 AND next_attempt_at > $2")
+			.bind(user)
+			.bind(to_db(now))
+			.fetch_all(&mut *conn)
+			.await
+			.wrap_err("listing what waits")?;
+	rows.into_iter()
+		.map(|(id, destination_id, rule, tier)| {
+			Ok(Waiting {
+				id,
+				destination_id,
+				rule: rule.parse().wrap_err_with(|| format!("message {id}'s rule"))?,
+				tier: tier.parse().wrap_err_with(|| format!("message {id}'s tier"))?,
+			})
+		})
+		.collect()
+}
+
+pub async fn postpone(conn: &mut SqliteConnection, id: i64, when: When) -> eyre::Result<()> {
+	sqlx::query("UPDATE alert_outbox SET next_attempt_at = $2, together = $3 WHERE id = $1")
+		.bind(id)
+		.bind(to_db(when.at))
+		.bind(when.together)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("moving what waits")?;
+	Ok(())
+}
+
+pub async fn drop_one(conn: &mut SqliteConnection, id: i64, why: &str) -> eyre::Result<()> {
+	sqlx::query(concat!(give_up!(), "id = $2"))
+		.bind(why)
+		.bind(id)
+		.execute(&mut *conn)
+		.await
+		.wrap_err("dropping what waits")?;
 	Ok(())
 }
 

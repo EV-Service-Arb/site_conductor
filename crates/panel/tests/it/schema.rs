@@ -5,19 +5,19 @@
 use std::collections::BTreeMap;
 
 use jiff::{SignedDuration, Timestamp};
-use sa_alerts::{Call, NotePage, Rule};
+use sa_alerts::{Call, NotePage};
 use sa_auth::{PermissionSet, SA_OPERATOR, Service, SourceKind};
 use sa_core::{
 	ids::{BrandId, SiteOrigin},
-	notify::{ChatId, Failure, Locale, Rendered},
+	notify::{Failure, Locale, Rendered},
 };
 use sa_panel::{
 	access::Asker,
-	alerts::{Directory, DirectoryError, Feeds, Hub, Identity},
+	alerts::{Address, Directory, DirectoryError, Feeds, Hub, Identity, Message, Outlets},
 	seal::DataKey,
 	session::{RefreshError, Refresher, SessionKey, Tokens},
 	store::Store,
-	telegram::{Account, Bot, CallbackId, Chat, ChatInfo, InlineButton, Target, Update},
+	telegram::{Account, CallbackId, Chat, ChatInfo, Update},
 	testing::{SourceKey, TestDb, panel_with, sign},
 };
 use serde_json::json;
@@ -25,6 +25,8 @@ use zeroize::Zeroizing;
 
 /// The migration that made Telegram one method of the alerts hub.
 const ALERTS: i64 = 20261105090000;
+/// The migration that let a destination be reached by any method.
+const METHODS: i64 = 20261124120000;
 /// The migration that took a trade's Google categories off Google's list.
 const GOOGLE_CATEGORIES: i64 = 20261112090000;
 /// The migration that made a category its studies' whole definition.
@@ -61,12 +63,12 @@ struct FakeBot {
 	blocked: bool,
 }
 
-impl Bot for FakeBot {
-	async fn send(&self, _: Target, _: &Rendered, _: &[InlineButton], _: Option<Vec<u8>>) -> Result<i64, Failure> {
-		if self.blocked { Err(Failure::Blocked) } else { Ok(1) }
+impl Outlets for FakeBot {
+	async fn send_to(&self, _: &Address, _: &Message) -> Result<String, Failure> {
+		if self.blocked { Err(Failure::Gone("blocked".into())) } else { Ok("1".to_owned()) }
 	}
 
-	async fn edit(&self, _: ChatId, _: i64, _: &Rendered, _: &[InlineButton]) -> Result<(), Failure> {
+	async fn edit(&self, _: i64, _: i64, _: &Rendered, _: &[(String, String)]) -> Result<(), Failure> {
 		Ok(())
 	}
 
@@ -78,7 +80,7 @@ impl Bot for FakeBot {
 		unreachable!("no chat is added here")
 	}
 
-	async fn is_admin(&self, _: ChatId, _: i64) -> Result<bool, Failure> {
+	async fn is_admin(&self, _: i64, _: i64) -> Result<bool, Failure> {
 		unreachable!("no chat is added here")
 	}
 }
@@ -222,11 +224,12 @@ async fn the_runtime_does_its_work_on_a_fresh_database() {
 		assert!(asked.need == "sa:operator");
 		let hub = |blocked| Hub {
 			panel: panel.clone(),
-			bot: FakeBot { blocked },
+			outlets: FakeBot { blocked },
 			concierge: Operators,
 			feeds: TwoLeads,
 			locale: Locale::Ru,
 			cabinet: cabinet(),
+			origin: cabinet(),
 		};
 		let operator: PermissionSet = SA_OPERATOR.members.iter().copied().collect();
 		let token = panel.telegram_link_token(user, &operator, "Olga", now).await.unwrap();
@@ -236,8 +239,6 @@ async fn the_runtime_does_its_work_on_a_fresh_database() {
 			from: Account::default(),
 		};
 		hub(false).handle(start(7), now).await.unwrap();
-		let destination = panel.alerts(user, &operator).await.unwrap().destinations[0].id;
-		panel.alerts_set_rules(user, &operator, destination, &[(Rule::NewLead, true)]).await.unwrap().unwrap();
 		panel.alerts_access_seen(user, &operator, "Olga", now).await.unwrap();
 		assert_eq!(hub(false).fan_out_own(now).await.unwrap(), 0, "an operator is not told of access requests");
 		assert_eq!(hub(false).take_feed(Service::Sites, now).await.unwrap(), Some(2), "sites' two leads");
@@ -562,7 +563,7 @@ async fn telegram_links_become_private_destinations_both_ways() {
 		sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&pool).await.unwrap();
 	}
 
-	migrator.run(&pool).await.unwrap();
+	migrator.run_to(METHODS - 1, &pool).await.unwrap();
 	let destinations: Vec<(uuid::Uuid, String, i64, Option<String>, bool)> = sqlx::query_as(
 		"SELECT d.user_id, t.kind, t.chat_id, t.title, t.dead_at IS NOT NULL FROM alert_destinations d \
 		 JOIN telegram_destinations t ON t.destination_id = d.id ORDER BY d.id",
@@ -603,6 +604,80 @@ async fn telegram_links_become_private_destinations_both_ways() {
 	assert_eq!(rules, [(ann, "new_lead".to_owned(), false)]);
 	let notes_after: i64 = sqlx::query_scalar("SELECT notes_after FROM telegram_poller").fetch_one(&pool).await.unwrap();
 	assert_eq!(notes_after, 42);
+}
+
+/// A Telegram destination keeps its chat, what it was scoped to and the rules its person chose, at a
+/// cadence for each tier; no message's id is handed out twice; on the way down, the same.
+#[tokio::test]
+async fn telegram_destinations_become_one_method_of_many_both_ways() {
+	let db = TestDb::create().await;
+	let pool = db.pool().await;
+	// One connection: another may still read the schema as it was before an undo.
+	let mut conn = pool.acquire().await.unwrap();
+	let migrator = sqlx::migrate!("./migrations");
+	migrator.undo(&mut *conn, METHODS - 1).await.unwrap();
+	for sql in [
+		"INSERT INTO users VALUES (x'00000000000000000000000000000001', 'ann@localhost', 'Ann', 1, 1)",
+		"INSERT INTO gmails (id, owner, gmail, created_at) VALUES (5, x'00000000000000000000000000000001', 'a@gmail.com', 1)",
+		"INSERT INTO alert_destinations (id, user_id, method, gmail_id, created_at) VALUES (3, x'00000000000000000000000000000001', 'telegram', 5, 10)",
+		"INSERT INTO alert_destinations (id, user_id, method, created_at) VALUES (4, x'00000000000000000000000000000001', 'telegram', 11)",
+		"INSERT INTO telegram_destinations (destination_id, kind, chat_id, title) VALUES (3, 'private', 7, '@ann')",
+		"INSERT INTO telegram_destinations (destination_id, kind, chat_id, topic_id, title, dead_at, dead_reason) VALUES (4, 'group', -9, 2, 'Ops', 99, 'kicked')",
+		"INSERT INTO alert_rules VALUES (3, 'new_lead', 0), (3, 'review_new', 1), (3, 'source_silent', 1)",
+		"INSERT INTO telegram_outbox (id, destination_id, user_id, chat_id, rule, event_id, state, next_attempt_at, created_at) \
+		 VALUES (41, 3, x'00000000000000000000000000000001', 7, 'booked', zeroblob(16), 'sent', 1, 1)",
+	] {
+		sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&mut *conn).await.unwrap();
+	}
+
+	migrator.run(&mut *conn).await.unwrap();
+	type Row = (i64, bool, Option<String>, String, String, String, String, Option<String>, String, i64, Option<i64>);
+	let destinations: Vec<Row> = sqlx::query_as(
+		"SELECT d.id, d.private, d.title, d.urgent, d.important, d.info, d.filter, d.dead_reason, t.kind, t.chat_id, t.topic_id \
+		 FROM alert_destinations d JOIN telegram_destinations t ON t.destination_id = d.id ORDER BY d.id",
+	)
+	.fetch_all(&mut *conn)
+	.await
+	.unwrap();
+	let filter = |f: &str| serde_json::from_str::<sa_core::alerts::Filter>(f).unwrap();
+	assert_eq!(filter(&destinations[0].6).gmails, [5].into());
+	assert_eq!(filter(&destinations[1].6), Default::default());
+	let kept: Vec<_> = destinations.into_iter().map(|(id, private, title, u, i, n, _, dead, kind, chat, topic)| (id, private, title, [u, i, n], dead, kind, chat, topic)).collect();
+	let cadences = ["now", "now", "off"].map(str::to_owned);
+	assert_eq!(
+		kept,
+		[
+			(3, true, Some("@ann".to_owned()), cadences.clone(), None, "private".to_owned(), 7, None),
+			(4, false, Some("Ops".to_owned()), cadences, Some("kicked".to_owned()), "group".to_owned(), -9, Some(2)),
+		]
+	);
+	let rules: Vec<(i64, String, String)> = sqlx::query_as("SELECT destination_id, rule, cadence FROM alert_rules ORDER BY 1, 2").fetch_all(&mut *conn).await.unwrap();
+	let rule = |d: i64, rule: &str, cadence: &str| (d, rule.to_owned(), cadence.to_owned());
+	assert_eq!(
+		rules,
+		[rule(3, "new_lead", "off"), rule(3, "review_new", "now"), rule(3, "source_silent", "now"), rule(4, "source_silent", "off")],
+		"silent sources, off until turned on, stay so"
+	);
+	let seq: i64 = sqlx::query_scalar("SELECT seq FROM sqlite_sequence WHERE name = 'alert_outbox'").fetch_one(&mut *conn).await.unwrap();
+	assert_eq!(seq, 41, "a button's data names its message's id");
+	for (sql, refusal) in [
+		("INSERT INTO alert_hours (user_id, tz, daily, quiet_to) VALUES (zeroblob(16), 'UTC', 0, 5)", "CHECK constraint failed"),
+		("INSERT INTO alert_hours (user_id, tz, daily, quiet_from, quiet_to) VALUES (zeroblob(16), 'UTC', 0, 5, 5)", "CHECK constraint failed"),
+	] {
+		let err = sqlx::query(sqlx::AssertSqlSafe(sql)).execute(&mut *conn).await.unwrap_err().to_string();
+		assert!(err.contains(refusal), "{sql}: {err}");
+	}
+
+	migrator.undo(&mut *conn, METHODS - 1).await.unwrap();
+	let back: Vec<(i64, Option<i64>, String, i64, Option<String>)> = sqlx::query_as(
+		"SELECT d.id, d.gmail_id, t.kind, t.chat_id, t.dead_reason FROM alert_destinations d JOIN telegram_destinations t ON t.destination_id = d.id ORDER BY d.id",
+	)
+	.fetch_all(&mut *conn)
+	.await
+	.unwrap();
+	assert_eq!(back, [(3, Some(5), "private".to_owned(), 7, None), (4, None, "group".to_owned(), -9, Some("kicked".to_owned()))]);
+	let rules: Vec<(String, bool)> = sqlx::query_as("SELECT rule, enabled FROM alert_rules WHERE destination_id = 3 ORDER BY 1").fetch_all(&mut *conn).await.unwrap();
+	assert_eq!(rules, [("new_lead".to_owned(), false), ("review_new".to_owned(), true), ("source_silent".to_owned(), true)]);
 }
 
 /// A free-text Google category becomes its gcid by its exact name, none stays none, and a label the
