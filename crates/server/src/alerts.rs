@@ -8,9 +8,9 @@ use axum::{
 	Extension, Json, Router,
 	body::Body as RawBody,
 	extract::{FromRef, Query, State},
-	http::{HeaderMap, HeaderName, HeaderValue, Method, Request, StatusCode, header},
-	response::{IntoResponse, NoContent, Redirect, Response},
-	routing::{get, post},
+	http::{HeaderName, HeaderValue, Method, Request, StatusCode, header},
+	response::{IntoResponse, NoContent, Response},
+	routing::post,
 };
 use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
 use futures::{StreamExt, stream::FuturesUnordered};
@@ -42,7 +42,7 @@ use crate::{
 	http::{ApiRoute, ApiState, FRESH, Limits, USER},
 	kit::Picture,
 	outlets::Networks,
-	signin::{Caller, SignIn},
+	signin::Caller,
 	telegram::{self, BotName},
 };
 
@@ -261,8 +261,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/alerts/telegram/chats", FRESH.needs(Own::Credentials), add_chat),
 		ApiRoute::new(M::POST, "/alerts/email", FRESH.needs(Own::Credentials), add_email),
 		ApiRoute::new(M::POST, "/alerts/email/confirm", FRESH.needs(Own::Credentials), confirm_email),
-		ApiRoute::new(M::POST, "/alerts/discord/link", FRESH.needs(Own::Credentials), discord_link),
-		ApiRoute::new(M::POST, "/alerts/discord/channels", FRESH.needs(Own::Credentials), add_discord_channel),
+		ApiRoute::new(M::POST, "/alerts/discord", FRESH.needs(Own::Credentials), add_discord),
 		ApiRoute::new(M::POST, "/alerts/slack", FRESH.needs(Own::Credentials), add_slack),
 		ApiRoute::new(M::POST, "/alerts/push", FRESH.needs(Own::Credentials), add_push),
 		ApiRoute::new(M::POST, "/alerts/webhooks", FRESH.needs(Own::Credentials), add_webhook),
@@ -272,17 +271,10 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 	]
 }
 
-/// Where Discord sends a person back to once they installed the bot.
-pub const DISCORD_CALLBACK: &str = "/auth/discord/alerts";
-
-/// What mail's one-click unsubscribe posts to (RFC 8058), open, its token its only say; and what
-/// Discord's consent comes back to.
-pub(crate) fn open_routes(sign_in: SignIn, alerting: Option<Alerting>, limits: &Limits) -> Router {
-	let unsubscribe = Router::new()
-		.route("/api/alerts/unsubscribe", post(unsubscribe).get(unsubscribe_page))
-		.with_state(sign_in.panel.clone());
-	let consent = Router::new().route(DISCORD_CALLBACK, get(discord_callback)).with_state((sign_in, alerting));
-	crate::http::bounded(unsubscribe.merge(consent), limits.auth_concurrent, limits.auth_timeout)
+/// What mail's one-click unsubscribe posts to: open, its token its only say (RFC 8058).
+pub(crate) fn open_routes(panel: Panel, limits: &Limits) -> Router {
+	let routes = Router::new().route("/api/alerts/unsubscribe", post(unsubscribe).get(unsubscribe_page));
+	crate::http::bounded(routes, limits.auth_concurrent, limits.auth_timeout).with_state(panel)
 }
 
 async fn answer(panel: &Panel, a: Option<&Alerting>, caller: &Caller) -> ApiResult<AlertsDto> {
@@ -617,85 +609,6 @@ async fn confirm_email(State(panel): State<Panel>, State(a): State<Option<Alerti
 	Ok(Created(answer(&panel, Some(&a), &caller).await?))
 }
 
-#[derive(JsonSchema, Serialize)]
-#[schemars(rename = "DiscordLink")]
-pub(crate) struct DiscordLinkDto {
-	/// Discord's consent page: it installs the bot to the caller's account, which lets it message them.
-	url: String,
-}
-
-/// A consent page that makes the bot's direct messages the caller's destination.
-///
-/// 503 without a bot.
-async fn discord_link(State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>) -> ApiResult<Created<DiscordLinkDto>> {
-	let a = hub(a)?;
-	let Some(discord) = &a.hub.outlets.discord else {
-		return Err(Refusal::new(Code::Unavailable, "Discord is not configured"));
-	};
-	let state = panel.alerts_discord_state(caller.user_id, Timestamp::now())?;
-	Ok(Created(DiscordLinkDto {
-		url: discord.oauth.authorize_url(&state).into(),
-	}))
-}
-
-#[derive(Deserialize)]
-struct Consented {
-	state: String,
-	code: Option<String>,
-	error: Option<String>,
-}
-
-/// Discord's redirect after a consent: the direct messages the caller's destination, then back to
-/// their alerts; a refusal is a page saying it.
-async fn discord_callback(State((s, a)): State<(SignIn, Option<Alerting>)>, headers: HeaderMap, Query(q): Query<Consented>) -> Response {
-	let caller = match crate::signin::check(&s, &headers, crate::signin::Freshness::Fresh).await {
-		Ok(c) => c,
-		Err(r) => return crate::signin::refused(&s, r),
-	};
-	match discord_consented(&s.panel, a, &caller, q).await {
-		Ok(()) => crate::signin::private(Redirect::to("/user/alerts/settings").into_response()),
-		Err(message) => crate::signin::private(
-			crate::signin::Said {
-				title: "Discord not connected",
-				message,
-			}
-			.into_response(),
-		),
-	}
-}
-
-async fn discord_consented(panel: &Panel, a: Option<Alerting>, caller: &Caller, q: Consented) -> Result<(), String> {
-	let now = Timestamp::now();
-	let Some(Alerting { hub, .. }) = a else {
-		return Err("alerts are not configured".to_owned());
-	};
-	let Some(discord) = &hub.outlets.discord else {
-		return Err("Discord is not configured".to_owned());
-	};
-	if !caller.permissions.may(Own::Credentials) {
-		return Err("Only your own sign-in connects Discord.".to_owned());
-	}
-	if !panel.alerts_discord_began(caller.user_id, &q.state, now) {
-		return Err("This consent is another account's, or out of date. Connect Discord again.".to_owned());
-	}
-	let code = match (q.code, q.error) {
-		(Some(code), None) => code,
-		(_, Some(error)) => return Err(format!("Discord said {error}.")),
-		(None, None) => return Err("Discord sent neither a code nor an error.".to_owned()),
-	};
-	let who = discord.oauth.exchange(&code).await.map_err(|f| f.to_string())?;
-	let to = Address::Discord { user: who.id };
-	let title = format!("@{}", who.username);
-	match hub.add(caller.user_id, &caller.permissions, display(caller), &to, &title, now).await {
-		Ok(Ok(_)) => Ok(()),
-		Ok(Err(refused)) => Err(refused.to_string()),
-		Err(e) => {
-			crate::report(&e, "alerts: adding a Discord account");
-			Err("It failed here. Try again.".to_owned())
-		}
-	}
-}
-
 /// Adds `to` as a destination of the caller's, once a test went out there.
 async fn add(a: Option<Alerting>, caller: &Caller, to: &Address, title: &str) -> ApiResult<AlertsDto> {
 	let a = hub(a)?;
@@ -704,9 +617,9 @@ async fn add(a: Option<Alerting>, caller: &Caller, to: &Address, title: &str) ->
 }
 
 #[derive(Deserialize, JsonSchema)]
-#[schemars(rename = "AddDiscordChannel")]
+#[schemars(rename = "AddDiscord")]
 #[serde(deny_unknown_fields)]
-pub(crate) struct AddDiscordChannel {
+pub(crate) struct AddDiscord {
 	/// The channel's webhook: Edit channel → Integrations → Webhooks.
 	url: String,
 	/// Urgent ones say `@here`.
@@ -716,13 +629,13 @@ pub(crate) struct AddDiscordChannel {
 /// Adds a Discord channel by its webhook, once a test went out there.
 ///
 /// 400 refused (nothing stored), 409 a destination already.
-async fn add_discord_channel(_: Outward, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddDiscordChannel>) -> ApiResult<Created<AlertsDto>> {
+async fn add_discord(_: Outward, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddDiscord>) -> ApiResult<Created<AlertsDto>> {
 	let webhook: discord::Webhook = b.url.parse().map_err(invalid)?;
-	let Some(channels) = hub(a.clone())?.hub.outlets.discord_channels else {
+	let Some(channels) = hub(a.clone())?.hub.outlets.discord else {
 		return Err(Refusal::new(Code::Unavailable, "Discord is not configured"));
 	};
 	let title = channels.look(&webhook).await.map_err(invalid)?.name.unwrap_or_else(|| "Discord channel".to_owned()); // Discord names none
-	let to = Address::DiscordChannel {
+	let to = Address::Discord {
 		url: webhook.to_string(),
 		ping: b.ping,
 	};

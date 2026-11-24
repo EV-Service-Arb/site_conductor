@@ -4,8 +4,7 @@ use std::path::{Path, PathBuf};
 
 use sa_auth::{Catalog, PermissionSet};
 use sa_core::{notify::Locale, tokens::Renewal};
-use sa_server::outlets::Discord;
-use social_networks_adapters::notify::{discord, email::Smtp};
+use social_networks_adapters::notify::email::Smtp;
 use sa_panel::seal::DataKey;
 
 /// The peers' in-cluster origins, by variable: the services the forward reaches. The flake's `consumes`.
@@ -88,13 +87,6 @@ ev_lib::settings! {
 		smtp_password: Option<String>,
 		/// Whom alerts' mail is from: `Service-Arb <alerts@…>`.
 		mail_from: Option<String>,
-		/// The Discord bot, which messages whoever installs it to their account, and its application's
-		/// OAuth client (redirect `<PANEL_PUBLIC_ORIGIN>/auth/discord/alerts`): the three, or none.
-		#[secret]
-		discord_bot_token: Option<String>,
-		discord_client_id: Option<String>,
-		#[secret]
-		discord_client_secret: Option<String>,
 		/// Tokens added to a balance per day, while it is under TOKENS_CAP.
 		tokens_daily: i64 = "15",
 		/// Where renewal stops; tokens added or granted above it stay.
@@ -233,26 +225,6 @@ impl Settings {
 			username,
 			password: zeroize::Zeroizing::new(password),
 			from,
-		}))
-	}
-
-	/// Discord's bot and its OAuth client, coming back to `redirect`: `None` when none of its variables
-	/// is set; some but not all is a mistake, named.
-	pub fn discord(&self, redirect: url::Url) -> eyre::Result<Option<Discord>> {
-		let Some([token, client, secret]) = all_or_none(
-			"Discord's direct messages need",
-			[
-				("DISCORD_BOT_TOKEN", &self.discord_bot_token),
-				("DISCORD_CLIENT_ID", &self.discord_client_id),
-				("DISCORD_CLIENT_SECRET", &self.discord_client_secret),
-			],
-		)?
-		else {
-			return Ok(None);
-		};
-		Ok(Some(Discord {
-			bot: discord::Bot::try_new(discord::BASE, zeroize::Zeroizing::new(token))?,
-			oauth: discord::OAuth::try_new(discord::BASE, &client, zeroize::Zeroizing::new(secret), redirect)?,
 		}))
 	}
 
@@ -569,9 +541,6 @@ mod tests {
 				"SMTP_USERNAME",
 				"SMTP_PASSWORD",
 				"MAIL_FROM",
-				"DISCORD_BOT_TOKEN",
-				"DISCORD_CLIENT_ID",
-				"DISCORD_CLIENT_SECRET",
 				"TOKENS_DAILY",
 				"TOKENS_CAP",
 				"TOKENS_START_CAP_MULTIPLE",

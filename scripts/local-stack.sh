@@ -804,10 +804,14 @@ if [ -z "$claude_token" ] && [ "$run_panel" = 1 ] && [ "$no_peers" = 0 ]; then
 	}
 fi
 # Whatever the calling shell exports for a deployed conductor must not leak in: concierge's
-# variables would refuse the dev sign-in, a bot token would start the bot.
+# variables would refuse the dev sign-in, a deployed conductor's bot token would take its updates.
+# Telegram answers one poller of a bot: a --port run and one with no peers go without the dev's.
+bot_token=""
+[ "$side" = 1 ] || [ "$no_peers" = 1 ] || bot_token="${SERVICE_ARB_TELEGRAM_BOT_TOKEN:-}"
 panel() {
 	env -u CONCIERGE_PUBLIC_ORIGIN -u CONCIERGE_GRPC_ADDR -u RP_CLIENT_SECRET_SA \
-		-u TELEGRAM_BOT_TOKEN -u SENTRY_DSN \
+		-u SENTRY_DSN \
+		TELEGRAM_BOT_TOKEN="$bot_token" TELEGRAM_BOT_USERNAME="${SERVICE_ARB_TELEGRAM_BOT_USERNAME:-}" TELEGRAM_LOCALE=en \
 		APP_ENV=development \
 		PANEL_DB_PATH="$state/panel.db" \
 		PANEL_HISTORY_DB_PATH="$state/queries_history.db" \

@@ -129,7 +129,6 @@ pub fn app(
 	// A call waits as long as the slowest operation it runs.
 	let agents = bounded(oauth::routes(sign_in.clone()), limits.auth_concurrent, limits.auth_timeout).merge(bounded(mcp::routes(agents), limits.api_concurrent, Duration::from_secs(600)));
 	let pages = forward.as_ref().map(|f| kit::Pages::new(f.services().clone()));
-	let opened = alerting.clone();
 	let state = ApiState {
 		catalog,
 		tools: tools.clone(),
@@ -177,7 +176,7 @@ pub fn app(
 		.merge(auth)
 		.merge(agents)
 		.merge(queries_cache::routes(sign_in.panel.clone(), &limits, forward.as_ref().map(|f| f.services().vouchers())))
-		.merge(alerts::open_routes(sign_in.clone(), opened, &limits))
+		.merge(alerts::open_routes(sign_in.panel.clone(), &limits))
 		.nest("/api/v1", v1);
 	let app = match forward {
 		Some(forward) => app

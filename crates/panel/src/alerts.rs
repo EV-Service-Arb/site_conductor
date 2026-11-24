@@ -49,7 +49,7 @@ pub use crate::store::{
 };
 use crate::{
 	Panel, Refused,
-	seal::{DISCORD_STATE_AAD, EMAIL_TOKEN_AAD, UNSUBSCRIBE_AAD, alert_address_aad, alert_note_aad},
+	seal::{EMAIL_TOKEN_AAD, UNSUBSCRIBE_AAD, alert_address_aad, alert_note_aad},
 	session::{Refresher, SessionError},
 	store::{
 		alerts::{self as db, Sealed},
@@ -72,9 +72,6 @@ pub const NOTES_PAGE: usize = 500;
 
 /// How long the link mailed to an address to prove it stays good.
 pub const EMAIL_TOKEN_TTL: SignedDuration = SignedDuration::from_hours(24);
-
-/// How long a Discord consent may take.
-const DISCORD_STATE_TTL: SignedDuration = SignedDuration::from_mins(10);
 
 /// A person's destinations, at most.
 const DESTINATIONS: usize = 50;
@@ -136,9 +133,6 @@ pub enum Address {
 		to: String,
 	},
 	Discord {
-		user: String,
-	},
-	DiscordChannel {
 		url: String,
 		/// Urgent ones say `@here`.
 		ping: bool,
@@ -164,7 +158,6 @@ impl Address {
 			Self::Telegram(_) => Method::Telegram,
 			Self::Email { .. } => Method::Email,
 			Self::Discord { .. } => Method::Discord,
-			Self::DiscordChannel { .. } => Method::DiscordChannel,
 			Self::Slack { .. } => Method::Slack,
 			Self::Push { .. } => Method::Push,
 			Self::Webhook { .. } => Method::Webhook,
@@ -173,7 +166,7 @@ impl Address {
 
 	/// Read by its person alone.
 	fn private(&self) -> bool {
-		matches!(self, Self::Email { .. } | Self::Discord { .. } | Self::Push { .. })
+		matches!(self, Self::Email { .. } | Self::Push { .. })
 	}
 
 	/// What tells it from a person's others of its method.
@@ -181,8 +174,7 @@ impl Address {
 		match self {
 			Self::Telegram(_) => unreachable!("a chat is its own"),
 			Self::Email { to } => to,
-			Self::Discord { user } => user,
-			Self::DiscordChannel { url, .. } | Self::Slack { url } | Self::Webhook { url, .. } => url,
+			Self::Discord { url, .. } | Self::Slack { url } | Self::Webhook { url, .. } => url,
 			Self::Push { endpoint, .. } => endpoint,
 		}
 	}
@@ -662,17 +654,6 @@ impl Panel {
 	pub fn alerts_email_proved(&self, user: Uuid, token: &str, now: Timestamp) -> Option<String> {
 		let token: EmailToken = self.opened(EMAIL_TOKEN_AAD, token)?;
 		(token.user == user && token.until > now).then_some(token.address)
-	}
-
-	/// What a Discord consent of the user's carries back.
-	pub fn alerts_discord_state(&self, user: Uuid, now: Timestamp) -> eyre::Result<String> {
-		let plain = serde_json::to_vec(&(user, now + DISCORD_STATE_TTL)).wrap_err("serializing a consent's state")?;
-		Ok(URL_SAFE_NO_PAD.encode(self.key.seal(DISCORD_STATE_AAD, &plain)?))
-	}
-
-	/// Whether `state` is a consent's the user began, a while ago at most.
-	pub fn alerts_discord_began(&self, user: Uuid, state: &str, now: Timestamp) -> bool {
-		self.opened::<(Uuid, Timestamp)>(DISCORD_STATE_AAD, state).is_some_and(|(who, until)| who == user && until > now)
 	}
 
 	/// The key browsers' push subscriptions are to.

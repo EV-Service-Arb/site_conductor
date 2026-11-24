@@ -189,7 +189,7 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		// The bot's and the mailbox's limits are ours, whatever the address: the method waits, and the
 		// message keeps its tries. A webhook's are its own.
 		if let Failure::RetryAfter(wait) = failure
-			&& matches!(to.method, Method::Telegram | Method::Email | Method::Discord)
+			&& matches!(to.method, Method::Telegram | Method::Email)
 		{
 			let until = now.saturating_add((*wait).max(notify::PER_CHAT_GAP)).unwrap_or(Timestamp::MAX);
 			outbox::pause(conn, d.id, to.method, until, error).await?;

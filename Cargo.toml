@@ -11,16 +11,6 @@ repository = "https://github.com/EV-Service-Arb/site_conductor"
 readme = "README.md"
 
 [workspace.dependencies]
-sa_alerts = { path = "crates/alerts", version = "0.1.0" }
-sa_auth = { path = "crates/auth", version = "0.1.0" }
-sa_browsers = { path = "crates/browsers", version = "0.1.0" }
-sa_contracts = { path = "crates/contracts", version = "0.1.0" }
-sa_core = { path = "crates/core", version = "0.1.0" }
-sa_panel = { path = "crates/panel", version = "0.1.0" }
-sa_places = { path = "crates/places", version = "0.1.0" }
-sa_sandbox = { path = "crates/sandbox", version = "0.1.0" }
-sa_server = { path = "crates/server", version = "0.1.0" }
-sa_trace = { path = "crates/trace", version = "0.1.0" }
 
 allocative = "=0.3.4" # starlark 0.13's maps derive it over hashbrown 0.14, which 0.3.6 left
 anyhow = "1.0.104"
@@ -59,14 +49,24 @@ ring = "0.17.14"
 rustix = { version = "1.1.6", features = ["process"] }
 rustls = { version = "0.23.46", default-features = false, features = ["ring", "std", "tls12"] } # ring, not aws-lc: aws-lc-sys rebuilds a bundled C library per target dir
 rustls-platform-verifier = "0.7.1"
+sa_alerts = { path = "crates/alerts", version = "0.1.0" }
+sa_auth = { path = "crates/auth", version = "0.1.0" }
+sa_browsers = { path = "crates/browsers", version = "0.1.0" }
+sa_contracts = { path = "crates/contracts", version = "0.1.0" }
+sa_core = { path = "crates/core", version = "0.1.0" }
+sa_panel = { path = "crates/panel", version = "0.1.0" }
+sa_places = { path = "crates/places", version = "0.1.0" }
+sa_sandbox = { path = "crates/sandbox", version = "0.1.0" }
+sa_server = { path = "crates/server", version = "0.1.0" }
+sa_trace = { path = "crates/trace", version = "0.1.0" }
 schemars = { version = "1.2.3", features = ["uuid1", "jiff02"] }
 seccompiler = "0.5.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
-sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "macros", "migrate", "uuid", "json"] }
 # the networks alerts go out through
 social_networks_adapters = { git = "https://github.com/valeratrades/social_networks", branch = "main", default-features = false, features = ["notify"] }
+sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "macros", "migrate", "uuid", "json"] }
 starlark = "=0.13.0" # 0.14 turns on serde_json's arbitrary_precision for the whole binary; the worker's heap cap is its hidden before_stmt hook
 strum = { version = "0.28.0", features = ["derive"] }
 subtle = "2.6.1"

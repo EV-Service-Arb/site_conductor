@@ -27,9 +27,6 @@ pub const BUSINESS_STATE_AAD: &[u8] = b"sa-panel/business-state/v1";
 /// Associated data of the link mailed to an address to prove it.
 pub const EMAIL_TOKEN_AAD: &[u8] = b"sa-panel/alerts-email/v1";
 
-/// Associated data of a Discord consent's `state`.
-pub const DISCORD_STATE_AAD: &[u8] = b"sa-panel/alerts-discord-state/v1";
-
 /// Associated data of a message's unsubscribe token.
 pub const UNSUBSCRIBE_AAD: &[u8] = b"sa-panel/alerts-unsubscribe/v1";
 

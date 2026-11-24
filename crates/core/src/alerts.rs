@@ -31,10 +31,8 @@ pub enum Method {
 	/// A chat with the bot, a channel, a group or a topic of one.
 	Telegram,
 	Email,
-	/// The bot's direct message.
-	Discord,
 	/// A channel's webhook.
-	DiscordChannel,
+	Discord,
 	/// A channel's incoming webhook.
 	Slack,
 	/// One browser's Web Push.
