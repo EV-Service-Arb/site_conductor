@@ -110,11 +110,22 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		let Some(first) = told.first() else {
 			return Ok(out);
 		};
-		let address = self.panel.alerts_address(&destination)?;
+		let address = match self.panel.alerts_address(&destination) {
+			Ok(address) => address,
+			Err(e) => {
+				let why = format!("unreadable: {e:#}");
+				tracing::warn!(destination = destination.id, why, "alerts: a destination's address is unreadable");
+				for t in &told {
+					outbox::dead(&mut conn, t.due.id, &why).await?;
+				}
+				out.dead += told.len();
+				return Ok(out);
+			}
+		};
 		let mut message = match told.as_slice() {
-			[one] if !one.due.together => self.alone(one, &destination),
+			[one] => self.alone(one, &destination),
 			several => Message {
-				tier: first.due.tier,
+				tier: first.due.tier, // the claim's most urgent
 				rule: None,
 				text: digest(&several.iter().map(|t| (t.due.tier, t.text.clone())).collect::<Vec<_>>(), self.locale),
 				links: vec![("Open alerts".to_owned(), self.at("/user/alerts"))],
@@ -127,7 +138,8 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		if destination.method == Method::Email {
 			message.unsubscribe = Some(self.unsubscribe(destination.id)?);
 		}
-		let photo = first.note.photo.clone().filter(|_| !first.due.together).map(|p| (first.due.rule, p));
+		let together = told.len() > 1;
+		let photo = first.note.photo.clone().filter(|_| !together).map(|p| (first.due.rule, p));
 		// No pool connection is held while a service or a network is asked.
 		drop(conn);
 		let fetched = match photo {
@@ -149,7 +161,7 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		let failure = match answer {
 			Ok(remote) => {
 				for t in &told {
-					outbox::sent(&mut conn, t.due.id, &remote, now).await?;
+					outbox::sent(&mut conn, t.due.id, &remote, together, now).await?;
 				}
 				out.sent += told.len();
 				return Ok(out);
@@ -281,7 +293,7 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		})
 	}
 
-	fn test_message(&self) -> Message {
+	pub(crate) fn test_message(&self) -> Message {
 		Message {
 			tier: Tier::Important,
 			rule: None,

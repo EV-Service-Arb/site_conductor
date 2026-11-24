@@ -49,13 +49,13 @@ pub use crate::store::{
 };
 use crate::{
 	Panel, Refused,
-	seal::{EMAIL_TOKEN_AAD, UNSUBSCRIBE_AAD, alert_address_aad, alert_note_aad},
+	seal::{DISCORD_STATE_AAD, EMAIL_TOKEN_AAD, UNSUBSCRIBE_AAD, alert_address_aad, alert_note_aad},
 	session::{Refresher, SessionError},
 	store::{
 		alerts::{self as db, Sealed},
 		outbox,
 	},
-	telegram::{Bot, Target},
+	telegram::{CallbackId, ChatInfo, Target},
 };
 
 /// Nothing is sent to a user whose access concierge has not confirmed for this long.
@@ -72,6 +72,9 @@ pub const NOTES_PAGE: usize = 500;
 
 /// How long the link mailed to an address to prove it stays good.
 pub const EMAIL_TOKEN_TTL: SignedDuration = SignedDuration::from_hours(24);
+
+/// How long a Discord consent may take.
+const DISCORD_STATE_TTL: SignedDuration = SignedDuration::from_mins(10);
 
 /// A person's destinations, at most.
 const DESTINATIONS: usize = 50;
@@ -107,11 +110,19 @@ pub trait Feeds: Sync {
 	fn photo(&self, service: Service, path: &str) -> impl Future<Output = eyre::Result<Vec<u8>>> + Send;
 }
 
-/// The networks a message goes out through; Telegram's own ways beside.
-pub trait Outlets: Bot {
-	/// Sends `message` to `to`: what its network calls it there. A method without its
-	/// configuration refuses.
+/// The networks a message goes out through; Telegram's own ways beside. A method without its
+/// configuration refuses.
+pub trait Outlets: Sync {
+	/// Sends `message` to `to`: what its network calls it there, where it says.
 	fn send_to(&self, to: &Address, message: &Message) -> impl Future<Output = Result<String, Failure>> + Send;
+	/// Replaces a Telegram message's text and buttons (none: the keyboard is removed).
+	fn edit(&self, chat: i64, message_id: i64, text: &Rendered, buttons: &[(String, String)]) -> impl Future<Output = Result<(), Failure>> + Send;
+	/// Answers a Telegram button's press, with a short notice the user sees.
+	fn answer(&self, callback: &CallbackId, text: &str) -> impl Future<Output = Result<(), Failure>> + Send;
+	/// Telegram's `getChat`: `chat` is `@name` or a numeric id.
+	fn chat(&self, chat: &str) -> impl Future<Output = Result<ChatInfo, Failure>> + Send;
+	/// Whether `user` administers `chat` on Telegram.
+	fn is_admin(&self, chat: i64, user: i64) -> impl Future<Output = Result<bool, Failure>> + Send;
 }
 
 /// Where a destination is reached. Serialized, what is sealed of it; Telegram's is its chat.
@@ -540,9 +551,9 @@ impl Panel {
 
 	/// Changes one of the user's destinations. A rule not open to them is refused, not stored: it
 	/// would only mislead the page.
-	pub async fn alerts_set(&self, user: Uuid, permissions: &PermissionSet, destination: i64, s: &Settings) -> eyre::Result<Result<(), Refused>> {
+	pub async fn alerts_set(&self, user: Uuid, permissions: &PermissionSet, destination: i64, s: &Settings, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		let mut tx = self.store.begin_write().await?;
-		let Some(now) = db::destination_of(&mut tx, user, destination).await? else {
+		let Some(was) = db::destination_of(&mut tx, user, destination).await? else {
 			return Ok(Err(Refused::NotFound));
 		};
 		let title = s.title.as_deref().map(str::trim).filter(|t| !t.is_empty());
@@ -558,7 +569,8 @@ impl Panel {
 			return Ok(Err(Refused::Invalid("a facet takes at most 1000".into())));
 		}
 		let rules: Vec<(Rule, Cadence)> = s.rules.iter().map(|(r, c)| (*r, *c)).collect();
-		db::set(&mut tx, destination, title.or(now.title.as_deref()), s.cadences, &s.filter, &rules).await?;
+		db::set(&mut tx, destination, title.or(was.title.as_deref()), s.cadences, &s.filter, &rules).await?;
+		reschedule(&mut tx, user, now).await?;
 		tx.commit().await.wrap_err("committing a destination's change")?;
 		Ok(Ok(()))
 	}
@@ -574,12 +586,15 @@ impl Panel {
 		Ok(Ok(()))
 	}
 
-	pub async fn alerts_set_hours(&self, user: Uuid, h: &Hours) -> eyre::Result<Result<(), Refused>> {
+	/// Sets the user's hours; what waits for them to pass goes out as they now are.
+	pub async fn alerts_set_hours(&self, user: Uuid, h: &Hours, now: Timestamp) -> eyre::Result<Result<(), Refused>> {
 		if let Err(e) = schedule(h) {
 			return Ok(Err(Refused::Invalid(e.to_string())));
 		}
-		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a user's hours")?;
-		db::set_hours(&mut conn, user, h).await?;
+		let mut tx = self.store.begin_write().await?;
+		db::set_hours(&mut tx, user, h).await?;
+		reschedule(&mut tx, user, now).await?;
+		tx.commit().await.wrap_err("committing a user's hours")?;
 		Ok(Ok(()))
 	}
 
@@ -646,6 +661,22 @@ impl Panel {
 	pub fn alerts_email_proved(&self, user: Uuid, token: &str, now: Timestamp) -> Option<String> {
 		let token: EmailToken = self.opened(EMAIL_TOKEN_AAD, token)?;
 		(token.user == user && token.until > now).then_some(token.address)
+	}
+
+	/// What a Discord consent of the user's carries back.
+	pub fn alerts_discord_state(&self, user: Uuid, now: Timestamp) -> eyre::Result<String> {
+		let plain = serde_json::to_vec(&(user, now + DISCORD_STATE_TTL)).wrap_err("serializing a consent's state")?;
+		Ok(URL_SAFE_NO_PAD.encode(self.key.seal(DISCORD_STATE_AAD, &plain)?))
+	}
+
+	/// Whether `state` is a consent's the user began, a while ago at most.
+	pub fn alerts_discord_began(&self, user: Uuid, state: &str, now: Timestamp) -> bool {
+		self.opened::<(Uuid, Timestamp)>(DISCORD_STATE_AAD, state).is_some_and(|(who, until)| who == user && until > now)
+	}
+
+	/// The key browsers' push subscriptions are to.
+	pub fn alerts_push_seed(&self) -> zeroize::Zeroizing<[u8; 32]> {
+		self.key.push_seed()
 	}
 
 	/// What a message's one-click unsubscribe carries.
@@ -753,7 +784,7 @@ impl Panel {
 			let event = derived_event_id(&["source_silent", &key_id, &since.to_string(), &days.to_string()]);
 			let note = Note::SourceSilent { key_id, kind, last };
 			own.push(Telling {
-				link: Some("/sources".to_owned()),
+				link: Some("/admin/sources".to_owned()),
 				..Telling::new(Rule::SourceSilent, event, now, note.render(locale))
 			});
 		}
@@ -772,6 +803,7 @@ impl Panel {
 			};
 			own.push(telling);
 		}
+		self.tell_accesses(&mut conn, now).await?;
 		let mut queued = 0;
 		for t in own {
 			let mut tx = crate::store::begin_write(&mut conn).await?;
@@ -919,6 +951,20 @@ struct EmailToken {
 	user: Uuid,
 	address: String,
 	until: Timestamp,
+}
+
+/// What waits for the user's hours, moved to when their destinations and hours now have it.
+async fn reschedule(tx: &mut sqlx::SqliteConnection, user: Uuid, now: Timestamp) -> eyre::Result<()> {
+	let hours = schedule(&db::hours(tx, user).await?.unwrap_or_default()).wrap_err_with(|| format!("{user}'s hours"))?;
+	let destinations = db::destinations(tx, user).await?;
+	for w in outbox::waiting(tx, user, now).await? {
+		let d = destinations.iter().find(|d| d.id == w.destination_id).expect("a message goes with its destination");
+		match hours.due(d.cadence(w.rule, w.tier), w.tier, now) {
+			Some(when) => outbox::postpone(tx, w.id, when).await?,
+			None => outbox::drop_one(tx, w.id, "turned off").await?,
+		}
+	}
+	Ok(())
 }
 
 fn schedule(h: &Hours) -> Result<sa_core::alerts::Hours, sa_core::Invalid> {

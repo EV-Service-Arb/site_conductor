@@ -291,6 +291,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alerts/discord/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adds a Discord channel by its webhook, once a test went out there.
+         * @description 400 refused (nothing stored), 409 a destination already.
+         */
+        post: operations["add_discord_channel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/discord/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A consent page that makes the bot's direct messages the caller's destination.
+         * @description 503 without a bot.
+         */
+        post: operations["discord_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alerts/email": {
         parameters: {
             query?: never;
@@ -430,6 +470,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/alerts/push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Adds the browser's push subscription, once a test went out there; one the caller has already is left as they set it. */
+        post: operations["add_push"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/alerts/rules/{rule}": {
         parameters: {
             query?: never;
@@ -441,6 +498,26 @@ export interface paths {
         /** Sets how much a rule's notes matter to the caller. 400 a rule not open to them. */
         put: operations["set_alert_tier"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/slack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adds a Slack channel by its incoming webhook, once a test went out there.
+         * @description 400 refused (nothing stored), 409 a destination already.
+         */
+        post: operations["add_slack"];
         delete?: never;
         options?: never;
         head?: never;
@@ -481,6 +558,26 @@ export interface paths {
          * @description 503 without a bot.
          */
         post: operations["telegram_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/alerts/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adds a webhook, once a test went out there.
+         * @description 400 refused (nothing stored), 409 a destination already.
+         */
+        post: operations["add_webhook"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2514,8 +2611,26 @@ export interface components {
             /** @description `@channel`, `-100<id>`, or `<group>/<topic>` for a forum topic. */
             chat: string;
         };
+        AddDiscordChannel: {
+            /** @description Urgent ones say `@here`. */
+            ping: boolean;
+            /** @description The channel's webhook: Edit channel → Integrations → Webhooks. */
+            url: string;
+        };
         AddEmail: {
             address: string;
+        };
+        AddPush: {
+            auth: string;
+            /** @description As the browser's `PushSubscription.toJSON()` gives them. */
+            endpoint: string;
+            p256dh: string;
+            /** @description The browser and what it runs on. */
+            title: string;
+        };
+        AddSlack: {
+            /** @description The channel's incoming webhook, `https://hooks.slack.com/services/…`. */
+            url: string;
         };
         AddSource: {
             /** @description At least one. */
@@ -2525,6 +2640,18 @@ export interface components {
             kind: components["schemas"]["KeyedSourceKind"];
             /** @description A `site` key's landing, `https://<domain>[:port]`; no other kind has one. */
             origin?: string | null;
+        };
+        AddWebhook: {
+            /** @description An https URL on the internet: each alert is POSTed there as JSON. */
+            url: string;
+        };
+        AddedWebhook: {
+            alerts: components["schemas"]["Alerts"];
+            /**
+             * @description What each delivery is signed with, shown this once:
+             *     `x-signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">`.
+             */
+            secret: string;
         };
         /**
          * @description An additional Google category and what one competitor of its tier weighs against one of the
@@ -2634,6 +2761,8 @@ export interface components {
             hours: components["schemas"]["AlertHours"] | null;
             /** @description The methods a destination can be added by on this server. */
             methods: components["schemas"]["Method"][];
+            /** @description What a browser's push subscription is to (its `applicationServerKey`). */
+            push_key: string | null;
             /** @description The rules open to the caller: their permissions', and the GMB rules once they hold a GMB. */
             rules: components["schemas"]["AlertRule"][];
         };
@@ -3191,6 +3320,10 @@ export interface components {
          * @enum {string}
          */
         Device: "pixel_7" | "galaxy_s23" | "redmi_note_14";
+        DiscordLink: {
+            /** @description Discord's consent page: it installs the bot to the caller's account, which lets it message them. */
+            url: string;
+        };
         EditBrand: {
             name?: string | null;
             site?: components["schemas"]["BrandId"] | null;
@@ -4659,17 +4792,16 @@ export interface components {
          */
         Role: "owner" | "member" | "viewer";
         /**
-         * @description - `gbp_state`: A GBP moved to another state, by Google or by someone else than its owner.
-         *     - `google_mail`: Mail from Google in a gmail's inbox.
-         *     - `connection_lost`: A gmail's inbox, Business Profile grant or proxy no longer answers.
+         * @description - `google_mail`: Mail from Google in a gmail's inbox.
+         *     - `connection_lost`: A gmail's inbox no longer answers.
          *     - `assistant_waiting`: The assistant holds a call until the person agrees to it.
          *     - `release_out`: A newer version of a listing a category was taken from.
          *     - `trash_purge`: What was removed is about to be deleted for good.
          *     - `feed_stalled`: A service's feed keeps failing.
-         *     - `meter_held`: A Google account's meter reached its stop.
+         *     - `meter_held`: A Google account's meter reached its stop, or its guard unlinked its billing.
          * @enum {string}
          */
-        Rule: "new_lead" | "contact_overdue" | "booked" | "payment_received" | "review_new" | "review_changed" | "review_gone" | "review_reappeared" | "scan_failed" | "tokens_low" | "browser_stopped" | "kickback" | "access_granted" | "access_requested" | "source_silent" | "gbp_state" | "google_mail" | "connection_lost" | "assistant_waiting" | "release_out" | "trash_purge" | "feed_stalled" | "meter_held";
+        Rule: "new_lead" | "contact_overdue" | "booked" | "payment_received" | "review_new" | "review_changed" | "review_gone" | "review_reappeared" | "scan_failed" | "tokens_low" | "browser_stopped" | "kickback" | "access_granted" | "access_requested" | "source_silent" | "google_mail" | "connection_lost" | "assistant_waiting" | "release_out" | "trash_purge" | "feed_stalled" | "meter_held";
         Running: {
             /** Format: int64 */
             gmb: number | null;
@@ -5545,8 +5677,13 @@ export type Action = components['schemas']['Action'];
 export type ActionState = components['schemas']['ActionState'];
 export type Actor = components['schemas']['Actor'];
 export type AddChat = components['schemas']['AddChat'];
+export type AddDiscordChannel = components['schemas']['AddDiscordChannel'];
 export type AddEmail = components['schemas']['AddEmail'];
+export type AddPush = components['schemas']['AddPush'];
+export type AddSlack = components['schemas']['AddSlack'];
 export type AddSource = components['schemas']['AddSource'];
+export type AddWebhook = components['schemas']['AddWebhook'];
+export type AddedWebhook = components['schemas']['AddedWebhook'];
 export type AdditionalCategory = components['schemas']['AdditionalCategory'];
 export type AdditionalIn = components['schemas']['AdditionalIn'];
 export type Advance = components['schemas']['Advance'];
@@ -5617,6 +5754,7 @@ export type Demand = components['schemas']['Demand'];
 export type Destination = components['schemas']['Destination'];
 export type DestinationKind = components['schemas']['DestinationKind'];
 export type Device = components['schemas']['Device'];
+export type DiscordLink = components['schemas']['DiscordLink'];
 export type EditBrand = components['schemas']['EditBrand'];
 export type EditKitDraft = components['schemas']['EditKitDraft'];
 export type Error = components['schemas']['Error'];
@@ -8197,6 +8335,265 @@ export interface operations {
             };
         };
     };
+    add_discord_channel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddDiscordChannel"];
+            };
+        };
+        responses: {
+            /** @description How the caller's alerts are set, and what every change answers. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    discord_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscordLink"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     add_email: {
         parameters: {
             query?: never;
@@ -9251,6 +9648,138 @@ export interface operations {
             };
         };
     };
+    add_push: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddPush"];
+            };
+        };
+        responses: {
+            /** @description How the caller's alerts are set, and what every change answers. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     set_alert_tier: {
         parameters: {
             query?: never;
@@ -9268,6 +9797,138 @@ export interface operations {
         responses: {
             /** @description How the caller's alerts are set, and what every change answers. */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Alerts"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    add_slack: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSlack"];
+            };
+        };
+        responses: {
+            /** @description How the caller's alerts are set, and what every change answers. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9533,6 +10194,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TelegramLink"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unreleased_category`, `unstudied` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `browsers_not_connected`, `unavailable` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    add_webhook: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddWebhook"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddedWebhook"];
                 };
             };
             /** @description `bad_request` */
@@ -27091,7 +27883,7 @@ export const permissionValues: ReadonlyArray<FlattenedDeepRequired<components>["
 export const pricedItemValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["PricedItem"]> = ["places.details", "places.search", "places.autocomplete", "places.geocode", "places.profile", "places.photo", "street_view.panorama", "map.map", "walk.open", "walk.reviews", "walk.sort", "walk.sort_retry", "walk.step", "phone.running", "placement.search", "ads.location", "ads.keyword_ideas", "ads.historical_metrics", "dataforseo.keywords_for_keywords", "dataforseo.search_volume", "browser.gologin", "browser.mimic", "claude.input", "claude.cache_write", "claude.cache_read", "claude.output"];
 export const providerValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Provider"]> = ["multilogin", "multilogin_browser", "gologin"];
 export const roleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Role"]> = ["owner", "member", "viewer"];
-export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "booked", "payment_received", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed", "tokens_low", "browser_stopped", "kickback", "access_granted", "access_requested", "source_silent", "gbp_state", "google_mail", "connection_lost", "assistant_waiting", "release_out", "trash_purge", "feed_stalled", "meter_held"];
+export const ruleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Rule"]> = ["new_lead", "contact_overdue", "booked", "payment_received", "review_new", "review_changed", "review_gone", "review_reappeared", "scan_failed", "tokens_low", "browser_stopped", "kickback", "access_granted", "access_requested", "source_silent", "google_mail", "connection_lost", "assistant_waiting", "release_out", "trash_purge", "feed_stalled", "meter_held"];
 export const scaleValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scale"]> = ["linear", "percentile"];
 export const scopeValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Scope"]> = ["conductor", "review_archive", "browsers", "placement"];
 export const sortValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Sort"]> = ["rank", "recent", "used"];

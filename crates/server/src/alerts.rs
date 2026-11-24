@@ -8,17 +8,18 @@ use axum::{
 	Extension, Json, Router,
 	body::Body as RawBody,
 	extract::{FromRef, Query, State},
-	http::{HeaderName, HeaderValue, Method, Request, StatusCode, header},
-	response::{IntoResponse, NoContent, Response},
-	routing::post,
+	http::{HeaderMap, HeaderName, HeaderValue, Method, Request, StatusCode, header},
+	response::{IntoResponse, NoContent, Redirect, Response},
+	routing::{get, post},
 };
 use ev_lib::api::{Body, Created, Ids, JsonSchema, Params, Refusal};
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Call, Family, NotePage, Rule, Tier};
 use sa_auth::{Own, Service, User};
 use sa_core::{
 	alerts::{Cadence, Cadences, Filter, Method as Outlet},
 	feeds,
+	notify::{MAX_NAME, one_line},
 };
 use sa_panel::{
 	Panel, Refused,
@@ -27,6 +28,7 @@ use sa_panel::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use social_networks_adapters::notify::{discord, slack, webpush};
 use tokio::sync::watch;
 
 use crate::{
@@ -37,7 +39,7 @@ use crate::{
 	http::{ApiRoute, ApiState, FRESH, Limits, USER},
 	kit::Picture,
 	outlets::Networks,
-	signin::Caller,
+	signin::{Caller, SignIn},
 	telegram::{self, BotName},
 };
 
@@ -46,6 +48,8 @@ const DELIVER_EVERY: Duration = Duration::from_millis(500);
 
 const FAN_OUT_EVERY: Duration = Duration::from_secs(2);
 const RECHECK_EVERY: Duration = Duration::from_secs(60);
+/// A feed failing this long is stalled: the admins are told.
+const STALLED_AFTER: SignedDuration = SignedDuration::from_mins(10);
 /// A service that publishes no feed yet (404) is asked again this often.
 pub(crate) const LOOK_AGAIN: Duration = Duration::from_secs(60);
 
@@ -74,6 +78,8 @@ pub struct AlertsDto {
 	pub bot: Option<String>,
 	/// The caller's own address, when it is verified.
 	pub email: Option<String>,
+	/// What a browser's push subscription is to (its `applicationServerKey`).
+	pub push_key: Option<String>,
 	/// The rules open to the caller: their permissions', and the GMB rules once they hold a GMB.
 	pub rules: Vec<RuleDto>,
 	pub destinations: Vec<DestinationDto>,
@@ -254,16 +260,28 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/alerts/telegram/chats", FRESH.needs(Own::Credentials), add_chat),
 		ApiRoute::new(M::POST, "/alerts/email", FRESH.needs(Own::Credentials), add_email),
 		ApiRoute::new(M::POST, "/alerts/email/confirm", FRESH.needs(Own::Credentials), confirm_email),
+		ApiRoute::new(M::POST, "/alerts/discord/link", FRESH.needs(Own::Credentials), discord_link),
+		ApiRoute::new(M::POST, "/alerts/discord/channels", FRESH.needs(Own::Credentials), add_discord_channel),
+		ApiRoute::new(M::POST, "/alerts/slack", FRESH.needs(Own::Credentials), add_slack),
+		ApiRoute::new(M::POST, "/alerts/push", FRESH.needs(Own::Credentials), add_push),
+		ApiRoute::new(M::POST, "/alerts/webhooks", FRESH.needs(Own::Credentials), add_webhook),
 		ApiRoute::new(M::PUT, "/alerts/destinations/{id}", USER, set_destination),
 		ApiRoute::new(M::POST, "/alerts/destinations/{id}/test", USER, test_destination),
 		ApiRoute::new(M::DELETE, "/alerts/destinations/{id}", USER, remove_destination),
 	]
 }
 
-/// What mail's one-click unsubscribe posts to: open, its token its only say (RFC 8058).
-pub(crate) fn open_routes(panel: Panel, limits: &Limits) -> Router {
-	let routes = Router::new().route("/api/alerts/unsubscribe", post(unsubscribe).get(unsubscribe_page));
-	crate::http::bounded(routes, limits.auth_concurrent, limits.auth_timeout).with_state(panel)
+/// Where Discord sends a person back to once they installed the bot.
+pub const DISCORD_CALLBACK: &str = "/auth/discord/alerts";
+
+/// What mail's one-click unsubscribe posts to (RFC 8058), open, its token its only say; and what
+/// Discord's consent comes back to.
+pub(crate) fn open_routes(sign_in: SignIn, alerting: Option<Alerting>, limits: &Limits) -> Router {
+	let unsubscribe = Router::new()
+		.route("/api/alerts/unsubscribe", post(unsubscribe).get(unsubscribe_page))
+		.with_state(sign_in.panel.clone());
+	let consent = Router::new().route(DISCORD_CALLBACK, get(discord_callback)).with_state((sign_in, alerting));
+	crate::http::bounded(unsubscribe.merge(consent), limits.auth_concurrent, limits.auth_timeout)
 }
 
 async fn answer(panel: &Panel, a: Option<&Alerting>, caller: &Caller) -> ApiResult<AlertsDto> {
@@ -272,6 +290,7 @@ async fn answer(panel: &Panel, a: Option<&Alerting>, caller: &Caller) -> ApiResu
 		methods: a.map(|a| a.hub.outlets.methods()).unwrap_or_default(), // no forward: no hub, nothing goes out
 		bot: a.and_then(|a| a.bot.get()).map(|n| format!("@{n}")),
 		email: caller.email_verified.then(|| caller.email.clone()),
+		push_key: a.and_then(|a| a.hub.outlets.push_key.clone()),
 		rules: alerts
 			.rules
 			.into_iter()
@@ -461,7 +480,7 @@ async fn set_alert_hours(State(panel): State<Panel>, State(a): State<Option<Aler
 		quiet: b.quiet,
 		snoozed_until: b.snoozed_until,
 	};
-	panel.alerts_set_hours(caller.user_id, &hours).await??;
+	panel.alerts_set_hours(caller.user_id, &hours, Timestamp::now()).await??;
 	Ok(Json(answer(&panel, a.as_ref(), &caller).await?))
 }
 
@@ -491,7 +510,7 @@ async fn set_destination(
 		filter: b.filter,
 		rules: b.rules,
 	};
-	panel.alerts_set(caller.user_id, &caller.permissions, id, &settings).await??;
+	panel.alerts_set(caller.user_id, &caller.permissions, id, &settings, Timestamp::now()).await??;
 	Ok(Json(answer(&panel, a.as_ref(), &caller).await?))
 }
 
@@ -596,6 +615,201 @@ async fn confirm_email(State(panel): State<Panel>, State(a): State<Option<Alerti
 	Ok(Created(answer(&panel, Some(&a), &caller).await?))
 }
 
+#[derive(JsonSchema, Serialize)]
+#[schemars(rename = "DiscordLink")]
+pub(crate) struct DiscordLinkDto {
+	/// Discord's consent page: it installs the bot to the caller's account, which lets it message them.
+	url: String,
+}
+
+/// A consent page that makes the bot's direct messages the caller's destination.
+///
+/// 503 without a bot.
+async fn discord_link(State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>) -> ApiResult<Created<DiscordLinkDto>> {
+	let a = hub(a)?;
+	let Some(discord) = &a.hub.outlets.discord else {
+		return Err(Refusal::new(Code::Unavailable, "Discord is not configured"));
+	};
+	let state = panel.alerts_discord_state(caller.user_id, Timestamp::now())?;
+	Ok(Created(DiscordLinkDto {
+		url: discord.oauth.authorize_url(&state).into(),
+	}))
+}
+
+#[derive(Deserialize)]
+struct Consented {
+	state: String,
+	code: Option<String>,
+	error: Option<String>,
+}
+
+/// Discord's redirect after a consent: the direct messages the caller's destination, then back to
+/// their alerts; a refusal is a page saying it.
+async fn discord_callback(State((s, a)): State<(SignIn, Option<Alerting>)>, headers: HeaderMap, Query(q): Query<Consented>) -> Response {
+	let caller = match crate::signin::check(&s, &headers, crate::signin::Freshness::Fresh).await {
+		Ok(c) => c,
+		Err(r) => return crate::signin::refused(&s, r),
+	};
+	match discord_consented(&s.panel, a, &caller, q).await {
+		Ok(()) => crate::signin::private(Redirect::to("/user/alerts/settings").into_response()),
+		Err(message) => crate::signin::private(
+			crate::signin::Said {
+				title: "Discord not connected",
+				message,
+			}
+			.into_response(),
+		),
+	}
+}
+
+async fn discord_consented(panel: &Panel, a: Option<Alerting>, caller: &Caller, q: Consented) -> Result<(), String> {
+	let now = Timestamp::now();
+	let Some(Alerting { hub, .. }) = a else {
+		return Err("alerts are not configured".to_owned());
+	};
+	let Some(discord) = &hub.outlets.discord else {
+		return Err("Discord is not configured".to_owned());
+	};
+	if !caller.permissions.may(Own::Credentials) {
+		return Err("Only your own sign-in connects Discord.".to_owned());
+	}
+	if !panel.alerts_discord_began(caller.user_id, &q.state, now) {
+		return Err("This consent is another account's, or out of date. Connect Discord again.".to_owned());
+	}
+	let code = match (q.code, q.error) {
+		(Some(code), None) => code,
+		(_, Some(error)) => return Err(format!("Discord said {error}.")),
+		(None, None) => return Err("Discord sent neither a code nor an error.".to_owned()),
+	};
+	let who = discord.oauth.exchange(&code).await.map_err(|f| f.to_string())?;
+	let to = Address::Discord { user: who.id };
+	let title = format!("@{}", who.username);
+	match hub.add(caller.user_id, &caller.permissions, display(caller), &to, &title, now).await {
+		Ok(Ok(_)) => Ok(()),
+		Ok(Err(refused)) => Err(refused.to_string()),
+		Err(e) => {
+			crate::report(&e, "alerts: adding a Discord account");
+			Err("It failed here. Try again.".to_owned())
+		}
+	}
+}
+
+/// Adds `to` as a destination of the caller's, once a test went out there.
+async fn add(a: Option<Alerting>, caller: &Caller, to: &Address, title: &str) -> ApiResult<AlertsDto> {
+	let a = hub(a)?;
+	a.hub.add(caller.user_id, &caller.permissions, display(caller), to, title, Timestamp::now()).await??;
+	answer(&a.hub.panel, Some(&a), caller).await
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "AddDiscordChannel")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AddDiscordChannel {
+	/// The channel's webhook: Edit channel → Integrations → Webhooks.
+	url: String,
+	/// Urgent ones say `@here`.
+	ping: bool,
+}
+
+/// Adds a Discord channel by its webhook, once a test went out there.
+///
+/// 400 refused (nothing stored), 409 a destination already.
+async fn add_discord_channel(State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddDiscordChannel>) -> ApiResult<Created<AlertsDto>> {
+	let webhook: discord::Webhook = b.url.parse().map_err(invalid)?;
+	let Some(channels) = hub(a.clone())?.hub.outlets.discord_channels else {
+		return Err(Refusal::new(Code::Unavailable, "Discord is not configured"));
+	};
+	let title = channels.look(&webhook).await.map_err(invalid)?.name.unwrap_or_else(|| "Discord channel".to_owned()); // Discord names none
+	let to = Address::DiscordChannel {
+		url: webhook.to_string(),
+		ping: b.ping,
+	};
+	Ok(Created(add(a, &caller, &to, &title).await?))
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "AddSlack")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AddSlack {
+	/// The channel's incoming webhook, `https://hooks.slack.com/services/…`.
+	url: String,
+}
+
+/// Adds a Slack channel by its incoming webhook, once a test went out there.
+///
+/// 400 refused (nothing stored), 409 a destination already.
+async fn add_slack(State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddSlack>) -> ApiResult<Created<AlertsDto>> {
+	let webhook: slack::Webhook = b.url.parse().map_err(invalid)?;
+	let to = Address::Slack { url: webhook.to_string() };
+	Ok(Created(add(a, &caller, &to, "Slack channel").await?))
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "AddPush")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AddPush {
+	/// As the browser's `PushSubscription.toJSON()` gives them.
+	endpoint: String,
+	p256dh: String,
+	auth: String,
+	/// The browser and what it runs on.
+	title: String,
+}
+
+/// Adds the browser's push subscription, once a test went out there; one the caller has already is
+/// left as they set it.
+async fn add_push(State(panel): State<Panel>, State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddPush>) -> ApiResult<Created<AlertsDto>> {
+	webpush::Subscription::try_new(&b.endpoint, &b.p256dh, &b.auth).map_err(invalid)?;
+	let to = Address::Push {
+		endpoint: b.endpoint,
+		p256dh: b.p256dh,
+		auth: b.auth,
+	};
+	let a = hub(a)?;
+	match a.hub.add(caller.user_id, &caller.permissions, display(&caller), &to, one_line(&b.title, MAX_NAME).as_str(), Timestamp::now()).await? {
+		Ok(_) | Err(Refused::Conflict(_)) => Ok(Created(answer(&panel, Some(&a), &caller).await?)),
+		Err(refused) => Err(refused.into()),
+	}
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[schemars(rename = "AddWebhook")]
+#[serde(deny_unknown_fields)]
+pub(crate) struct AddWebhook {
+	/// An https URL on the internet: each alert is POSTed there as JSON.
+	url: String,
+}
+
+#[derive(JsonSchema, Serialize)]
+#[schemars(rename = "AddedWebhook")]
+pub(crate) struct WebhookDto {
+	/// What each delivery is signed with, shown this once:
+	/// `x-signature: t=<unix>,v1=<hex HMAC-SHA256 of "<t>.<body>">`.
+	secret: String,
+	alerts: AlertsDto,
+}
+
+/// Adds a webhook, once a test went out there.
+///
+/// 400 refused (nothing stored), 409 a destination already.
+async fn add_webhook(State(a): State<Option<Alerting>>, Extension(caller): Extension<Caller>, Body(b): Body<AddWebhook>) -> ApiResult<Created<WebhookDto>> {
+	let url: url::Url = b.url.trim().parse().map_err(|e| Refused::Invalid(format!("not a URL: {e}")))?;
+	let mut raw = [0; 32];
+	getrandom::fill(&mut raw).map_err(|e| eyre::eyre!("the OS random source failed: {e}"))?;
+	let secret = format!("whsec_{}", hex::encode(raw));
+	let title = url.host_str().ok_or_else(|| Refused::Invalid("no host".into()))?.to_owned();
+	let to = Address::Webhook {
+		url: url.into(),
+		secret: secret.clone(),
+	};
+	let alerts = add(a, &caller, &to, &title).await?;
+	Ok(Created(WebhookDto { secret, alerts }))
+}
+
+fn invalid(f: social_networks_adapters::notify::Failure) -> Refused {
+	Refused::Invalid(f.to_string())
+}
+
 #[derive(Deserialize)]
 struct Unsubscribe {
 	token: String,
@@ -625,8 +839,13 @@ async fn unsubscribe_page() -> Response {
 /// and asked again after [`LOOK_AGAIN`].
 async fn feed(hub: &Hub<Networks, Concierge, Forward>, service: Service, mut shutdown: watch::Receiver<bool>) {
 	let mut absent = false;
+	let mut failing = None;
 	while !*shutdown.borrow() {
-		let wait = match hub.take_feed(service, Timestamp::now()).await {
+		let taken = hub.take_feed(service, Timestamp::now()).await;
+		if taken.is_ok() {
+			failing = None;
+		}
+		let wait = match taken {
 			Ok(Some(_)) => {
 				absent = false;
 				FAN_OUT_EVERY
@@ -640,6 +859,12 @@ async fn feed(hub: &Hub<Networks, Concierge, Forward>, service: Service, mut shu
 			}
 			Err(e) => {
 				crate::report(&e, "alerts: a feed");
+				let now = Timestamp::now();
+				if now.duration_since(*failing.get_or_insert(now)) >= STALLED_AFTER
+					&& let Err(e) = hub.panel.alerts_feed_stalled(service, &format!("{e:#}"), now).await
+				{
+					crate::report(&e, "alerts: telling of a feed stalled");
+				}
 				FAN_OUT_EVERY
 			}
 		};

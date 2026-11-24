@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use sa_auth::{Catalog, PermissionSet};
 use sa_core::{notify::Locale, tokens::Renewal};
+use sa_server::outlets::Discord;
+use social_networks_adapters::notify::{discord, email::Smtp};
 use sa_panel::seal::DataKey;
 
 /// The peers' in-cluster origins, by variable: the services the forward reaches. The flake's `consumes`.
@@ -77,6 +79,22 @@ ev_lib::settings! {
 		telegram_bot_username: Option<String>,
 		/// The language of the bot's messages: `ru` or `en`.
 		telegram_locale: String = "ru",
+		/// The relay alerts are mailed through, e.g. `smtp.gmail.com`: 465 is TLS, 587 STARTTLS, any other
+		/// in the clear and only to loopback. With the three below, or none of the four: no alerts by mail.
+		smtp_host: Option<String>,
+		smtp_port: u16 = "587",
+		smtp_username: Option<String>,
+		#[secret]
+		smtp_password: Option<String>,
+		/// Whom alerts' mail is from: `Service-Arb <alerts@…>`.
+		mail_from: Option<String>,
+		/// The Discord bot, which messages whoever installs it to their account, and its application's
+		/// OAuth client (redirect `<PANEL_PUBLIC_ORIGIN>/auth/discord/alerts`): the three, or none.
+		#[secret]
+		discord_bot_token: Option<String>,
+		discord_client_id: Option<String>,
+		#[secret]
+		discord_client_secret: Option<String>,
 		/// Tokens added to a balance per day, while it is under TOKENS_CAP.
 		tokens_daily: i64 = "15",
 		/// Where renewal stops; tokens added or granted above it stay.
@@ -124,6 +142,17 @@ ev_lib::settings! {
 		panel_dev_sign_in_email: Option<String>,
 		app_env: String = "development",
 	}
+}
+
+/// Every one of `vars`' values; `None` when none is set.
+fn all_or_none<const N: usize>(what: &str, vars: [(&str, &Option<String>); N]) -> eyre::Result<Option<[String; N]>> {
+	let set = vars.map(|(_, v)| v.as_deref().map(str::trim).filter(|v| !v.is_empty()));
+	let missing: Vec<&str> = vars.iter().zip(&set).filter(|(_, v)| v.is_none()).map(|((name, _), _)| *name).collect();
+	if missing.len() == N {
+		return Ok(None);
+	}
+	eyre::ensure!(missing.is_empty(), "{what} {} too", missing.join(", "));
+	Ok(Some(set.map(|v| v.expect("none is missing").to_owned())))
 }
 
 impl Settings {
@@ -181,6 +210,49 @@ impl Settings {
 			token: token.to_owned(),
 			username: self.telegram_bot_username.as_deref().map(str::trim).filter(|u| !u.is_empty()).map(str::to_owned),
 			locale: self.telegram_locale.parse()?,
+		}))
+	}
+
+	/// The mail relay: `None` when none of its variables is set; some but not all is a mistake, named.
+	pub fn smtp(&self) -> eyre::Result<Option<Smtp>> {
+		let Some([host, username, password, from]) = all_or_none(
+			"alerts by mail need",
+			[
+				("SMTP_HOST", &self.smtp_host),
+				("SMTP_USERNAME", &self.smtp_username),
+				("SMTP_PASSWORD", &self.smtp_password),
+				("MAIL_FROM", &self.mail_from),
+			],
+		)?
+		else {
+			return Ok(None);
+		};
+		Ok(Some(Smtp {
+			host,
+			port: self.smtp_port,
+			username,
+			password: zeroize::Zeroizing::new(password),
+			from,
+		}))
+	}
+
+	/// Discord's bot and its OAuth client, coming back to `redirect`: `None` when none of its variables
+	/// is set; some but not all is a mistake, named.
+	pub fn discord(&self, redirect: url::Url) -> eyre::Result<Option<Discord>> {
+		let Some([token, client, secret]) = all_or_none(
+			"Discord's direct messages need",
+			[
+				("DISCORD_BOT_TOKEN", &self.discord_bot_token),
+				("DISCORD_CLIENT_ID", &self.discord_client_id),
+				("DISCORD_CLIENT_SECRET", &self.discord_client_secret),
+			],
+		)?
+		else {
+			return Ok(None);
+		};
+		Ok(Some(Discord {
+			bot: discord::Bot::try_new(discord::BASE, zeroize::Zeroizing::new(token))?,
+			oauth: discord::OAuth::try_new(discord::BASE, &client, zeroize::Zeroizing::new(secret), redirect)?,
 		}))
 	}
 
@@ -492,6 +564,14 @@ mod tests {
 				"TELEGRAM_BOT_TOKEN",
 				"TELEGRAM_BOT_USERNAME",
 				"TELEGRAM_LOCALE",
+				"SMTP_HOST",
+				"SMTP_PORT",
+				"SMTP_USERNAME",
+				"SMTP_PASSWORD",
+				"MAIL_FROM",
+				"DISCORD_BOT_TOKEN",
+				"DISCORD_CLIENT_ID",
+				"DISCORD_CLIENT_SECRET",
 				"TOKENS_DAILY",
 				"TOKENS_CAP",
 				"TOKENS_START_CAP_MULTIPLE",

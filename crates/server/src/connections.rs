@@ -3,11 +3,11 @@
 //! back; its browser is [`crate::browser`]'s.
 //! In `serve`, each inbox followed for its mail with Google (`sa_panel::inbox`).
 
-use std::{collections::BTreeSet, time::Duration};
+use std::{collections::BTreeMap, time::Duration};
 
 use axum::{Extension, Json, extract::State, http::Method, response::NoContent};
 use ev_lib::api::{Body, Ids, JsonSchema};
-use jiff::Timestamp;
+use jiff::{SignedDuration, Timestamp};
 use sa_panel::{
 	Panel,
 	browsers::Provider,
@@ -29,13 +29,16 @@ use crate::{
 /// Each inbox is read this often.
 const FOLLOW_EVERY: Duration = Duration::from_secs(60);
 
+/// An inbox failing this long is lost: its owner is told.
+const LOST_AFTER: SignedDuration = SignedDuration::from_mins(15);
+
 /// Where Google sends a Business Profile consent back to.
 pub(crate) const BUSINESS_CALLBACK: &str = "/auth/google/business";
 
 /// Reads every gmail's inbox past its cursor until `shutdown` turns true. Nothing here ends `serve`.
 pub async fn follow(panel: Panel, mut shutdown: watch::Receiver<bool>) {
 	// an inbox failing every pass (its app password revoked) is said when it starts and ends
-	let mut failing = BTreeSet::new();
+	let mut failing: BTreeMap<i64, Timestamp> = BTreeMap::new();
 	while !*shutdown.borrow() {
 		let pass = async {
 			let gmails = match panel.inboxes().await {
@@ -49,11 +52,23 @@ pub async fn follow(panel: Panel, mut shutdown: watch::Receiver<bool>) {
 				};
 				match read.await {
 					Ok(()) =>
-						if failing.remove(&gmail) {
+						if failing.remove(&gmail).is_some() {
 							tracing::info!(gmail_id = gmail, "its inbox reads again");
 						},
-					Err(e) if failing.insert(gmail) => crate::report(&e.wrap_err(format!("gmail {gmail}'s inbox, read again every {}s", FOLLOW_EVERY.as_secs())), "following an inbox"),
-					Err(e) => tracing::debug!(gmail_id = gmail, error = %e, "its inbox still fails"),
+					Err(e) => {
+						let now = Timestamp::now();
+						let since = *failing.entry(gmail).or_insert(now);
+						if since == now {
+							crate::report(&e.wrap_err(format!("gmail {gmail}'s inbox, read again every {}s", FOLLOW_EVERY.as_secs())), "following an inbox");
+							continue;
+						}
+						tracing::debug!(gmail_id = gmail, error = %e, "its inbox still fails");
+						if now.duration_since(since) >= LOST_AFTER
+							&& let Err(e) = panel.alerts_inbox_lost(gmail, &format!("{e:#}"), now).await
+						{
+							crate::report(&e, "telling of an inbox lost");
+						}
+					}
 				}
 			}
 		};

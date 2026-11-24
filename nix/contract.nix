@@ -14,6 +14,9 @@
       "RP_CLIENT_SECRET_SA"
       "PANEL_ASSERTION_KEY"
       "TELEGRAM_BOT_TOKEN"
+      "SMTP_PASSWORD"
+      "DISCORD_BOT_TOKEN"
+      "DISCORD_CLIENT_SECRET"
       "GOLOGIN_TOKEN"
       "MULTILOGIN_TOKEN"
       "CLAUDE_CODE_OAUTH_TOKEN"
@@ -24,6 +27,16 @@
       "TELEGRAM_BOT_TOKEN"
       "TELEGRAM_BOT_USERNAME"
       "TELEGRAM_LOCALE"
+      # alerts by mail: the four, or none (SMTP_PORT 587 by default)
+      "SMTP_HOST"
+      "SMTP_PORT"
+      "SMTP_USERNAME"
+      "SMTP_PASSWORD"
+      "MAIL_FROM"
+      # Discord's direct messages: the three, or none; its application's redirect is <PANEL_PUBLIC_ORIGIN>/auth/discord/alerts
+      "DISCORD_BOT_TOKEN"
+      "DISCORD_CLIENT_ID"
+      "DISCORD_CLIENT_SECRET"
       # 15 and 500 by default
       "TOKENS_DAILY"
       "TOKENS_CAP"
@@ -42,17 +55,18 @@
       # per client IP at the edge; the conductor bounds concurrency, not who calls. /api/hooks/booking:
       # the booking providers' webhooks, forwarded to sites (public, signature-checked there).
       # /api/queries_cache: open to everyone, so this is its only guard. /mcp/register: open too.
-      rateLimitPathPrefixes = [ "/auth" "/api/hooks/booking" "/api/queries_cache" "/mcp/register" "/mcp/authorize" "/mcp/token" ];
+      rateLimitPathPrefixes = [ "/auth" "/api/alerts" "/api/hooks/booking" "/api/queries_cache" "/mcp/register" "/mcp/authorize" "/mcp/token" ];
     };
     egress = {
       # concierge's gRPC, at the address it names
       grpcEnv = [ "CONCIERGE_GRPC_ADDR" ];
       # the Bot API; the Places API (the accounts' Places keys); GoLogin's (GOLOGIN_TOKEN) and
       # Multilogin's (MULTILOGIN_TOKEN) APIs; the Claude API (CLAUDE_CODE_OAUTH_TOKEN)
+      # alerts: the mail relay, Discord, Slack; a push service or a person's own webhook, any https host
       # the meters' baseline: each account's billing export, its service account's token
       # a gmail's inbox, at whatever public host its owner set (crates/panel/src/imap.rs)
       ports = [ 993 ];
-      hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "bigquery.googleapis.com:443" "oauth2.googleapis.com:443" "api.anthropic.com:443" ];
+      hosts = [ "api.telegram.org:443" "places.googleapis.com:443" "geocode.googleapis.com:443" "api.gologin.com:443" "api.multilogin.com:443" "bigquery.googleapis.com:443" "oauth2.googleapis.com:443" "api.anthropic.com:443" "discord.com:443" "hooks.slack.com:443" "smtp.gmail.com:587" ];
     };
   };
 

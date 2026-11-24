@@ -3104,6 +3104,338 @@
         }
       }
     },
+    "/alerts/discord/channels": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds a Discord channel by its webhook, once a test went out there.",
+        "description": "400 refused (nothing stored), 409 a destination already.",
+        "operationId": "add_discord_channel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddDiscordChannel"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/alerts/discord/link": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "A consent page that makes the bot's direct messages the caller's destination.",
+        "description": "503 without a bot.",
+        "operationId": "discord_link",
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscordLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
     "/alerts/email": {
       "post": {
         "tags": [
@@ -4508,6 +4840,176 @@
         }
       }
     },
+    "/alerts/push": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds the browser's push subscription, once a test went out there; one the caller has already is left as they set it.",
+        "operationId": "add_push",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPush"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
     "/alerts/rules/{rule}": {
       "put": {
         "tags": [
@@ -4686,6 +5188,177 @@
           "unreleased_category": 422,
           "unstudied": 422
         }
+      }
+    },
+    "/alerts/slack": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds a Slack channel by its incoming webhook, once a test went out there.",
+        "description": "400 refused (nothing stored), 409 a destination already.",
+        "operationId": "add_slack",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddSlack"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "How the caller's alerts are set, and what every change answers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Alerts"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
       }
     },
     "/alerts/telegram/chats": {
@@ -4874,6 +5547,177 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/TelegramLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`bad_request`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "`unauthenticated`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "`unaffordable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "`csrf`, `forbidden`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "`not_found`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`conflict`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "`too_large`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`another_country`, `unreleased_category`, `unstudied`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "`too_many`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "`internal`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`bad_gateway`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "`browsers_not_connected`, `unavailable`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:own:credentials"
+      }
+    },
+    "/alerts/webhooks": {
+      "post": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Adds a webhook, once a test went out there.",
+        "description": "400 refused (nothing stored), 409 a destination already.",
+        "operationId": "add_webhook",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddWebhook"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AddedWebhook"
                 }
               }
             }
@@ -28254,6 +29098,24 @@
           "chat"
         ]
       },
+      "AddDiscordChannel": {
+        "type": "object",
+        "properties": {
+          "ping": {
+            "description": "Urgent ones say `@here`.",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "The channel's webhook: Edit channel → Integrations → Webhooks.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "url",
+          "ping"
+        ]
+      },
       "AddEmail": {
         "type": "object",
         "properties": {
@@ -28264,6 +29126,45 @@
         "additionalProperties": false,
         "required": [
           "address"
+        ]
+      },
+      "AddPush": {
+        "type": "object",
+        "properties": {
+          "auth": {
+            "type": "string"
+          },
+          "endpoint": {
+            "description": "As the browser's `PushSubscription.toJSON()` gives them.",
+            "type": "string"
+          },
+          "p256dh": {
+            "type": "string"
+          },
+          "title": {
+            "description": "The browser and what it runs on.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "endpoint",
+          "p256dh",
+          "auth",
+          "title"
+        ]
+      },
+      "AddSlack": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "The channel's incoming webhook, `https://hooks.slack.com/services/…`.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "url"
         ]
       },
       "AddSource": {
@@ -28299,6 +29200,35 @@
           "key_id",
           "kind",
           "brands"
+        ]
+      },
+      "AddWebhook": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "An https URL on the internet: each alert is POSTed there as JSON.",
+            "type": "string"
+          }
+        },
+        "additionalProperties": false,
+        "required": [
+          "url"
+        ]
+      },
+      "AddedWebhook": {
+        "type": "object",
+        "properties": {
+          "alerts": {
+            "$ref": "#/components/schemas/Alerts"
+          },
+          "secret": {
+            "description": "What each delivery is signed with, shown this once:\n`x-signature: t=<unix>,v1=<hex HMAC-SHA256 of \"<t>.<body>\">`.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "alerts"
         ]
       },
       "AdditionalCategory": {
@@ -28673,6 +29603,13 @@
               "$ref": "#/components/schemas/Method"
             }
           },
+          "push_key": {
+            "description": "What a browser's push subscription is to (its `applicationServerKey`).",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "rules": {
             "description": "The rules open to the caller: their permissions', and the GMB rules once they hold a GMB.",
             "type": "array",
@@ -28685,6 +29622,7 @@
           "methods",
           "bot",
           "email",
+          "push_key",
           "rules",
           "destinations",
           "hours"
@@ -30268,6 +31206,18 @@
           "pixel_7",
           "galaxy_s23",
           "redmi_note_14"
+        ]
+      },
+      "DiscordLink": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "description": "Discord's consent page: it installs the bot to the caller's account, which lets it message them.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
         ]
       },
       "EditBrand": {
@@ -34797,7 +35747,7 @@
         ]
       },
       "Rule": {
-        "description": "- `gbp_state`: A GBP moved to another state, by Google or by someone else than its owner.\n- `google_mail`: Mail from Google in a gmail's inbox.\n- `connection_lost`: A gmail's inbox, Business Profile grant or proxy no longer answers.\n- `assistant_waiting`: The assistant holds a call until the person agrees to it.\n- `release_out`: A newer version of a listing a category was taken from.\n- `trash_purge`: What was removed is about to be deleted for good.\n- `feed_stalled`: A service's feed keeps failing.\n- `meter_held`: A Google account's meter reached its stop.",
+        "description": "- `google_mail`: Mail from Google in a gmail's inbox.\n- `connection_lost`: A gmail's inbox no longer answers.\n- `assistant_waiting`: The assistant holds a call until the person agrees to it.\n- `release_out`: A newer version of a listing a category was taken from.\n- `trash_purge`: What was removed is about to be deleted for good.\n- `feed_stalled`: A service's feed keeps failing.\n- `meter_held`: A Google account's meter reached its stop, or its guard unlinked its billing.",
         "type": "string",
         "enum": [
           "new_lead",
@@ -34815,7 +35765,6 @@
           "access_granted",
           "access_requested",
           "source_silent",
-          "gbp_state",
           "google_mail",
           "connection_lost",
           "assistant_waiting",
@@ -37486,8 +38435,30 @@
           "type": "object"
         }
       },
+      "alert_settings": {
+        "description": "Where the caller's alerts go, when, and which count as what.",
+        "params": {
+          "properties": {},
+          "required": [],
+          "type": "object"
+        },
+        "path": "/user/alerts/settings",
+        "query": {
+          "properties": {
+            "confirm": {
+              "description": "A mailed link's token: the address it proves.",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [],
+          "type": "object"
+        }
+      },
       "alerts": {
-        "description": "Where the caller's alerts go, and which.",
+        "description": "The caller's alerts, newest first.",
         "key": "e",
         "params": {
           "properties": {},
@@ -37496,7 +38467,49 @@
         },
         "path": "/user/alerts",
         "query": {
-          "properties": {},
+          "properties": {
+            "family": {
+              "description": "What a rule is about, as a person sorts their alerts.",
+              "enum": [
+                "leads",
+                "reviews",
+                "profiles",
+                "money",
+                "panel",
+                "team",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "open": {
+              "description": "The one opened.",
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "tier": {
+              "description": "How much a note matters: what it may interrupt.",
+              "enum": [
+                "info",
+                "important",
+                "urgent",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "unread": {
+              "description": "The unread alone.",
+              "type": "boolean"
+            }
+          },
           "required": [],
           "type": "object"
         }

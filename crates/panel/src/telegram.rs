@@ -9,24 +9,22 @@
 //! button ─ signed data ─ the chat's user, access asked of concierge now ─ its service, as that user
 //! ```
 //!
-//! The Bot API is the server's; this sees it through [`Bot`].
-
-use std::future::Future;
-
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
 use sa_alerts::Button;
 use sa_auth::PermissionSet;
-use sa_core::notify::{self, ChatId, Failure, OutboxId, Rendered, Reply};
+use sa_core::notify::{self, ChatId, OutboxId, Rendered, Reply};
 use sha2::{Digest, Sha256};
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
-pub use crate::store::telegram::{Account, Chat as Place, Kind};
+pub use social_networks_adapters::notify::telegram::{Account, CallbackId, Chat, ChatInfo, Target, Update};
+
+pub use crate::store::telegram::Kind;
 use crate::{
 	Panel, Refused,
-	alerts::{Access, Directory, Feeds, Hub, Outlets, Pressed},
+	alerts::{Access, Address, Directory, Feeds, Hub, Message, Outlets, Pressed},
 	deliver::failure_text,
 	session::Refresher,
 	store::{alerts as hub_db, outbox, telegram as db},
@@ -37,96 +35,6 @@ pub const LINK_TTL: SignedDuration = SignedDuration::from_mins(10);
 
 /// At most one unsolicited reply (help, "not linked", …) per chat this often.
 pub const REPLY_EVERY: SignedDuration = SignedDuration::from_mins(10);
-
-/// The Bot API, as the method needs it. Every call answers the failure as [`notify::Failure`],
-/// so the outbox can decide what becomes of the message.
-pub trait Bot: Sync {
-	/// Sends a plain-text message with its entities, or a photo with it as the caption; the id
-	/// Telegram gave it.
-	fn send(&self, to: Target, message: &Rendered, buttons: &[InlineButton], photo: Option<Vec<u8>>) -> impl Future<Output = Result<i64, Failure>> + Send;
-	/// Replaces a message's text and buttons (none: the keyboard is removed).
-	fn edit(&self, chat: ChatId, message_id: i64, message: &Rendered, buttons: &[InlineButton]) -> impl Future<Output = Result<(), Failure>> + Send;
-	/// Answers a button press, with a short notice the user sees.
-	fn answer(&self, callback: &CallbackId, text: &str) -> impl Future<Output = Result<(), Failure>> + Send;
-	/// `getChat`: `chat` is `@name` or a numeric id.
-	fn chat(&self, chat: &str) -> impl Future<Output = Result<ChatInfo, Failure>> + Send;
-	/// Whether `user` administers `chat` (`getChatMember`).
-	fn is_admin(&self, chat: ChatId, user_id: i64) -> impl Future<Output = Result<bool, Failure>> + Send;
-}
-
-/// A button under a message.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum InlineButton {
-	/// Pressed, it comes back to the bot with its signed data.
-	Callback { label: String, data: String },
-	/// Opens `url`.
-	Url { label: String, url: String },
-}
-
-/// Where in Telegram a message goes.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Target {
-	pub chat_id: i64,
-	/// A forum's topic.
-	pub topic_id: Option<i64>,
-}
-
-/// What `getChat` says of a chat.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ChatInfo {
-	pub id: i64,
-	/// `private`, `group`, `supergroup` or `channel`.
-	pub kind: String,
-	pub title: Option<String>,
-	pub forum: bool,
-}
-
-/// A chat an update came from.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct Chat {
-	pub id: i64,
-	/// A one-to-one chat with the bot; groups and channels are never linked by a command.
-	pub private: bool,
-}
-
-/// A button press, by the id Telegram gave it.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct CallbackId {
-	pub v: String,
-}
-
-/// What the bot received, as far as the conductor cares.
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum Update {
-	/// `/start`, with the payload of a `t.me/<bot>?start=<payload>` link when there is one,
-	/// typed (not forwarded) by `from`.
-	Start {
-		chat: Chat,
-		payload: Option<String>,
-		from: Account,
-	},
-	Stop {
-		chat: Chat,
-	},
-	/// Any other message.
-	Other {
-		chat: Chat,
-	},
-	/// A button pressed under one of the bot's messages.
-	Callback {
-		id: CallbackId,
-		chat_id: i64,
-		message_id: i64,
-		data: String,
-		/// The message as the user sees it, to extend with who pressed.
-		message: Rendered,
-	},
-}
-
-/// A message's buttons, as the Bot API takes them.
-pub fn callbacks(buttons: Vec<(String, String)>) -> Vec<InlineButton> {
-	buttons.into_iter().map(|(label, data)| InlineButton::Callback { label, data }).collect()
-}
 
 fn link_token_hash(token: &str) -> [u8; 32] {
 	let mut h = Sha256::new();
@@ -211,7 +119,7 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 		if topic.is_some() && !info.forum {
 			return refuse(format!("{chat} has no topics"));
 		}
-		match self.outlets.is_admin(ChatId { v: info.id }, own_chat).await {
+		match self.outlets.is_admin(info.id, own_chat).await {
 			Ok(true) => {}
 			Ok(false) => return refuse(format!("your linked Telegram account does not administer {chat}")),
 			Err(f) => return refuse(format!("Telegram did not say whether you administer {chat} ({})", failure_text(&f))),
@@ -221,12 +129,8 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 			return Ok(Err(Refused::Conflict(format!("{chat} is a destination already"))));
 		}
 		drop(conn);
-		let to = Target { chat_id: info.id, topic_id: topic };
-		let test = Rendered {
-			text: notify::test_text(self.locale).to_owned(),
-			entities: Vec::new(),
-		};
-		if let Err(f) = self.outlets.send(to, &test, &[], None).await {
+		let to = Address::Telegram(Target { chat_id: info.id, topic_id: topic });
+		if let Err(f) = self.outlets.send_to(&to, &self.test_message()).await {
 			return refuse(format!("the bot cannot post in {chat}: {}", failure_text(&f)));
 		}
 		let mut tx = self.panel.store.begin_write().await?;
@@ -241,8 +145,12 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 	}
 
 	async fn say(&self, chat: i64, text: String) {
-		let message = Rendered { text, entities: Vec::new() };
-		if let Err(f) = self.outlets.send(Target { chat_id: chat, topic_id: None }, &message, &[], None).await {
+		let message = Message {
+			text: Rendered { text, entities: Vec::new() },
+			..self.test_message()
+		};
+		let to = Address::Telegram(Target { chat_id: chat, topic_id: None });
+		if let Err(f) = self.outlets.send_to(&to, &message).await {
 			tracing::warn!(failure = ?f, "telegram: a reply was not delivered");
 		}
 	}
@@ -291,11 +199,13 @@ impl<O: Outlets, C: Refresher + Directory, F: Feeds> Hub<O, C, F> {
 			} => {
 				let (reply, edit) = self.pressed(chat_id, &data, now).await?;
 				if let Some(Edit { message: outbox, line, left }) = edit {
-					let mut edited = message;
+					let mut edited = Rendered::default();
+					edited.push(&message.text);
+					edited.entities = message.entities.iter().map(|e| serde_json::to_value(e).expect("an entity is JSON")).collect();
 					edited.push("\n\n");
 					edited.push(&line);
-					let buttons = callbacks(self.buttons(ChatId { v: chat_id }, outbox, &left));
-					if let Err(f) = self.outlets.edit(ChatId { v: chat_id }, message_id, &edited, &buttons).await {
+					let buttons = self.buttons(ChatId { v: chat_id }, outbox, &left);
+					if let Err(f) = self.outlets.edit(chat_id, message_id, &edited, &buttons).await {
 						tracing::warn!(failure = ?f, "telegram: a pressed message was not updated");
 					}
 				}

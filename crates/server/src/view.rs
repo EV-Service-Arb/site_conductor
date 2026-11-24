@@ -97,9 +97,22 @@ pub enum View {
 	/// The caller's wallet.
 	#[view("/user/wallet", needs = Own::Payments, key = 'w')]
 	Wallet,
-	/// Where the caller's alerts go, and which.
+	/// The caller's alerts, newest first.
 	#[view("/user/alerts", key = 'e')]
-	Alerts,
+	Alerts {
+		/// The one opened.
+		open: Option<i64>,
+		tier: Option<sa_alerts::Tier>,
+		family: Option<sa_alerts::Family>,
+		/// The unread alone.
+		unread: bool,
+	},
+	/// Where the caller's alerts go, when, and which count as what.
+	#[view("/user/alerts/settings")]
+	AlertSettings {
+		/// A mailed link's token: the address it proves.
+		confirm: Option<String>,
+	},
 	/// Asking for a permission the caller lacks, then on to where they were going.
 	#[view("/access")]
 	Access {

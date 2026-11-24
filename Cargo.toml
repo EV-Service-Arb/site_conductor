@@ -64,6 +64,8 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 sqlx = { version = "0.9.1", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "macros", "migrate", "uuid", "json"] }
+# the networks alerts go out through
+social_networks_adapters = { git = "https://github.com/valeratrades/social_networks", branch = "main", default-features = false, features = ["notify"] }
 starlark = "=0.13.0" # 0.14 turns on serde_json's arbitrary_precision for the whole binary; the worker's heap cap is its hidden before_stmt hook
 strum = { version = "0.28.0", features = ["derive"] }
 subtle = "2.6.1"

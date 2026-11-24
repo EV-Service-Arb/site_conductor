@@ -21,11 +21,15 @@ use sa_server::{
 	forward::{Forward, Services},
 	grafana::Grafana,
 	http, live,
+	outlets::{Discord, Networks},
 	signin::{SignIn, SignInConfig},
-	outlets::Networks,
-	telegram::{self, BotApi, BotName},
+	telegram::BotName,
 	tokens, trash,
 	web::{self, Files},
+};
+use social_networks_adapters::notify::{
+	email::{Mailer, Smtp},
+	telegram::{BASE, Bot},
 };
 
 use crate::settings::Settings;
@@ -207,9 +211,13 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 					})?),
 			};
 			let forward = settings.forward()?.map(Services::new);
-			let telegram = settings.telegram()?;
+			let networks = AlertSettings {
+				telegram: settings.telegram()?,
+				smtp: settings.smtp()?,
+				discord: settings.panel_public_origin.as_deref().map(|o| settings.discord(url::Url::parse(o)?.join(alerts::DISCORD_CALLBACK)?)).transpose()?.flatten(),
+			};
 			eyre::ensure!(
-				telegram.is_none() || forward.is_some(),
+				networks.telegram.is_none() || forward.is_some(),
 				"TELEGRAM_BOT_TOKEN needs the forward (PANEL_ASSERTION_KEY and the services' URLs): the hub reads the services' feeds"
 			);
 			let grafana = settings.grafana()?;
@@ -237,7 +245,7 @@ async fn run(cli: Cli, settings: Settings, dev_sign_in: Option<settings::DevSign
 				panel,
 				identity,
 				forward,
-				telegram,
+				networks,
 				grafana,
 				settings.web()?,
 				settings.browsers()?,
@@ -302,6 +310,13 @@ async fn queries_cache(store: &Store, cmd: QueriesCacheCmd) -> eyre::Result<()> 
 	Ok(())
 }
 
+/// What alerts go out through, as configured.
+struct AlertSettings {
+	telegram: Option<settings::TelegramSettings>,
+	smtp: Option<Smtp>,
+	discord: Option<Discord>,
+}
+
 /// Who signs people in.
 enum Identity {
 	Concierge(settings::SignInSettings),
@@ -314,7 +329,7 @@ async fn serve(
 	panel: Panel,
 	identity: Identity,
 	services: Option<Services>,
-	telegram: Option<settings::TelegramSettings>,
+	networks: AlertSettings,
 	grafana: Option<settings::GrafanaSettings>,
 	files: Option<Files>,
 	browsers: Option<sa_server::browser::Connected>,
@@ -381,28 +396,26 @@ async fn serve(
 	};
 	let alerting = match &forward {
 		Some(forward) => {
-			let (bot, locale) = match telegram {
-				Some(tg) => (Some((BotApi::try_new(telegram::API_BASE, zeroize::Zeroizing::new(tg.token))?, BotName::new(tg.username))), tg.locale),
-				None => {
-					tracing::warn!("TELEGRAM_BOT_TOKEN unset: no alerts by Telegram");
-					(None, Locale::En)
-				}
-			};
-			let (telegram, bot) = bot.unzip();
+			let origin: url::Url = origin.parse().wrap_err("the panel's origin is not a URL")?;
+			let mut outlets = Networks::try_new(&hub_panel.alerts_push_seed(), &origin)?;
+			let (mut bot, mut locale) = (BotName::default(), Locale::En);
+			if let Some(tg) = networks.telegram {
+				outlets.telegram = Some(Bot::try_new(BASE, zeroize::Zeroizing::new(tg.token))?);
+				(bot, locale) = (BotName::new(tg.username), tg.locale);
+			}
+			outlets.email = networks.smtp.map(Mailer::try_new).transpose()?;
+			outlets.discord = networks.discord;
+			tracing::info!(methods = ?outlets.methods(), "alerts on");
 			let hub = Hub {
 				panel: hub_panel,
-				outlets: Networks { telegram },
+				outlets,
 				concierge: hub_concierge,
 				feeds: forward.clone(),
 				locale,
 				cabinet: cabinet.parse().wrap_err("the concierge origin is not a URL")?,
-				origin: origin.parse().wrap_err("the panel's origin is not a URL")?,
+				origin,
 			};
-			tracing::info!(methods = ?hub.outlets.methods(), "alerts on");
-			Some(Alerting {
-				hub,
-				bot: bot.unwrap_or_default(), // without a bot, never learned
-			})
+			Some(Alerting { hub, bot })
 		}
 		None => None,
 	};

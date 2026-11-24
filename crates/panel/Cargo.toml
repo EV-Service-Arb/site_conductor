@@ -32,7 +32,7 @@ ring.workspace = true
 rustls.workspace = true
 rustls-platform-verifier.workspace = true
 sa_alerts.workspace = true
-sa_auth.workspace = true
+sa_auth = { workspace = true, features = ["catalog"] }
 sa_browsers.workspace = true
 sa_core.workspace = true
 sa_places.workspace = true
@@ -41,6 +41,7 @@ schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+social_networks_adapters.workspace = true
 sqlx.workspace = true
 strum.workspace = true
 subtle.workspace = true

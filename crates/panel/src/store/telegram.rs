@@ -5,6 +5,7 @@ use eyre::WrapErr;
 use jiff::{SignedDuration, Timestamp};
 use sa_auth::PermissionSet;
 use sa_core::{alerts::Method, notify::ChatId};
+use social_networks_adapters::notify::telegram::Account;
 use sqlx::{SqliteConnection, types::Json};
 use uuid::Uuid;
 
@@ -90,13 +91,6 @@ pub struct Chat {
 	pub id: i64,
 	/// A forum's topic.
 	pub topic_id: Option<i64>,
-}
-
-/// The Telegram account behind a chat, as its `/start` said.
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct Account {
-	pub username: Option<String>,
-	pub first_name: Option<String>,
 }
 
 /// The user's private chat: its destination and chat id.
