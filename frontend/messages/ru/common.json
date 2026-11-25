@@ -187,6 +187,10 @@
     "en": "Areas",
     "t": "Зоны"
   },
+  "mail.count": {
+    "en": "{n} need you",
+    "t": "требуют вас: {n}"
+  },
   "state.noView": {
     "en": "Nothing is at this address",
     "t": "По этому адресу ничего нет"
