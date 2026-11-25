@@ -414,6 +414,37 @@
         ],
         "type": "object"
       },
+      "Again": {
+        "description": "Which of the answers held for a study its pull asks again. What is not held is bought whichever.",
+        "oneOf": [
+          {
+            "enum": [
+              "nothing"
+            ],
+            "type": "string"
+          },
+          {
+            "const": "every",
+            "description": "Every one, but for what a pull that stopped part-way bought.",
+            "type": "string"
+          },
+          {
+            "additionalProperties": false,
+            "description": "Every one fetched this many seconds ago or before.",
+            "properties": {
+              "older_s": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "older_s"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "Alert": {
         "properties": {
           "at": {
@@ -9200,6 +9231,22 @@
           "trade",
           "country",
           "release"
+        ],
+        "type": "object"
+      },
+      "PullDefinition": {
+        "additionalProperties": false,
+        "properties": {
+          "again": {
+            "$ref": "#/components/schemas/Again"
+          },
+          "definition": {
+            "$ref": "#/components/schemas/Definition"
+          }
+        },
+        "required": [
+          "definition",
+          "again"
         ],
         "type": "object"
       },
@@ -41404,7 +41451,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/Definition"
+                "$ref": "#/components/schemas/PullDefinition"
               }
             }
           },
@@ -41538,7 +41585,7 @@
             "description": "`unavailable`, `browsers_not_connected`"
           }
         },
-        "summary": "Builds a definition again, its area and category kept here or not, buying what it lacks at the caller's tokens, as a pull does.",
+        "summary": "Builds a definition again, its area and category kept here or not, buying what it lacks, and again what it says, at the caller's tokens, as a pull does.",
         "tags": [
           "placement"
         ],

@@ -10,7 +10,8 @@
 //!                                             again until it lacks none → built again, charged what was bought
 //! GET  /placement/studies/{sha}             a published one, as the study above
 //! POST /placement/studies/{sha}/pull        as the pull above, charged to whoever pulls
-//! POST /placement/pull                      a Definition handed in whole, as the pull above; its end
+//! POST /placement/pull                      a Definition handed in whole, and which of the answers
+//!                                             held are asked again, as the pull above; its end
 //!                                             an event, the stream kept alive until it
 //! POST /library/studies                     publish: on a released version, or releasing it
 //! GET  /library/studies?trade&country&area
@@ -136,6 +137,25 @@ struct StudyIn {
 struct ShaIn {
 	/// A published study's definition id.
 	sha: String,
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "PullDefinition")]
+struct DefinitionIn {
+	definition: Definition,
+	again: Again,
+}
+
+/// Which of the answers held for a study its pull asks again. What is not held is bought whichever.
+#[derive(Clone, Copy, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+enum Again {
+	/// Every one, but for what a pull that stopped part-way bought.
+	Every,
+	/// Every one fetched this many seconds ago or before.
+	OlderS(u32),
+	Nothing,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -304,23 +324,27 @@ async fn opened(s: &ApiState, p: &Placement, def: Definition) -> ApiResult<Paylo
 async fn pull(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequest, Caller>, Params(at): Params<StudyIn>) -> ApiResult<Payload> {
 	let p = connected(&s)?.clone();
 	let def = define(&s, &caller, &at.area, at.version).await?;
-	pulled(&s, &caller, &p, def).await
+	pulled(&s, &caller, &p, def, Again::Every).await
 }
 
 /// Builds a published study again, buying what it lacks at the caller's tokens, as a pull does.
 async fn pull_published_study(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequest, Caller>, Ids(ShaIn { sha }): Ids<ShaIn>) -> ApiResult<Payload> {
 	let p = connected(&s)?.clone();
 	let def = s.sign_in.panel.published_study(caller.user_id, &sha, Timestamp::now()).await??.definition;
-	pulled(&s, &caller, &p, def).await
+	pulled(&s, &caller, &p, def, Again::Every).await
 }
 
-/// Builds a definition again, its area and category kept here or not, buying what it lacks at the
-/// caller's tokens, as a pull does.
+/// Builds a definition again, its area and category kept here or not, buying what it lacks, and again
+/// what it says, at the caller's tokens, as a pull does.
 ///
 /// 400 a definition placement refuses, or an area not a circle of an area's radius, its margin
 /// included; 503 placement not connected. Its end is the answer's one event: `pulled`, or `refused`
 /// with the refusal a pull answers.
-async fn pull_definition(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequest, Caller>, Body(def): Body<Definition>) -> ApiResult<Pulling> {
+async fn pull_definition(
+	State(s): State<ApiState>,
+	Spends(caller, _): Spends<PlacementRequest, Caller>,
+	Body(DefinitionIn { definition: def, again }): Body<DefinitionIn>,
+) -> ApiResult<Pulling> {
 	let p = connected(&s)?.clone();
 	def.check().map_err(|e| Refusal::new(Code::BadRequest, e.0))?;
 	match &def.area {
@@ -330,7 +354,7 @@ async fn pull_definition(State(s): State<ApiState>, Spends(caller, _): Spends<Pl
 	let end = async move {
 		let pull = async {
 			opened(&s, &p, def.clone()).await?; // what does not build buys nothing
-			pulled(&s, &caller, &p, def).await
+			pulled(&s, &caller, &p, def, again).await
 		};
 		let ended = tokio::time::timeout(PULL_BOUND, pull).await;
 		let ended = ended.unwrap_or_else(|_| Err(Refusal::new(Code::Unavailable, "stopped part-way, out of time: pulled again, it buys the rest")));
@@ -342,13 +366,13 @@ async fn pull_definition(State(s): State<ApiState>, Spends(caller, _): Spends<Pl
 	Ok(Pulling(Sse::new(futures::stream::once(end)).keep_alive(KeepAlive::default()).into_response()))
 }
 
-/// `def` built again, what it lacks bought at `caller`'s tokens.
-async fn pulled(s: &ApiState, caller: &Caller, p: &Placement, def: Definition) -> ApiResult<Payload> {
+/// `def` built again, what it lacks and what is asked `again` bought at `caller`'s tokens.
+async fn pulled(s: &ApiState, caller: &Caller, p: &Placement, def: Definition, again: Again) -> ApiResult<Payload> {
 	let sha = def.id();
 	let slot = p.slot(&sha);
 	let mut slot = slot.lock().await;
-	let held = s.sign_in.panel.pull(caller.user_id).await??;
-	let pulled = match bought(s, p, &def, &held).await {
+	let mut held = s.sign_in.panel.pull(caller.user_id).await??;
+	let pulled = match bought(s, p, &def, &mut held, again).await {
 		Ok(()) => built(s, p, def).await,
 		Err(e) => Err(e),
 	};
@@ -360,8 +384,12 @@ async fn pulled(s: &ApiState, caller: &Caller, p: &Placement, def: Definition) -
 
 /// Every search `def` lacks, bought: it is asked again after each round, since whether another page
 /// is behind one is known only once it is answered.
-async fn bought(s: &ApiState, p: &Placement, def: &Definition, held: &sa_panel::placement::Pull) -> ApiResult<()> {
-	let since = held.since(&def.id()).await?;
+async fn bought(s: &ApiState, p: &Placement, def: &Definition, held: &mut sa_panel::placement::Pull, again: Again) -> ApiResult<()> {
+	let since = match again {
+		Again::Every => held.since(&def.id()).await?,
+		Again::OlderS(s) => Timestamp::now() - jiff::SignedDuration::from_secs(s.into()),
+		Again::Nothing => Timestamp::MIN,
+	};
 	let mut asked = std::collections::HashSet::new();
 	//LOOP: a repeated ask errors, so it ends once placement asks for nothing
 	loop {

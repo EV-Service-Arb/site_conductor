@@ -369,7 +369,12 @@ async fn reading_studies_is_not_pulling_them() {
 
 	let (status, _) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&version={plumbing}"), Value::Null).await;
 	assert_eq!(status, StatusCode::FORBIDDEN);
-	assert_eq!(c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, None)).await.0, StatusCode::FORBIDDEN);
+	assert_eq!(
+		c.send(Method::POST, "/api/v1/placement/pull", pulling(definition(testing::RADIUS_M, None), json!("every")))
+			.await
+			.0,
+		StatusCode::FORBIDDEN
+	);
 	assert_eq!(c.searched(), 0);
 }
 
@@ -385,11 +390,48 @@ fn definition(radius_m: f64, demand: Option<Value>) -> Value {
 	})
 }
 
+fn pulling(definition: Value, again: Value) -> Value {
+	json!({ "definition": definition, "again": again })
+}
+
+/// What is held is asked again as the pull says, and what is lacking is bought whatever it says.
+#[tokio::test]
+async fn a_definition_is_asked_again_of_what_is_old_enough() {
+	let mut c = Conductor::new(admin(), 8, 1000).await;
+	let mut searched = Vec::new();
+	for again in [
+		json!("nothing"),
+		json!("nothing"),
+		json!({ "older_s": 3600 }),
+		json!("every"),
+		json!({ "older_s": 3600 }),
+		json!("every"),
+	] {
+		let (status, events) = c.send(Method::POST, "/api/v1/placement/pull", pulling(definition(testing::RADIUS_M, None), again)).await;
+		let events = String::from_utf8(events).unwrap();
+		assert_eq!((status, events.contains("event: pulled\n")), (StatusCode::OK, true), "{events}");
+		searched.push(c.searched());
+	}
+	// the one page behind another is behind it once
+	let (first, all) = (NEED + 1, NEED);
+	assert_eq!(searched, [first, first, first, first + all, first + all, first + 2 * all]);
+}
+
+#[tokio::test]
+async fn a_definition_alone_is_no_pull() {
+	let mut c = Conductor::new(admin(), 8, 1000).await;
+	assert_eq!(
+		c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, None)).await.0,
+		StatusCode::BAD_REQUEST
+	);
+	assert_eq!(c.searched(), 0);
+}
+
 #[tokio::test]
 async fn a_definition_is_pulled_as_a_study_is() {
 	let mut c = Conductor::new(admin(), 8, 1000).await;
 
-	let (status, events) = c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, None)).await;
+	let (status, events) = c.send(Method::POST, "/api/v1/placement/pull", pulling(definition(testing::RADIUS_M, None), json!("every"))).await;
 	let events = String::from_utf8(events).unwrap();
 	assert_eq!((status, events.contains("event: pulled\n")), (StatusCode::OK, true), "{events}");
 	assert_eq!(c.searched(), NEED + 1);
@@ -400,7 +442,7 @@ async fn a_definition_is_pulled_as_a_study_is() {
 async fn a_definition_unaffordable_ends_refused() {
 	let mut c = Conductor::new(admin(), 8, 20).await;
 
-	let (status, events) = c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, None)).await;
+	let (status, events) = c.send(Method::POST, "/api/v1/placement/pull", pulling(definition(testing::RADIUS_M, None), json!("every"))).await;
 	let events = String::from_utf8(events).unwrap();
 	assert_eq!(
 		(status, events.contains("event: refused\n") && events.contains("unaffordable")),
@@ -415,14 +457,19 @@ async fn a_definition_that_does_not_build_or_is_too_wide_buys_nothing() {
 	let mut c = Conductor::new(admin(), 8, 1000).await;
 
 	let unknown = json!({ "expr": "no_such_column", "columns": [], "layers": [] });
-	let (status, events) = c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, Some(unknown))).await;
+	let (status, events) = c
+		.send(Method::POST, "/api/v1/placement/pull", pulling(definition(testing::RADIUS_M, Some(unknown)), json!("every")))
+		.await;
 	let events = String::from_utf8(events).unwrap();
 	assert_eq!(
 		(status, events.contains("event: refused\n")),
 		(StatusCode::OK, true),
 		"its build is heard of as it goes on: {events}"
 	);
-	assert_eq!(c.send(Method::POST, "/api/v1/placement/pull", definition(100_001., None)).await.0, StatusCode::BAD_REQUEST);
+	assert_eq!(
+		c.send(Method::POST, "/api/v1/placement/pull", pulling(definition(100_001., None), json!("every"))).await.0,
+		StatusCode::BAD_REQUEST
+	);
 	assert_eq!((c.searched(), c.balance().await), (0, json!(1000)));
 }
 
