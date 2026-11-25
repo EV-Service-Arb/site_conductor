@@ -327,9 +327,12 @@ async fn pull_definition(State(s): State<ApiState>, Spends(caller, _): Spends<Pl
 		Area::Circle { radius_m, margin_m, .. } if radius_m + margin_m <= MAX_RADIUS_M as f64 => {}
 		_ => return Err(Refusal::new(Code::BadRequest, format!("a study is of a circle of at most {MAX_RADIUS_M} m"))),
 	}
-	opened(&s, &p, def.clone()).await?; // what does not build buys nothing
 	let end = async move {
-		let ended = tokio::time::timeout(PULL_BOUND, pulled(&s, &caller, &p, def)).await;
+		let pull = async {
+			opened(&s, &p, def.clone()).await?; // what does not build buys nothing
+			pulled(&s, &caller, &p, def).await
+		};
+		let ended = tokio::time::timeout(PULL_BOUND, pull).await;
 		let ended = ended.unwrap_or_else(|_| Err(Refusal::new(Code::Unavailable, "stopped part-way, out of time: pulled again, it buys the rest")));
 		Ok::<_, Infallible>(match ended {
 			Ok(_) => Event::default().event("pulled").data("{}"),

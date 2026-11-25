@@ -415,9 +415,12 @@ async fn a_definition_that_does_not_build_or_is_too_wide_buys_nothing() {
 	let mut c = Conductor::new(admin(), 8, 1000).await;
 
 	let unknown = json!({ "expr": "no_such_column", "columns": [], "layers": [] });
+	let (status, events) = c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, Some(unknown))).await;
+	let events = String::from_utf8(events).unwrap();
 	assert_eq!(
-		c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, Some(unknown))).await.0,
-		StatusCode::INTERNAL_SERVER_ERROR
+		(status, events.contains("event: refused\n")),
+		(StatusCode::OK, true),
+		"its build is heard of as it goes on: {events}"
 	);
 	assert_eq!(c.send(Method::POST, "/api/v1/placement/pull", definition(100_001., None)).await.0, StatusCode::BAD_REQUEST);
 	assert_eq!((c.searched(), c.balance().await), (0, json!(1000)));
