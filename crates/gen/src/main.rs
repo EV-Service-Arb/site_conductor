@@ -108,7 +108,7 @@ fn sorted(mut v: serde_json::Value) -> String {
 /// conductor's release would go out against a peer contract prod doesn't serve.
 fn check_released(sources: &[(sa_auth::Service, Option<PathBuf>)], vendored: &Path) {
 	let git = |root: &Path, args: &[&str]| {
-		let out = std::process::Command::new("git").arg("-C").arg(root).args(args).output().expect("git runs");
+		let out = std::process::Command::new("git").env_remove("GIT_DIR").arg("-C").arg(root).args(args).output().expect("git runs");
 		assert!(out.status.success(), "git {args:?} in {}: {}", root.display(), String::from_utf8_lossy(&out.stderr));
 		String::from_utf8(out.stdout).expect("git prints UTF-8")
 	};
