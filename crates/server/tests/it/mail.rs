@@ -13,6 +13,7 @@ use jiff::{SignedDuration, Timestamp};
 use sa_core::{
 	feeds::{GONE_MAX, GoneReview},
 	gbp::Country,
+	mail::Settings,
 	notify::Locale,
 	prices::{ClaudeTokens, Item, Provider, Spender},
 };
@@ -737,12 +738,48 @@ async fn a_reading_declined_is_counted_all_the_same() {
 }
 
 #[tokio::test]
+async fn how_google_is_pursued_is_the_callers_own() {
+	let mut w = World::new(vec![], false).await;
+	w.arrives(1, SUPPORT, "[1-1234000056789] Your Request to Google", "Plomberie Dupont - Lyon: follow the prompts.")
+		.await;
+	let usual = Settings::default();
+	let answer = |set: Settings| json!({ "set": set, "least": Settings::LEAST, "most": Settings::MOST });
+	assert_eq!(w.call(Method::GET, "/mail/settings", None).await, (200, answer(usual)));
+	let other = Settings {
+		hold_minutes: 45,
+		re_ask_hours: 72,
+		limit: 3,
+		..usual
+	};
+	assert_eq!(w.call(Method::PUT, "/mail/settings", Some(json!(other))).await, (200, answer(other)));
+	let (_, auto) = w.call(Method::GET, "/mail/auto", None).await;
+	assert_eq!((&auto["hold_minutes"], &auto["re_ask_hours"], &auto["limit"]), (&json!(45), &json!(72), &json!(3)));
+	assert_eq!(w.cases().await[0]["auto"]["limit"], 3);
+
+	let mut beyond = json!(other);
+	beyond["re_ask_hours"] = json!(23);
+	let (status, why) = w.call(Method::PUT, "/mail/settings", Some(beyond)).await;
+	assert_eq!(status, 400, "{why}");
+	assert!(why.to_string().contains("re_ask_hours: 23 is not 24 to 336"), "{why}");
+	for wrong in [json!({ "limit": 3 }), json!({ "limit": -1 }), json!("x")] {
+		let (status, why) = w.call(Method::PUT, "/mail/settings", Some(wrong)).await;
+		assert_eq!(status, 400, "whole, or not at all: {why}");
+	}
+	let mut theirs = Browser::default();
+	theirs.sign_in_as(&w.app, "other@x.com").await;
+	let (_, got) = theirs.call(&w.app, Method::GET, "/api/v1/mail/settings", None).await;
+	assert_eq!(got, answer(usual), "another's");
+	assert_eq!(w.call(Method::GET, "/mail/settings", None).await, (200, answer(other)));
+}
+
+#[tokio::test]
 async fn an_agent_sends_only_what_its_person_agreed_to() {
 	for (operation, body) in [
 		("send_mail_draft", json!({ "body": "x", "files": [], "as_is": false })),
 		("edit_mail_draft", json!({ "body": "x" })),
 		("edit_mail_case", json!({ "done": false })),
 		("correct_mail", json!({ "kind": "self_serve" })),
+		("set_mail_settings", serde_json::to_value(Settings::LEAST).unwrap()),
 	] {
 		held_for_its_person(operation, body).await;
 	}

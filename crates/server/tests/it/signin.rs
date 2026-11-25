@@ -969,6 +969,7 @@ async fn no_permission_opens_no_section() {
 			"/mail/cases/{id}",
 			"/mail/cases/{id}/draft",
 			"/mail/cases/{id}/given",
+			"/mail/settings",
 			"/mail/stats",
 			"/gmbs/{id}/documents",
 			"/gmbs/{id}/documents/{document}",

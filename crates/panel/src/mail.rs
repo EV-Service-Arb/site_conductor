@@ -19,8 +19,8 @@ use sa_alerts::{Button, Call, Rule, Tier};
 use sa_core::{
 	gbp::State as Stands,
 	mail::{
-		self as rules, About, Draft as Reply, DraftState, Goal, HOLD, Halt, Holds, Joining, Kind, MAX_READS, Mark, Message, Pursuit, QuietBecause, READ_BACK, Reading, Ruled, Said, Sender,
-		Settled, Spoken, State, Topic, Why,
+		self as rules, About, Draft as Reply, DraftState, Goal, Halt, Holds, Joining, Kind, MAX_READS, Mark, Message, Pursuit, QuietBecause, READ_BACK, Reading, Ruled, Said, Sender,
+		Settings, Settled, Spoken, State, Topic, Why,
 	},
 	notify::{Locale, Note, Rendered, one_line},
 };
@@ -53,12 +53,9 @@ const READS: usize = 20;
 const SUMMARY_MAX: usize = 160;
 /// A turn older than this is told of no more: the marks of what was told are kept a little longer.
 const TELL_WITHIN: SignedDuration = SignedDuration::from_hours(24 * 6);
-/// A date Google set is told of again this long before.
-const DEADLINE_NEAR: SignedDuration = SignedDuration::from_hours(24);
+const _: () = assert!(Settings::MOST.remind_hours < TELL_WITHIN.as_hours());
 /// What a held reply's note does: the reply waits for its person.
 const STOP: &str = "stop_mail_draft";
-/// What waits on a person for this long is told of again.
-const REMIND_AFTER: SignedDuration = SignedDuration::from_hours(48);
 /// A held reply that did not go for this long past its moment goes by itself no more.
 const LATE: SignedDuration = SignedDuration::from_hours(1);
 /// Mail read by nobody for this long is told of.
@@ -144,6 +141,8 @@ pub struct Case {
 	pub due: bool,
 	/// From when a reply lacking nothing may go by itself, or why none does.
 	pub press: Result<Timestamp, Halt>,
+	/// Its gmail's owner's.
+	pub settings: Settings,
 	/// When its inbox was last read, as the account it has now, since the conductor started.
 	read: Option<Timestamp>,
 	/// Oldest first.
@@ -338,6 +337,7 @@ pub struct Auto {
 	pub by_itself: bool,
 	/// The GBPs' topics switched on.
 	pub on: Vec<(i64, Topic)>,
+	pub settings: Settings,
 }
 
 /// What a person corrects of a reading; each absent is left.
@@ -641,13 +641,28 @@ impl Panel {
 		Ok(Ok(case))
 	}
 
-	/// The person's replies that go by themselves.
+	/// The person's replies that go by themselves, and how Google is pursued.
 	pub async fn mail_auto(&self, owner: Uuid) -> eyre::Result<Auto> {
 		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for automatic replies")?;
 		Ok(Auto {
 			by_itself: self.mail_by_itself,
 			on: db::auto(&mut conn, owner).await?,
+			settings: db::settings(&mut conn, owner).await?,
 		})
+	}
+
+	/// Moves every case of the person's as it is next read; a reply held already goes at its moment, or waits for them.
+	pub async fn set_mail_settings(&self, owner: Uuid, settings: Settings) -> eyre::Result<Result<(), Refused>> {
+		let settings = match settings.checked() {
+			Ok(s) => s,
+			Err(why) => return Ok(Err(Refused::Invalid(why))),
+		};
+		let mut tx = self.store.begin_write().await?;
+		if db::settings(&mut tx, owner).await? != settings {
+			db::set_settings(&mut tx, owner, settings).await?;
+		}
+		tx.commit().await.wrap_err("committing how a person's mail is pursued")?;
+		Ok(Ok(()))
 	}
 
 	/// Each of the person's GBPs `gmbs` switched, or none.
@@ -762,7 +777,8 @@ impl Panel {
 		if written_of(&case) != written_of(of) || (!asked_for && !case.due) || db::handed(&mut tx, answers).await? {
 			return Ok(None);
 		}
-		let held = case.press.ok().filter(|_| !asked_for).map(|from| from.max(now + HOLD));
+		let hold = SignedDuration::from_mins(case.settings.hold_minutes);
+		let held = case.press.ok().filter(|_| !asked_for).map(|from| from.max(now + hold));
 		let (body, needs, state, error) = match written {
 			Written::Reply { body, needs } if held.is_some() && needs.is_empty() => (body, needs, DraftState::Held, None),
 			Written::Reply { body, needs } => (body, needs, DraftState::Proposed, None),
@@ -989,7 +1005,7 @@ impl Panel {
 			return Ok(Err(Refused::Conflict(why)));
 		}
 		// Google may have answered since the inbox was read
-		if person.is_none() && (case.read < send_at || case.press.is_ok_and(|from| from > now)) {
+		if person.is_none() && case.read < send_at {
 			return Ok(Err(Refused::Unavailable("its inbox is not read past its moment yet".to_owned())));
 		}
 		let messages = case.messages();
@@ -1137,7 +1153,7 @@ impl Panel {
 					false => continue,
 				},
 				State::Done { by: Settled::Here } if read.is_some_and(|r| !matches!(r.kind, Kind::Closed | Kind::DuplicateTicket)) => ("done", at),
-				State::NeedsYou { .. } | State::ReplyReady if deadline.is_some_and(|d| d.duration_since(now) <= DEADLINE_NEAR) => ("deadline", now),
+				State::NeedsYou { .. } | State::ReplyReady if deadline.is_some_and(|d| d.duration_since(now) <= SignedDuration::from_hours(c.settings.deadline_hours)) => ("deadline", now),
 				// their own press, and what came of one
 				State::NeedsYou {
 					why: Why::Reopened | Why::NothingToSay { .. },
@@ -1152,8 +1168,9 @@ impl Panel {
 			if now.duration_since(at) > TELL_WITHIN {
 				continue;
 			}
-			let again = matches!(turn, "needs_you" | "reply_ready") && now.duration_since(at) >= REMIND_AFTER;
-			let (turn, at) = if again { ("again", at + REMIND_AFTER) } else { (turn, at) };
+			let remind = SignedDuration::from_hours(c.settings.remind_hours);
+			let again = matches!(turn, "needs_you" | "reply_ready") && now.duration_since(at) >= remind;
+			let (turn, at) = if again { ("again", at + remind) } else { (turn, at) };
 			// what goes by itself unless it is stopped
 			let reply = c.draft.as_ref().filter(|_| turn == "held").and_then(|d| d.body.as_deref()).map(|b| one_line(b, BEFORE_MAX));
 			let note = |summary, reply| Note::GoogleMail {
@@ -1229,6 +1246,7 @@ impl Panel {
 		}
 		let stuck = db::stuck(conn, owner).await?;
 		let auto = db::auto(conn, owner).await?;
+		let settings = db::settings(conn, owner).await?;
 		let picked: HashMap<i64, i64> = rows.iter().filter_map(|r| Some((r.id, r.gmb_id?))).collect();
 		// whose a link is: a person's word of a message with it or its case, else the latest mail to name a GBP beside
 		// it, else what its reader saw
@@ -1292,6 +1310,7 @@ impl Panel {
 					stuck: stuck.clone(),
 					due: false,
 					press: Err(Halt::Unread),
+					settings,
 					read: reads
 						.get(&r.gmail_id)
 						.filter(|(u, _)| inboxes.get(&r.gmail_id).is_some_and(|(now, _)| now == u))
@@ -1367,6 +1386,7 @@ impl Panel {
 				elsewhere: &others,
 				carried_by,
 				switched: self.mail_by_itself && c.gmb.is_some_and(|g| auto.contains(&(g, c.topic))),
+				settings: c.settings,
 				stuck: c.stuck.as_deref(),
 				read: c.read,
 			};

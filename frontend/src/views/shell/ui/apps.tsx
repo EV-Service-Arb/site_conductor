@@ -87,9 +87,10 @@ export function useApps(onNavigate?: () => void): App[] {
       section: {
         id: "email",
         items: [
-          { id: "threads", href: link({ view: "email", params: {} }), label: t(mail.tab.threads, "Threads"), icon: Inbox, badge, description: t(mail.tab.threads.description, "Each conversation and notice, and whose turn it is"), match: () => at.view === "email" && at.params.show !== "automatic" && at.params.show !== "stats" },
+          { id: "threads", href: link({ view: "email", params: {} }), label: t(mail.tab.threads, "Threads"), icon: Inbox, badge, description: t(mail.tab.threads.description, "Each conversation and notice, and whose turn it is"), match: () => at.view === "email" && at.params.show !== "automatic" && at.params.show !== "stats" && at.params.show !== "settings" },
           { id: "automatic", href: link({ view: "email", params: { show: "automatic" } }), label: t(mail.tab.automatic, "Automatic replies"), icon: Bot, description: t(mail.tab.automatic.description, "Which GBPs' mail is answered by itself"), match: () => at.view === "email" && at.params.show === "automatic" },
           { id: "stats", href: link({ view: "email", params: { show: "stats" } }), label: t(mail.tab.stats, "Stats"), icon: ChartColumn, description: t(mail.tab.stats.description, "What it took to get what Google was asked for"), match: () => at.view === "email" && at.params.show === "stats" },
+          { id: "settings", href: link({ view: "email", params: { show: "settings" } }), label: t(mail.tab.settings, "Settings"), icon: Settings, description: t(mail.tab.settings.description, "When Google is asked again, and when you are told"), match: () => at.view === "email" && at.params.show === "settings" },
         ],
       },
     },

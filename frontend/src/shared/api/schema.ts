@@ -2074,7 +2074,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The GBPs and topics whose replies go by themselves, a quarter of an hour after they are written. */
+        /** The GBPs and topics whose replies go by themselves, and how. */
         get: operations["mail_auto"];
         /** Lets replies on a topic of each of the caller's GBPs named go by themselves, or no more. 400 a topic that never does; 404 one not theirs. */
         put: operations["set_mail_auto"];
@@ -2234,6 +2234,24 @@ export interface paths {
          * @description 400 a topic its kind is not of, or a message of ours.
          */
         patch: operations["correct_mail"];
+        trace?: never;
+    };
+    "/mail/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How the caller's mail with Google is pursued, in every case of theirs, and when they are told of it. */
+        get: operations["mail_settings"];
+        /** Sets it, whole: every case is as it says from its next read on. What that makes due is written, and charged, at once, and held before it goes by itself; a reply held already goes at its moment, or waits for its person. 400 one past its bounds. */
+        put: operations["set_mail_settings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/mail/stats": {
@@ -4744,7 +4762,7 @@ export interface components {
             /** @description Why nothing does; `null`: its next reply does, if it lacks nothing. */
             halt: components["schemas"]["MailHalt"] | null;
             /**
-             * Format: uint
+             * Format: uint16
              * @description Past it a person decides.
              */
             limit: number;
@@ -4759,7 +4777,7 @@ export interface components {
              */
             hold_minutes: number;
             /**
-             * Format: uint
+             * Format: uint16
              * @description How often Google is asked, at most, until it gives something new.
              */
             limit: number;
@@ -5218,6 +5236,50 @@ export interface components {
         } | {
             /** @constant */
             is: "gmail";
+        };
+        /** @description How a person's mail with Google is pursued, and when they are told of it: once for every case of theirs. */
+        MailSettings: {
+            /**
+             * Format: int64
+             * @description It goes this long after ours before it.
+             */
+            apart_hours: number;
+            /**
+             * Format: int64
+             * @description A date Google set is told of again this long before.
+             */
+            deadline_hours: number;
+            /**
+             * Format: int64
+             * @description A reply that goes by itself waits this long first, to be stopped.
+             */
+            hold_minutes: number;
+            /**
+             * Format: int64
+             * @description That, where it is deciding on a video or an appeal.
+             */
+            in_review_days: number;
+            /**
+             * Format: uint16
+             * @description How often Google is asked, at most, until it gives something new; past it a person decides.
+             */
+            limit: number;
+            /**
+             * Format: int64
+             * @description How long Google is silent before it is asked again, where it gave no other term.
+             */
+            re_ask_hours: number;
+            /**
+             * Format: int64
+             * @description What waits on its person for this long is told of again.
+             */
+            remind_hours: number;
+        };
+        /** @description `GET /mail/settings`, and the least and the most each may be set to. */
+        MailSettingsSet: {
+            least: components["schemas"]["MailSettings"];
+            most: components["schemas"]["MailSettings"];
+            set: components["schemas"]["MailSettings"];
         };
         /** @description What settled a case. */
         MailSettled: {
@@ -7056,6 +7118,8 @@ export type MailReadingEdit = components['schemas']['MailReadingEdit'];
 export type MailSaid = components['schemas']['MailSaid'];
 export type MailSend = components['schemas']['MailSend'];
 export type MailSentBy = components['schemas']['MailSentBy'];
+export type MailSettings = components['schemas']['MailSettings'];
+export type MailSettingsSet = components['schemas']['MailSettingsSet'];
 export type MailSettled = components['schemas']['MailSettled'];
 export type MailStanding = components['schemas']['MailStanding'];
 export type MailState = components['schemas']['MailState'];
@@ -27323,6 +27387,267 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MailCaseDetail"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    mail_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /mail/settings`, and the least and the most each may be set to. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailSettingsSet"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    set_mail_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description How a person's mail with Google is pursued, and when they are told of it: once for every case of theirs. */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MailSettings"];
+            };
+        };
+        responses: {
+            /** @description `GET /mail/settings`, and the least and the most each may be set to. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailSettingsSet"];
                 };
             };
             /** @description `bad_request` */

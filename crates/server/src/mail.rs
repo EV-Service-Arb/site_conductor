@@ -129,7 +129,7 @@ impl CaseDto {
 			auto: AutomationDto {
 				halt: c.press.err(),
 				asked: c.asked(),
-				limit: rules::MAX_ASKS,
+				limit: c.settings.limit,
 			},
 			draft: draft.map(DraftDto::from),
 			joined: c.joined.clone(),
@@ -147,7 +147,7 @@ pub struct AutomationDto {
 	/// Ours since Google last gave something new.
 	pub asked: usize,
 	/// Past it a person decides.
-	pub limit: usize,
+	pub limit: u16,
 }
 
 /// Who speaks in a message.
@@ -395,7 +395,16 @@ pub struct AutosDto {
 	/// How long Google is silent before it is asked again, where it gave no other term.
 	pub re_ask_hours: i64,
 	/// How often Google is asked, at most, until it gives something new.
-	pub limit: usize,
+	pub limit: u16,
+}
+
+/// `GET /mail/settings`, and the least and the most each may be set to.
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MailSettingsSet")]
+pub struct SettingsDto {
+	pub set: rules::Settings,
+	pub least: rules::Settings,
+	pub most: rules::Settings,
 }
 
 /// A goal asked of Google for a GBP, until it is over.
@@ -711,6 +720,8 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::GET, "/mail/stats", USER, mail_stats),
 		ApiRoute::new(M::GET, "/mail/auto", USER, mail_auto),
 		ApiRoute::new(M::PUT, "/mail/auto", FRESH, set_mail_auto),
+		ApiRoute::new(M::GET, "/mail/settings", USER, mail_settings),
+		ApiRoute::new(M::PUT, "/mail/settings", FRESH, set_mail_settings),
 		ApiRoute::new(M::GET, "/gmbs/{id}/mail", USER, gmb_mail),
 	]
 }
@@ -1040,16 +1051,16 @@ async fn restore_mail_draft(_: Outward, State(state): State<ApiState>, Extension
 	detail(&state, caller.user_id, case).await
 }
 
-/// The GBPs and topics whose replies go by themselves, a quarter of an hour after they are written.
+/// The GBPs and topics whose replies go by themselves, and how.
 async fn mail_auto(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<AutosDto>> {
 	let auto = panel.mail_auto(caller.user_id).await?;
 	Ok(Json(AutosDto {
 		by_itself: auto.by_itself,
 		on: auto.on.into_iter().map(|(gmb_id, topic)| AutoDto { gmb_id, topic }).collect(),
 		topics: sa_panel::mail::AUTO.to_vec(),
-		hold_minutes: rules::HOLD.as_mins(),
-		re_ask_hours: rules::RE_ASK.as_hours(),
-		limit: rules::MAX_ASKS,
+		hold_minutes: auto.settings.hold_minutes,
+		re_ask_hours: auto.settings.re_ask_hours,
+		limit: auto.settings.limit,
 	}))
 }
 
@@ -1068,6 +1079,23 @@ async fn set_mail_auto(_: Outward, State(panel): State<Panel>, Extension(caller)
 	panel.set_mail_auto(caller.user_id, &b.gmbs, b.topic, b.on).await??;
 	tracing::info!(user_id = %caller.user_id, gmbs = ?b.gmbs, topic = ?b.topic, on = b.on, "automatic replies switched");
 	mail_auto(State(panel), Extension(caller)).await
+}
+
+/// How the caller's mail with Google is pursued, in every case of theirs, and when they are told of it.
+async fn mail_settings(State(panel): State<Panel>, Extension(caller): Extension<Caller>) -> ApiResult<Json<SettingsDto>> {
+	Ok(Json(SettingsDto {
+		set: panel.mail_auto(caller.user_id).await?.settings,
+		least: rules::Settings::LEAST,
+		most: rules::Settings::MOST,
+	}))
+}
+
+/// Sets it, whole: every case is as it says from its next read on. What that makes due is written, and charged, at once, and
+/// held before it goes by itself; a reply held already goes at its moment, or waits for its person. 400 one past its bounds.
+async fn set_mail_settings(_: Outward, State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<rules::Settings>) -> ApiResult<Json<SettingsDto>> {
+	panel.set_mail_settings(caller.user_id, b).await??;
+	tracing::info!(user_id = %caller.user_id, settings = ?b, "how Google is pursued, set");
+	mail_settings(State(panel), Extension(caller)).await
 }
 
 #[derive(Deserialize, JsonSchema)]

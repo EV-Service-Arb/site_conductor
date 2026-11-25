@@ -672,6 +672,8 @@ POST   /mail/drafts/{id}/restore
 GET    /mail/stats
 GET    /mail/auto
 PUT    /mail/auto                           fresh
+GET    /mail/settings
+PUT    /mail/settings                       fresh
 GET    /gmbs/{id}/mail
 GET    /gmbs/{id}/documents
 POST   /gmbs/{id}/documents                 slow
@@ -1249,8 +1251,8 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   of them is no count); what it lacks is a need, and a draft with one never goes by itself. Where the
   archive does not track the GBP the list is a need; while it does not answer, the reply waits. A draft lacking
   something goes with no file only once its person says so.
-- **Whose turn.** A deflection, a refusal, a call that failed, or silence past Google's term (48 h where it
-  gave none, a week for a video or an appeal; only an inbox read past it is silent) is pressed. What Google
+- **Whose turn.** A deflection, a refusal, a call that failed, or silence past Google's term (its person's where it
+  gave none, another for a video or an appeal; only an inbox read past it is silent) is pressed. What Google
   asks for is its operator's, the reply ready around it. A specialist of Google's is waited for, told of, and
   pressed once. What a notice says stands until a kind that supersedes it; a verification is over once its GBP is
   verified, a suspension once it is reinstated, a case once its GBP is in the trash. Of a GBP's open
@@ -1260,12 +1262,16 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   (kept sealed, for the next ask and the appeal) or otherwise.
 - **What works** (`/mail/stats`): a goal (the live call, the missing reviews) is pursued from our first ask until Google
   gives it, or the GBP is verified without; an ask's answer is Google's last word before the next of ours, in its case.
+- **Settings.** How Google is pursued and its person told is theirs, once for every case (`mail_settings`; unsaid,
+  `sa_core::mail::Settings::default`), within `LEAST` and `MOST`. A change moves every case as it is next
+  read; what it makes due is written, and held from then. A held reply's moment it never moves: the reply goes then if it
+  still may, else it is its person's.
 - **A reply** goes as the gmail, to support's one address, to the last message of the case that takes one.
   `sending` is committed before SMTP; one left so is never tried again, nor is another sent to what it answers.
   One goes by itself only while its GBP's switch for the topic (`verification`, `reviews`; off unless its owner's, and
   once the GBP moves to another gmail) is on and its case may be pressed, asked as it is written, held and sent
   (`sa_core::mail::press`, or why not): by Google's last word alone, nothing asked or lacking, its GBP certain and live, mailed to the gmail's own account or written to by
-  it, 12 h after ours, fewer than `MAX_ASKS` of ours since Google gave or asked something new; once its inbox was read past its moment, and
+  it, ≥ 12 h after ours, fewer of ours than its person's limit since Google gave or asked something new; once its inbox was read past its moment, and
   at most an hour late. A correction holds it back; another account on the gmail, or the same on two, and
   nothing goes. A person may send past all that. Only production's goes by itself: a copy of its database
   would answer Google too.
@@ -1423,7 +1429,7 @@ feed (2 s)        GET <service>/api/conductor/notifications?after=<cursor>&limit
 own               told in the write that made it so, or found due every 2 s (`own_alerts`); a gmail's grant,
                   Maps key and proxy asked daily, failing every 15 min, told when they fail twice running; Google's mail
                   every 60 s: a case turned to a person or to a specialist of Google's, or settled in it, once
-                  per message and turn, for 6 days, and again after 48 h on a person; the oldest an hour unread
+                  per message and turn, for 6 days, and again once it waited on a person as long as they set; the oldest an hour unread
 told              once per (rule, event): kept 30 days, sealed; in the inbox of each person of its
                   audience; queued for each destination of theirs reached, its filter passed, their access
                   confirmed within the hour

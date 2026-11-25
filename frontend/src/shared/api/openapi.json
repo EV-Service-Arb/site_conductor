@@ -5926,7 +5926,8 @@
           },
           "limit": {
             "description": "Past it a person decides.",
-            "format": "uint",
+            "format": "uint16",
+            "maximum": 65535,
             "minimum": 0,
             "type": "integer"
           }
@@ -5952,7 +5953,8 @@
           },
           "limit": {
             "description": "How often Google is asked, at most, until it gives something new.",
-            "format": "uint",
+            "format": "uint16",
+            "maximum": 65535,
             "minimum": 0,
             "type": "integer"
           },
@@ -7297,6 +7299,79 @@
             "type": "object"
           }
         ]
+      },
+      "MailSettings": {
+        "additionalProperties": false,
+        "description": "How a person's mail with Google is pursued, and when they are told of it: once for every case of theirs.",
+        "properties": {
+          "apart_hours": {
+            "description": "It goes this long after ours before it.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "deadline_hours": {
+            "description": "A date Google set is told of again this long before.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "hold_minutes": {
+            "description": "A reply that goes by itself waits this long first, to be stopped.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "in_review_days": {
+            "description": "That, where it is deciding on a video or an appeal.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "limit": {
+            "description": "How often Google is asked, at most, until it gives something new; past it a person decides.",
+            "format": "uint16",
+            "maximum": 65535,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "re_ask_hours": {
+            "description": "How long Google is silent before it is asked again, where it gave no other term.",
+            "format": "int64",
+            "type": "integer"
+          },
+          "remind_hours": {
+            "description": "What waits on its person for this long is told of again.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "hold_minutes",
+          "apart_hours",
+          "limit",
+          "re_ask_hours",
+          "in_review_days",
+          "remind_hours",
+          "deadline_hours"
+        ],
+        "type": "object"
+      },
+      "MailSettingsSet": {
+        "description": "`GET /mail/settings`, and the least and the most each may be set to.",
+        "properties": {
+          "least": {
+            "$ref": "#/components/schemas/MailSettings"
+          },
+          "most": {
+            "$ref": "#/components/schemas/MailSettings"
+          },
+          "set": {
+            "$ref": "#/components/schemas/MailSettings"
+          }
+        },
+        "required": [
+          "set",
+          "least",
+          "most"
+        ],
+        "type": "object"
       },
       "MailSettled": {
         "description": "What settled a case.",
@@ -36989,7 +37064,7 @@
             "description": "`unavailable`, `browsers_not_connected`"
           }
         },
-        "summary": "The GBPs and topics whose replies go by themselves, a quarter of an hour after they are written.",
+        "summary": "The GBPs and topics whose replies go by themselves, and how.",
         "tags": [
           "mail"
         ],
@@ -38966,6 +39041,334 @@
           }
         },
         "summary": "Corrects what a message of Google's was read as; the caller's word from then on. A draft going by itself waits for its person.",
+        "tags": [
+          "mail"
+        ],
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-outward": true
+      }
+    },
+    "/mail/settings": {
+      "get": {
+        "operationId": "mail_settings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailSettingsSet"
+                }
+              }
+            },
+            "description": "`GET /mail/settings`, and the least and the most each may be set to."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unaffordable`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`csrf`, `forbidden`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`conflict`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_large`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_many`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`, `browsers_not_connected`"
+          }
+        },
+        "summary": "How the caller's mail with Google is pursued, in every case of theirs, and when they are told of it.",
+        "tags": [
+          "mail"
+        ],
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      },
+      "put": {
+        "operationId": "set_mail_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MailSettings"
+              }
+            }
+          },
+          "description": "How a person's mail with Google is pursued, and when they are told of it: once for every case of theirs.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailSettingsSet"
+                }
+              }
+            },
+            "description": "`GET /mail/settings`, and the least and the most each may be set to."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unaffordable`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`csrf`, `forbidden`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`conflict`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_large`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_many`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`, `browsers_not_connected`"
+          }
+        },
+        "summary": "Sets it, whole: every case is as it says from its next read on. What that makes due is written, and charged, at once, and held before it goes by itself; a reply held already goes at its moment, or waits for its person. 400 one past its bounds.",
         "tags": [
           "mail"
         ],
@@ -45504,6 +45907,7 @@
                 "waiting",
                 "automatic",
                 "stats",
+                "settings",
                 null
               ],
               "type": [

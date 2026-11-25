@@ -16,31 +16,33 @@ import { ErrorState } from "@/shared/ui/error-state";
 
 import { CaseDetail } from "./case-detail";
 import { Inboxes } from "./inboxes";
+import { Settings } from "./settings";
 import { Stats } from "./stats";
 
 type Sought = Params<"email">;
 
-/** Google's mail about the caller's GBPs, as cases: the list and the one opened, in a narrow room one or the other; and which replies go by themselves. */
+/** Google's mail about the caller's GBPs, as cases: the list and the one opened, in a narrow room one or the other; which replies go by themselves; how Google is pursued. */
 export function EmailView() {
   const at = useAt();
   if (at.view !== "email") throw new Error("the email view on another's");
   const t = useT();
   const { case: opened, show } = at.params;
-  const tab = show === "automatic" || show === "stats" ? show : "threads";
+  const aside = show === "automatic" || show === "stats" || show === "settings";
   return (
     <div className="@container flex min-h-0 flex-1 flex-col">
       <header className={cn("flex items-center gap-3 border-b border-border px-4", opened !== undefined && "@max-3xl:hidden")}>
         <h1 className="text-base font-semibold text-ink">{t(nav.email, "Email")}</h1>
-        <Tabs value={tab} onValueChange={(to) => go({ view: "email", params: to === "automatic" || to === "stats" ? { show: to } : {} })}>
+        <Tabs className="min-w-0 overflow-x-auto" value={aside ? show : "threads"} onValueChange={(to) => go({ view: "email", params: to === "automatic" || to === "stats" || to === "settings" ? { show: to } : {} })}>
           <TabsList aria-label={t(nav.email, "Email")}>
             <TabsTrigger value="threads">{t(mail.tab.threads, "Threads")}</TabsTrigger>
             <TabsTrigger value="automatic">{t(mail.tab.automatic, "Automatic replies")}</TabsTrigger>
             <TabsTrigger value="stats">{t(mail.tab.stats, "Stats")}</TabsTrigger>
+            <TabsTrigger value="settings">{t(mail.tab.settings, "Settings")}</TabsTrigger>
           </TabsList>
         </Tabs>
       </header>
-      {show === "automatic" || show === "stats" ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5">{show === "stats" ? <Stats /> : <AutoReplies />}</div>
+      {aside ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5">{show === "stats" ? <Stats /> : show === "settings" ? <Settings /> : <AutoReplies />}</div>
       ) : (
         <Threads sought={at.params} show={show ?? "needs_you"} />
       )}

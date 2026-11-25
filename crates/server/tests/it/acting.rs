@@ -7,6 +7,7 @@ use axum::{
 };
 use jiff::Timestamp;
 use sa_auth::{Own, Principal, Service};
+use sa_core::mail::Settings;
 use sa_panel::{
 	Panel,
 	import::Export,
@@ -53,7 +54,7 @@ fn lent(set: sa_auth::PermissionSet) -> Vec<String> {
 #[tokio::test]
 async fn acting_as_another_is_their_account_with_the_actors_permissions_but_the_bound_ones() {
 	let db = TestDb::create().await;
-	let (app, _, seen) = setup(&db, admin()).await;
+	let (app, panel, seen) = setup(&db, admin()).await;
 	let mut b = Browser::default();
 	b.sign_in(&app).await;
 	let (_, me) = b.call(&app, Method::GET, "/api/v1/me", None).await;
@@ -107,6 +108,11 @@ async fn acting_as_another_is_their_account_with_the_actors_permissions_but_the_
 			StatusCode::FORBIDDEN,
 			"{method} {path} is the subject's own"
 		);
+	}
+
+	assert_eq!(b.call(&app, Method::PUT, "/api/v1/mail/settings", Some(json!(Settings::MOST))).await.0, StatusCode::OK);
+	for (whose, set) in [(DEREK, Settings::MOST), (&actor, Settings::default())] {
+		assert_eq!(panel.mail_auto(whose.parse().unwrap()).await.unwrap().settings, set, "the subject's");
 	}
 
 	assert_eq!(b.call(&app, Method::DELETE, "/api/v1/me/acting", None).await.0, StatusCode::NO_CONTENT);

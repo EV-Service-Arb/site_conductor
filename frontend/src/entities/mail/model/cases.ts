@@ -56,6 +56,11 @@ export function useAutos() {
   return useResource(api, "/mail/auto");
 }
 
+/** How Google is pursued, and within what. */
+export function useMailSettings() {
+  return useResource(api, "/mail/settings");
+}
+
 /** Google's mail about a GBP. */
 export function useGmbMail(gmb: number) {
   return useResource(api, "/gmbs/{id}/mail", { params: { path: { id: gmb } } });

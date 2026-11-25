@@ -381,6 +381,7 @@ export const VIEWS = {
               "waiting",
               "automatic",
               "stats",
+              "settings",
               null
             ],
             "type": [

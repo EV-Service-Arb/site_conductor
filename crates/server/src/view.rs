@@ -245,6 +245,8 @@ pub enum MailShow {
 	Automatic,
 	/// What was asked of Google, and what it gave.
 	Stats,
+	/// How Google is pursued.
+	Settings,
 }
 
 /// What the Add a GBP panel starts from.

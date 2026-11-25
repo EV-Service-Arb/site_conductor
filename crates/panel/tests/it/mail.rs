@@ -6,7 +6,7 @@ use jiff::{SignedDuration, Timestamp};
 use sa_alerts::Tier;
 use sa_core::{
 	gbp::Country,
-	mail::{DraftState, Halt, Kind, MAX_ASKS, Method, Outcome, QuietBecause, Reading, Said, Settled, State, Topic, Why, attempt},
+	mail::{DraftState, Halt, Kind, Method, Outcome, QuietBecause, Reading, Said, Settings, Settled, State, Topic, Why, attempt},
 	notify::Locale,
 	prices::Spender,
 };
@@ -16,6 +16,7 @@ use sa_panel::{
 	gmbs::Existing,
 	import::Export,
 	inbox::{Account, Batch, Cursor, Folder, Mail, Mailbox},
+	live::Signal,
 	mail::{Case, CaseEdit, File, Outgoing, ReadBy, ReadingEdit, SendError, Sent, SentBy, Written},
 	seal::{DataKey, gmail_imap_aad},
 	testing::{Outbox, TestDb, panel_sending},
@@ -188,6 +189,10 @@ impl World {
 			join: None,
 		};
 		self.p.edit_mail_case(self.owner, self.owner, id, edit, now).await.unwrap().unwrap();
+	}
+
+	async fn sets(&self, s: Settings) {
+		self.p.set_mail_settings(self.owner, s).await.unwrap().unwrap();
 	}
 
 	fn sent(&self) -> Vec<Outgoing> {
@@ -797,7 +802,7 @@ async fn a_reopened_case_is_its_persons_until_google_speaks() {
 		.unwrap();
 	let until = t("2026-10-03T09:02:00Z");
 	assert_eq!(w.only(now).await.state, State::Waiting { until }, "sent, and not in the inbox yet");
-	for n in 0..MAX_ASKS {
+	for n in 0..Settings::default().limit {
 		let at = format!("2026-10-01T{}:00:00Z", 10 + n);
 		w.arrives(ours(&at, 1, &format!("Re: {REQUEST}"), SUPPORT, &["m1@mail"], "x")).await;
 	}
@@ -924,6 +929,7 @@ enum Happens {
 	Trashed,
 	/// Its person reopens that case, by order.
 	Reopened(usize),
+	Set(Settings),
 }
 
 fn says(kind: Kind, of: &str) -> Happens {
@@ -965,6 +971,7 @@ async fn lived(w: World, mut happens: Vec<(i64, Happens)>, robot: Option<Kind>, 
 					let case = w.cases(&now.to_string()).await[nth].id;
 					w.marks(case, false, now).await;
 				}
+				Happens::Set(s) => w.sets(s).await,
 			}
 		}
 		w.p.follow_inbox(w.gmail, &w.inbox, now).await.unwrap();
@@ -1026,7 +1033,7 @@ async fn lived(w: World, mut happens: Vec<(i64, Happens)>, robot: Option<Kind>, 
 
 #[tokio::test]
 async fn google_is_pressed_over_days_as_far_as_it_should_be() {
-	use Happens::{Google, Ours, Reopened, Trashed};
+	use Happens::{Google, Ours, Reopened, Set, Trashed};
 	use Kind::*;
 	let verified = || {
 		Google(
@@ -1067,6 +1074,8 @@ async fn google_is_pressed_over_days_as_far_as_it_should_be() {
 			SelfServe,
 		)
 	};
+	let usual = Settings::default();
+	let four_days = Settings { re_ask_hours: 96, ..usual };
 	type Row = (&'static str, Vec<(i64, Happens)>, Option<Kind>, i64, &'static str);
 	let rows: Vec<Row> = vec![
 		(
@@ -1201,6 +1210,56 @@ async fn google_is_pressed_over_days_as_far_as_it_should_be() {
 			6,
 			"us d0, quiet (carried) d1",
 		),
+		(
+			"two asked at most",
+			vec![(0, Set(Settings { limit: 2, ..usual })), (0, says(Acknowledged, LYON))],
+			None,
+			8,
+			"us d2, us d4, asked_often d6",
+		),
+		(
+			"a robot, a day between",
+			vec![(0, Set(Settings { apart_hours: 24, ..usual })), (0, says(SelfServe, LYON))],
+			Some(SelfServe),
+			4,
+			"us d0, us d1, us d2, us d3",
+		),
+		("asked again every four days", vec![(0, Set(four_days)), (0, says(Acknowledged, LYON))], None, 10, "us d4, us d8"),
+		(
+			"every four days, then every day, silent past it already",
+			vec![(0, Set(four_days)), (0, says(Acknowledged, LYON)), (40, Set(Settings { re_ask_hours: 24, ..usual }))],
+			None,
+			4,
+			"us d1, us d2, us d3",
+		),
+		(
+			"asked as often as it may be, then oftener",
+			vec![(0, Set(Settings { limit: 1, ..usual })), (0, says(SelfServe, LYON)), (72, Set(usual))],
+			None,
+			8,
+			"us d0, asked_often d2, reply_ready d3",
+		),
+		(
+			"as late as it may be, not quiet before",
+			vec![(0, Set(Settings::MOST)), (0, says(Acknowledged, LYON))],
+			None,
+			16,
+			"us d14",
+		),
+		(
+			"a review as short as it may be",
+			vec![(0, Set(Settings::LEAST)), (0, says(VideoInReview, LYON))],
+			None,
+			6,
+			"us d3, asked_often d4",
+		),
+		(
+			"settled, reopened, written to by hand, all as soon as it may be",
+			vec![(0, Set(Settings::LEAST)), (0, says(Verified, LYON)), (24, Reopened(0)), (30, Ours("And the call?"))],
+			None,
+			4,
+			"done d0, reopened d1, unanswered d2",
+		),
 	];
 	let mut runs = Vec::new();
 	for (what, happens, robot, days, want) in rows {
@@ -1279,6 +1338,158 @@ async fn a_held_reply_is_held_back_by_what_changed() {
 		let draft = w.only("2026-10-01T09:21:00Z").await.draft.unwrap();
 		assert_eq!(draft.reply.state, DraftState::Proposed, "its operator's again");
 	}
+}
+
+#[tokio::test]
+async fn a_held_reply_goes_at_its_moment_or_is_its_persons_whatever_is_set_since() {
+	let usual = Settings::default();
+	let (night, day) = (Settings { hold_minutes: 720, ..usual }, Settings { apart_hours: 24, ..usual });
+	let goes = |at: &str| State::Sending { at: t(at) };
+	struct Row {
+		what: &'static str,
+		written_under: Settings,
+		said: Kind,
+		written: &'static str,
+		goes_at: &'static str,
+		set: Vec<(&'static str, Settings)>,
+		stands: State,
+		goes: bool,
+	}
+	let held = |what, set: Vec<(&'static str, Settings)>, stands, goes| Row {
+		what,
+		written_under: usual,
+		said: Kind::SelfServe,
+		written: "2026-10-01T09:05:00Z",
+		goes_at: "2026-10-01T20:00:00Z",
+		set,
+		stands,
+		goes,
+	};
+	let noon = "2026-10-01T12:00:00Z";
+	let rows = [
+		held("the hold raised", vec![(noon, night)], goes("2026-10-01T20:00:00Z"), true),
+		Row {
+			written_under: night,
+			goes_at: "2026-10-01T21:05:00Z",
+			..held("the hold lowered", vec![(noon, usual)], goes("2026-10-01T21:05:00Z"), true)
+		},
+		held("the gap raised past it", vec![(noon, day)], State::ReplyReady, false),
+		held(
+			"the gap raised past it, and put back before it",
+			vec![(noon, day), ("2026-10-01T19:00:00Z", usual)],
+			goes("2026-10-01T20:00:00Z"),
+			true,
+		),
+		held(
+			"the limit lowered to it",
+			vec![(noon, Settings { limit: 1, ..usual })],
+			State::NeedsYou { why: Why::AskedOften { asked: 1 } },
+			false,
+		),
+		Row {
+			said: Kind::Acknowledged,
+			written: "2026-10-03T09:05:00Z",
+			goes_at: "2026-10-03T09:20:00Z",
+			..held(
+				"Google given longer",
+				vec![("2026-10-03T09:10:00Z", Settings { re_ask_hours: 96, ..usual })],
+				State::ReplyReady,
+				false,
+			)
+		},
+		Row {
+			said: Kind::VideoInReview,
+			written: "2026-10-08T09:05:00Z",
+			goes_at: "2026-10-08T09:20:00Z",
+			..held(
+				"Google given longer for a review",
+				vec![("2026-10-08T09:10:00Z", Settings { in_review_days: 14, ..usual })],
+				State::ReplyReady,
+				false,
+			)
+		},
+	];
+	for r in rows {
+		let (w, what) = (World::new().await, r.what);
+		w.p.set_mail_auto(w.owner, &[w.lyon], Topic::Verification, true).await.unwrap().unwrap();
+		w.sets(r.written_under).await;
+		w.arrives(ours("2026-10-01T08:00:00Z", 1, REQUEST, SUPPORT, &[], "The call?")).await;
+		w.arrives(support("2026-10-01T09:00:00Z", 1, REQUEST, LYON)).await;
+		w.reads("2026-10-01T09:01:00Z", r.said, |_| {}).await;
+		let case = w.only(r.written).await;
+		w.drafts(&case, &[], false, r.written).await;
+		assert_eq!(w.only(r.written).await.state, goes(r.goes_at), "{what}");
+		for (at, s) in &r.set {
+			w.sets(*s).await;
+			w.only(at).await;
+		}
+		let (last, _) = r.set.last().unwrap();
+		assert_eq!(w.only(last).await.state, r.stands, "{what}");
+		let before = t(r.goes_at) - SignedDuration::from_mins(1);
+		w.only(&before.to_string()).await;
+		assert_eq!(w.p.send_held_mail(before).await.unwrap(), 0, "{what}");
+		w.only(r.goes_at).await;
+		assert_eq!(w.p.send_held_mail(t(r.goes_at)).await.unwrap(), usize::from(r.goes), "{what}");
+		assert_eq!(w.sent().len(), usize::from(r.goes), "{what}");
+		let draft = w.only(r.goes_at).await.draft.unwrap();
+		assert_eq!(draft.reply.state, if r.goes { DraftState::Sent } else { DraftState::Proposed }, "{what}");
+	}
+}
+
+#[tokio::test]
+async fn what_a_lower_setting_makes_due_is_held_from_then() {
+	let w = World::new().await;
+	let usual = Settings::default();
+	w.p.set_mail_auto(w.owner, &[w.lyon], Topic::Verification, true).await.unwrap().unwrap();
+	w.sets(Settings { re_ask_hours: 336, ..usual }).await;
+	w.arrives(support("2026-10-01T09:00:00Z", 1, REQUEST, LYON)).await;
+	w.reads("2026-10-01T09:01:00Z", Kind::Acknowledged, |_| {}).await;
+	let case = w.only("2026-10-05T12:00:00Z").await;
+	assert_eq!((case.state, case.due), (State::Waiting { until: t("2026-10-15T09:00:00Z") }, false));
+	w.sets(Settings { re_ask_hours: 24, ..usual }).await;
+	let case = w.only("2026-10-05T12:00:00Z").await;
+	assert!(case.due);
+	w.drafts(&case, &[], false, "2026-10-05T12:00:00Z").await;
+	assert_eq!(w.only("2026-10-05T12:14:00Z").await.state, State::Sending { at: t("2026-10-05T12:15:00Z") });
+	assert_eq!(w.p.send_held_mail(t("2026-10-05T12:14:00Z")).await.unwrap(), 0, "stopped until then");
+	w.only("2026-10-05T12:15:00Z").await;
+	assert_eq!(w.p.send_held_mail(t("2026-10-05T12:15:00Z")).await.unwrap(), 1);
+}
+
+#[tokio::test]
+async fn the_settings_are_a_persons_within_the_tables_own_bounds() {
+	let w = World::new().await;
+	let pool = w.db.pool().await;
+	let stored = async || w.p.mail_auto(w.owner).await.unwrap().settings;
+	let mut bus = w.p.bus().subscribe();
+	w.sets(Settings::default()).await;
+	let rows: i64 = sqlx::query_scalar("SELECT count(*) FROM mail_settings").fetch_one(&pool).await.unwrap();
+	assert_eq!((rows, stored().await), (0, Settings::default()), "what it is unsaid");
+	for s in [Settings::LEAST, Settings::MOST, Settings::MOST] {
+		w.sets(s).await;
+		assert_eq!(stored().await, s);
+	}
+	let mut heard = 0;
+	while let Ok(signal) = tokio::time::timeout(std::time::Duration::from_millis(300), bus.recv()).await {
+		heard += usize::from(matches!(signal.unwrap(), Signal::Changed(c) if c.topic == "conductor.mail_settings"));
+	}
+	assert_eq!(heard, 2, "what is stored already changes nothing");
+	let (least, most) = (serde_json::to_value(Settings::LEAST).unwrap(), serde_json::to_value(Settings::MOST).unwrap());
+	for (field, most_of) in most.as_object().unwrap() {
+		for n in [least[field].as_i64().unwrap() - 1, most_of.as_i64().unwrap() + 1] {
+			let mut s = most.clone();
+			s[field] = n.into();
+			let Err(Refused::Invalid(why)) = w.p.set_mail_settings(w.owner, serde_json::from_value(s).unwrap()).await.unwrap() else {
+				panic!("{field} {n} is taken")
+			};
+			assert!(why.contains(field.as_str()), "{why}");
+			assert!(why.contains(&most_of.to_string()), "{why}");
+			let raw = format!("UPDATE mail_settings SET \"{field}\" = {n}");
+			assert!(sqlx::query(sqlx::AssertSqlSafe(raw)).execute(&pool).await.is_err(), "{field} {n} is kept");
+		}
+	}
+	assert_eq!(stored().await, Settings::MOST);
+	assert_eq!(w.p.mail_auto(Uuid::now_v7()).await.unwrap().settings, Settings::default(), "another's");
 }
 
 #[tokio::test]
@@ -1408,6 +1619,35 @@ async fn a_running_deadline_and_a_long_silence_are_told() {
 	w.reads("2026-11-01T09:01:00Z", Kind::AppealReceived, |r| r.answer_within_hours = Some(240)).await;
 	assert_eq!(told("2026-11-11T08:00:00Z").await.0, 2, "waited for");
 	assert_eq!(told("2026-11-11T10:00:00Z").await.0, 3, "silent past its ten days");
+}
+
+#[tokio::test]
+async fn a_reminder_and_a_deadline_are_told_when_their_person_says_and_once() {
+	let w = World::new().await;
+	let usual = Settings::default();
+	let told = async |at: &str| {
+		w.p.alerts_access_seen(w.owner, &sa_panel::testing::operator(), "owner", t(at)).await.unwrap();
+		w.cases(at).await;
+		w.p.tell_mail(Locale::En, t(at)).await.unwrap();
+		w.p.alerts_inbox(w.owner, &sa_panel::testing::operator(), &Sought::default()).await.unwrap().len()
+	};
+	w.sets(Settings { remind_hours: 12, ..usual }).await;
+	w.arrives(notice("2026-10-01T09:00:00Z", 1, REJECTED, &rejected(" for Plomberie Dupont - Lyon", "15"))).await;
+	w.reads("2026-10-01T09:01:00Z", Kind::VideoRejected, |_| {}).await;
+	assert_eq!(told("2026-10-01T09:02:00Z").await, 1);
+	assert_eq!(told("2026-10-01T20:59:00Z").await, 1);
+	assert_eq!(told("2026-10-01T21:00:00Z").await, 2, "it waits still");
+	w.sets(usual).await;
+	assert_eq!(told("2026-10-03T09:00:00Z").await, 2, "reminded of once");
+
+	w.sets(Settings::MOST).await;
+	w.arrives(notice("2026-10-11T09:00:00Z", 2, "Is it still open?", "Plomberie Dupont - Lyon, Est")).await;
+	w.reads("2026-10-11T09:01:00Z", Kind::StillActive, |r| r.deadline = Some(t("2026-10-14T09:00:00Z"))).await;
+	assert_eq!(told("2026-10-11T09:02:00Z").await, 3, "a three-day term begins as what needs its person");
+	assert_eq!(told("2026-10-12T08:59:00Z").await, 3);
+	assert_eq!(told("2026-10-12T09:01:00Z").await, 4, "two days before");
+	w.sets(usual).await;
+	assert_eq!(told("2026-10-13T09:01:00Z").await, 4, "warned of once");
 }
 
 #[tokio::test]

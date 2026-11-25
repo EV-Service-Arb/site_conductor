@@ -7,20 +7,10 @@ use jiff::{SignedDuration, Timestamp};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-/// Ours in a case since Google last gave something new; past it a person decides.
-pub const MAX_ASKS: usize = 6;
-/// A draft that goes by itself waits this long.
-pub const HOLD: SignedDuration = SignedDuration::from_mins(15);
 /// Older mail is kept, not read by the model.
 pub const READ_BACK: SignedDuration = SignedDuration::from_hours(24 * 90);
 /// A reading failed this often is a person's.
 pub const MAX_READS: i64 = 3;
-/// Google is asked again after this long without an answer, if it gave no other term.
-pub const RE_ASK: SignedDuration = SignedDuration::from_hours(48);
-/// A video or an appeal is decided on within it, if Google gave no other term.
-const IN_REVIEW: SignedDuration = SignedDuration::from_hours(24 * 7);
-/// What goes by itself waits this long after ours before it.
-const APART: SignedDuration = SignedDuration::from_hours(12);
 /// An inbox not read for this long may hold Google's answer.
 const STALE: SignedDuration = SignedDuration::from_hours(1);
 /// A case whose last message is older needs nothing.
@@ -30,6 +20,10 @@ const SENDING_FOR: SignedDuration = SignedDuration::from_mins(5);
 /// A shorter name, place id or address line is in every other message.
 const NAMES_FROM: usize = 4;
 
+// a silence is asked about before its case is quiet, and that is not put off by the gap
+const _: () = assert!(Settings::MOST.apart_hours <= Settings::LEAST.re_ask_hours);
+const _: () = assert!(Settings::MOST.re_ask_hours * 60 + Settings::MOST.hold_minutes < QUIET_AFTER.as_mins());
+const _: () = assert!(Settings::MOST.in_review_days * 24 * 60 + Settings::MOST.hold_minutes < QUIET_AFTER.as_mins());
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, strum::VariantArray)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -570,6 +564,80 @@ pub struct Said {
 	pub case_id: Option<i64>,
 }
 
+/// How a person's mail with Google is pursued, and when they are told of it: once for every case of theirs.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(rename = "MailSettings")]
+pub struct Settings {
+	/// A reply that goes by itself waits this long first, to be stopped.
+	pub hold_minutes: i64,
+	/// It goes this long after ours before it.
+	pub apart_hours: i64,
+	/// How often Google is asked, at most, until it gives something new; past it a person decides.
+	pub limit: u16,
+	/// How long Google is silent before it is asked again, where it gave no other term.
+	pub re_ask_hours: i64,
+	/// That, where it is deciding on a video or an appeal.
+	pub in_review_days: i64,
+	/// What waits on its person for this long is told of again.
+	pub remind_hours: i64,
+	/// A date Google set is told of again this long before.
+	pub deadline_hours: i64,
+}
+impl Settings {
+	pub const LEAST: Self = Self {
+		hold_minutes: 15, // told of and stopped within it, each a minute's pass
+		apart_hours: 12,
+		limit: 1, // none is the switch off
+		re_ask_hours: 24,
+		in_review_days: 3,
+		remind_hours: 12,
+		deadline_hours: 12,
+	};
+	pub const MOST: Self = Self {
+		hold_minutes: 12 * 60,
+		apart_hours: 24,
+		limit: 10,
+		re_ask_hours: 24 * 14,
+		in_review_days: 14,
+		remind_hours: 24 * 5,
+		deadline_hours: 48, // a term of three days opens with no warning
+	};
+
+	/// Itself, every one within its bounds, or which is not.
+	pub fn checked(self) -> Result<Self, String> {
+		let each = |s: Self| {
+			[
+				("hold_minutes", s.hold_minutes),
+				("apart_hours", s.apart_hours),
+				("limit", i64::from(s.limit)),
+				("re_ask_hours", s.re_ask_hours),
+				("in_review_days", s.in_review_days),
+				("remind_hours", s.remind_hours),
+				("deadline_hours", s.deadline_hours),
+			]
+		};
+		let bounds = each(Self::LEAST).into_iter().zip(each(Self::MOST));
+		match each(self).into_iter().zip(bounds).find(|((_, set), ((_, least), (_, most)))| !(least..=most).contains(&set)) {
+			Some(((field, set), ((_, least), (_, most)))) => Err(format!("{field}: {set} is not {least} to {most}")),
+			None => Ok(self),
+		}
+	}
+}
+impl Default for Settings {
+	fn default() -> Self {
+		Self {
+			hold_minutes: 15,
+			apart_hours: 12,
+			limit: 6,
+			re_ask_hours: 48,
+			in_review_days: 7,
+			remind_hours: 48,
+			deadline_hours: 24,
+		}
+	}
+}
+
 /// What settled a case.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
 #[serde(tag = "is", rename_all = "snake_case")]
@@ -623,6 +691,7 @@ pub struct Case<'a> {
 	pub carried_by: Option<i64>,
 	/// Its GBP's replies on its topic go by themselves.
 	pub switched: bool,
+	pub settings: Settings,
 	/// Why its mail is not read or its reply not written: no Claude, no balance.
 	pub stuck: Option<&'a str>,
 	/// When its inbox was last read, since the conductor started.
@@ -747,16 +816,13 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	// what Google asks is the operator's to give or to confirm
 	let asks = last.reading.as_ref().is_some_and(|r| r.kind == Kind::Asks);
 	match draft {
+		// its moment, once told, is never moved
 		Some(Draft {
 			state: DraftState::Held,
-			send_at,
+			send_at: Some(at),
 			needs: lacks,
 			..
-		}) if lacks.is_empty() && press(c, now).is_ok() => {
-			return State::Sending {
-				at: send_at.expect("a held draft goes at a moment"),
-			};
-		}
+		}) if lacks.is_empty() && press(c, now).is_ok_and(|from| from <= *at) => return State::Sending { at: *at },
 		Some(Draft {
 			state: DraftState::Proposed | DraftState::Held,
 			needs: lacks,
@@ -765,7 +831,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 			return match (lacks.is_empty(), asks, asked(c.messages)) {
 				(false, ..) => needs(Why::Needs { needs: lacks.clone() }),
 				(true, true, _) => needs(Why::Kind { kind: Kind::Asks }),
-				(true, false, asked) if asked >= MAX_ASKS => needs(Why::AskedOften { asked }),
+				(true, false, asked) if asked >= usize::from(c.settings.limit) => needs(Why::AskedOften { asked }),
 				(true, false, _) => State::ReplyReady,
 			},
 		Some(Draft {
@@ -793,14 +859,17 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 			state: DraftState::Dismissed,
 			written_at,
 			..
-		}) if !open && now < later(*written_at, RE_ASK) => return State::Waiting { until: later(*written_at, RE_ASK) },
+		}) if !open && now < later(*written_at, SignedDuration::from_hours(c.settings.re_ask_hours)) =>
+			return State::Waiting {
+				until: later(*written_at, SignedDuration::from_hours(c.settings.re_ask_hours)),
+			},
 		_ => {}
 	}
 	if mark.is_some_and(|(_, ours)| !ours) && sent_at.is_none() {
 		return needs(Why::Reopened);
 	}
 	let silence = || {
-		let until = term(&heard, sent_at);
+		let until = term(c, &heard, sent_at);
 		// an inbox not read since may hold the answer
 		if now < until || c.read.is_none_or(|read| read < until) {
 			return State::Waiting { until };
@@ -845,7 +914,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	}
 }
 
-/// Whether a reply is to be written: one is due, or past `MAX_ASKS` there for its operator.
+/// Whether a reply is to be written: one is due, or past its limit there for its operator.
 pub fn due(c: &Case<'_>, now: Timestamp) -> bool {
 	let last = heard(c).last().map(|m| m.id);
 	let written = c.draft.is_some_and(|d| Some(d.answers) == last && d.state != DraftState::Superseded);
@@ -917,10 +986,10 @@ pub fn press(c: &Case<'_>, now: Timestamp) -> Result<Timestamp, Halt> {
 		return Err(Halt::Asked);
 	}
 	let asked = asked(c.messages);
-	if asked >= MAX_ASKS {
+	if asked >= usize::from(c.settings.limit) {
 		return Err(Halt::Limit { asked });
 	}
-	let until = term(&heard, None);
+	let until = term(c, &heard, None);
 	match w.kind {
 		_ if w.kind.topic().is_some_and(|t| t != c.topic) => return Err(Halt::Operators),
 		Kind::SelfServe | Kind::OptionsExhausted | Kind::ReinstatementRefused | Kind::ReviewsNoData | Kind::ReviewsLiveAlready | Kind::CallFailed => {}
@@ -934,7 +1003,8 @@ pub fn press(c: &Case<'_>, now: Timestamp) -> Result<Timestamp, Halt> {
 	if c.read.is_some_and(|read| now.duration_since(read) > STALE) {
 		return Err(Halt::Stale);
 	}
-	Ok(heard.iter().rev().find(|m| m.sent).map_or(to.at, |m| later(m.at, APART)))
+	let apart = SignedDuration::from_hours(c.settings.apart_hours);
+	Ok(heard.iter().rev().find(|m| m.sent).map_or(to.at, |m| later(m.at, apart)))
 }
 
 /// Whom a reply goes to: Google's last message from an address that takes one, unless it refuses it.
@@ -1255,18 +1325,19 @@ fn later(at: Timestamp, by: SignedDuration) -> Timestamp {
 }
 
 /// Until when Google's answer is waited for; `sent_at`, our last, not in the inbox yet.
-fn term(heard: &[&Message], sent_at: Option<Timestamp>) -> Timestamp {
+fn term(c: &Case<'_>, heard: &[&Message], sent_at: Option<Timestamp>) -> Timestamp {
+	let re_ask = SignedDuration::from_hours(c.settings.re_ask_hours);
 	let promised = heard.iter().rev().find(|m| !m.sent).map(|m| {
-		let by = m.reading.as_ref().map_or(RE_ASK, |r| match (r.answer_within_hours, r.kind) {
+		let by = m.reading.as_ref().map_or(re_ask, |r| match (r.answer_within_hours, r.kind) {
 			(Some(h), _) => SignedDuration::from_hours(i64::from(h)),
-			(None, Kind::VideoInReview | Kind::AppealReceived) => IN_REVIEW,
-			(None, _) => RE_ASK,
+			(None, Kind::VideoInReview | Kind::AppealReceived) => SignedDuration::from_hours(24 * c.settings.in_review_days),
+			(None, _) => re_ask,
 		});
 		later(m.at, by)
 	});
 	// a promise made before we asked again does not answer what we asked since
 	let ours = sent_at.or_else(|| heard.iter().rev().find(|m| m.sent).map(|m| m.at));
-	promised.into_iter().chain(ours.map(|at| later(at, RE_ASK))).max().expect("what is heard is Google's or ours")
+	promised.into_iter().chain(ours.map(|at| later(at, re_ask))).max().expect("what is heard is Google's or ours")
 }
 
 /// What of its GBP's other mail, or the GBP's moves, leaves nothing of it to do.
@@ -1316,7 +1387,7 @@ fn reply(c: &Case<'_>, silence: Option<Timestamp>) -> State {
 		(_, Some(since)) if mark(c).is_some() => Why::Unanswered { since },
 		(None, Some(since)) => Why::Unanswered { since },
 		(None, None) => Why::NoReply,
-		(Some(_), _) if asked(c.messages) >= MAX_ASKS => Why::AskedOften { asked: asked(c.messages) },
+		(Some(_), _) if asked(c.messages) >= usize::from(c.settings.limit) => Why::AskedOften { asked: asked(c.messages) },
 		(Some(_), _) => match c.stuck {
 			None => return State::ReplyDue,
 			Some(error) => Why::Stuck { error: error.to_owned() },
@@ -1627,6 +1698,7 @@ mod tests {
 			elsewhere: &[],
 			carried_by: None,
 			switched: true,
+			settings: Settings::default(),
 			stuck: None,
 			read: Some(Timestamp::MAX),
 		}

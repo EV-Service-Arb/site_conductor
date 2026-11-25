@@ -6,7 +6,7 @@ use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
 	gbp,
-	mail::{DraftState, Holds, Mark, Reading, Sender, Topic},
+	mail::{DraftState, Holds, Mark, Reading, Sender, Settings, Topic},
 };
 use sqlx::{SqliteConnection, types::Json};
 use uuid::Uuid;
@@ -672,6 +672,44 @@ pub(crate) async fn set_auto(conn: &mut SqliteConnection, gmb: i64, topic: Topic
 		.execute(&mut *conn)
 		.await
 		.wrap_err("switching a topic's automatic replies")?;
+	Ok(())
+}
+
+pub(crate) async fn settings(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Settings> {
+	type Row = (i64, i64, u16, i64, i64, i64, i64);
+	let row: Option<Row> = sqlx::query_as("SELECT hold_minutes, apart_hours, \"limit\", re_ask_hours, in_review_days, remind_hours, deadline_hours FROM mail_settings WHERE user_id = $1")
+		.bind(owner)
+		.fetch_optional(&mut *conn)
+		.await
+		.wrap_err("reading how a person's mail is pursued")?;
+	let set = |(hold_minutes, apart_hours, limit, re_ask_hours, in_review_days, remind_hours, deadline_hours): Row| Settings {
+		hold_minutes,
+		apart_hours,
+		limit,
+		re_ask_hours,
+		in_review_days,
+		remind_hours,
+		deadline_hours,
+	};
+	Ok(row.map_or_else(Settings::default, set))
+}
+
+pub(crate) async fn set_settings(conn: &mut SqliteConnection, owner: Uuid, s: Settings) -> eyre::Result<()> {
+	sqlx::query(
+		"INSERT OR REPLACE INTO mail_settings (user_id, hold_minutes, apart_hours, \"limit\", re_ask_hours, in_review_days, remind_hours, deadline_hours) \
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+	)
+	.bind(owner)
+	.bind(s.hold_minutes)
+	.bind(s.apart_hours)
+	.bind(s.limit)
+	.bind(s.re_ask_hours)
+	.bind(s.in_review_days)
+	.bind(s.remind_hours)
+	.bind(s.deadline_hours)
+	.execute(&mut *conn)
+	.await
+	.wrap_err("setting how a person's mail is pursued")?;
 	Ok(())
 }
 
