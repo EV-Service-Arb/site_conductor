@@ -29,12 +29,6 @@ pub(crate) type Reads = Arc<Mutex<HashMap<i64, (String, Timestamp)>>>;
 /// The GBPs each gmail's mail was last matched with: its own, its owner's others.
 pub(crate) type NamedAs = Arc<Mutex<HashMap<i64, (Vec<Named>, Vec<Named>)>>>;
 
-/// The GBPs a message names, its subject with it.
-fn named(subject: Option<&str>, text: &str, gbps: &[Named]) -> Vec<i64> {
-	let read = subject.into_iter().chain([text]).collect::<Vec<_>>().join("\n\n");
-	sa_core::mail::named(&read, gbps).into_iter().collect()
-}
-
 /// A mailbox the follower reads.
 pub trait Mailbox: Sync {
 	/// `folder`'s UIDVALIDITY and its mail with Google past `after` (another UIDVALIDITY's: from the first),
@@ -101,6 +95,12 @@ pub struct Mail {
 	pub whole: bool,
 	/// Gmail has it in Spam.
 	pub spam: bool,
+}
+
+/// The GBPs a message names, its subject with it.
+fn named(subject: Option<&str>, text: &str, gbps: &[Named]) -> Vec<i64> {
+	let read = subject.into_iter().chain([text]).collect::<Vec<_>>().join("\n\n");
+	sa_core::mail::named(&read, gbps).into_iter().collect()
 }
 
 impl Panel {

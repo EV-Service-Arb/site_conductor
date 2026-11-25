@@ -369,7 +369,58 @@ async fn reading_studies_is_not_pulling_them() {
 
 	let (status, _) = c.send(Method::POST, &format!("/api/v1/placement/study/pull?area=clermont&version={plumbing}"), Value::Null).await;
 	assert_eq!(status, StatusCode::FORBIDDEN);
+	assert_eq!(c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, None)).await.0, StatusCode::FORBIDDEN);
 	assert_eq!(c.searched(), 0);
+}
+
+/// Plumbing over central Clermont, as a host without a catalog here holds it.
+fn definition(radius_m: f64, demand: Option<Value>) -> Value {
+	json!({
+		"area": { "kind": "circle", "slug": "elsewhere", "country": "FR", "center": { "lat": testing::CENTER.lat, "lng": testing::CENTER.lng }, "radius_m": radius_m, "margin_m": 0. },
+		"category": {
+			"trade": { "id": PLUMBER, "name": "Plombier" }, "country": "FR", "additional": [],
+			"keywords": [{ "text": "plombier", "weight": 1. }, { "text": "fuite d'eau", "weight": 0.5 }],
+			"excluded": { "words": [], "types": [] }, "demand": demand,
+		},
+	})
+}
+
+#[tokio::test]
+async fn a_definition_is_pulled_as_a_study_is() {
+	let mut c = Conductor::new(admin(), 8, 1000).await;
+
+	let (status, events) = c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, None)).await;
+	let events = String::from_utf8(events).unwrap();
+	assert_eq!((status, events.contains("event: pulled\n")), (StatusCode::OK, true), "{events}");
+	assert_eq!(c.searched(), NEED + 1);
+	assert_eq!(c.balance().await, 1000 - (NEED as i64 + 1) * 8);
+}
+
+#[tokio::test]
+async fn a_definition_unaffordable_ends_refused() {
+	let mut c = Conductor::new(admin(), 8, 20).await;
+
+	let (status, events) = c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, None)).await;
+	let events = String::from_utf8(events).unwrap();
+	assert_eq!(
+		(status, events.contains("event: refused\n") && events.contains("unaffordable")),
+		(StatusCode::OK, true),
+		"{events}"
+	);
+	assert_eq!((c.searched(), c.balance().await), (0, json!(20)));
+}
+
+#[tokio::test]
+async fn a_definition_that_does_not_build_or_is_too_wide_buys_nothing() {
+	let mut c = Conductor::new(admin(), 8, 1000).await;
+
+	let unknown = json!({ "expr": "no_such_column", "columns": [], "layers": [] });
+	assert_eq!(
+		c.send(Method::POST, "/api/v1/placement/pull", definition(testing::RADIUS_M, Some(unknown))).await.0,
+		StatusCode::INTERNAL_SERVER_ERROR
+	);
+	assert_eq!(c.send(Method::POST, "/api/v1/placement/pull", definition(100_001., None)).await.0, StatusCode::BAD_REQUEST);
+	assert_eq!((c.searched(), c.balance().await), (0, json!(1000)));
 }
 
 #[tokio::test]

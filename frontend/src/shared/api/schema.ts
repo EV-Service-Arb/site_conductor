@@ -2467,6 +2467,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/placement/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Builds a definition again, its area and category kept here or not, buying what it lacks at the caller's tokens, as a pull does.
+         * @description 400 a definition placement refuses, or an area not a circle of an area's radius, its margin
+         *     included; 503 placement not connected. Its end is the answer's one event: `pulled`, or `refused`
+         *     with the refusal a pull answers.
+         */
+        post: operations["pull_definition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/placement/studies/{sha}": {
         parameters: {
             query?: never;
@@ -2934,6 +2956,14 @@ export interface components {
              */
             secret: string;
         };
+        Additional: {
+            google: components["schemas"]["Gcid"];
+            /**
+             * Format: double
+             * @description A competitor of its tier against one of the trade's.
+             */
+            weight: number;
+        };
         /**
          * @description An additional Google category and what one competitor of its tier weighs against one of the
          *     trade's.
@@ -3094,6 +3124,29 @@ export interface components {
             country: string;
             name: string;
             /** Format: int64 */
+            radius_m: number;
+            slug: string;
+        };
+        /**
+         * @description An area as the conductor keeps it: a city's viewport or a circle, and a margin around it that
+         *     is still "next to it".
+         */
+        AreaInput: {
+            country: components["schemas"]["BaseCountry"];
+            /** @constant */
+            kind: "city";
+            /** Format: double */
+            margin_m: number;
+            slug: string;
+            viewport: components["schemas"]["Viewport"];
+        } | {
+            center: components["schemas"]["LatLng2"];
+            country: components["schemas"]["BaseCountry"];
+            /** @constant */
+            kind: "circle";
+            /** Format: double */
+            margin_m: number;
+            /** Format: double */
             radius_m: number;
             slug: string;
         };
@@ -3462,6 +3515,26 @@ export interface components {
             /** @description Oldest first, since it was set up. */
             moves: components["schemas"]["CategoryMove"][];
         };
+        /**
+         * @description A trade set up for a country: everything a study of it reads, whichever area it is applied to.
+         *     Its competitors are tiered by which of its Google categories' searches found them, first match
+         *     wins (docs/ARCHITECTURE.md, Placement).
+         */
+        CategoryInput: {
+            /** @description A tier each after the trade's, in this order: what the search of its exact name returns. */
+            additional: components["schemas"]["Additional"][];
+            country: components["schemas"]["BaseCountry"];
+            /** @description None: no demand surface, and nothing that reads one. */
+            demand?: components["schemas"]["Demand"] | null;
+            excluded: components["schemas"]["Excluded"];
+            /** @description [`keywords`]' form, the trade's name among them at weight 1. */
+            keywords: components["schemas"]["KeywordInput"][];
+            /**
+             * @description Tier 1, what its searches return, and the weight of 1 the rest is weighed against: searched by
+             *     its name and by each keyword. Its name is what a study is called by.
+             */
+            trade: components["schemas"]["Gcid"];
+        };
         /** @description A move of a category's head. */
         CategoryMove: {
             /** @description RFC 3339. */
@@ -3673,6 +3746,11 @@ export interface components {
              */
             read: string;
         };
+        Definition: {
+            area: components["schemas"]["AreaInput"];
+            /** @description None is the area on its own: the grid's layers, and not one billed call. */
+            category?: components["schemas"]["CategoryInput"] | null;
+        };
         /** @description What the country's grid means to the trade, per cell. */
         Demand: {
             /** @description Derived before `expr` reads them, in order. */
@@ -3872,6 +3950,11 @@ export interface components {
          * @enum {string}
          */
         GbpRole: "owner" | "manager";
+        /** @description One of Google's Business Profile categories, named in the country's language. */
+        Gcid: {
+            id: string;
+            name: string;
+        };
         /**
          * @description Who beyond the owner and members may read a chat by its link.
          *
@@ -4412,6 +4495,12 @@ export interface components {
             shows: string;
         };
         LatLng: {
+            /** Format: double */
+            lat: number;
+            /** Format: double */
+            lng: number;
+        };
+        LatLng2: {
             /** Format: double */
             lat: number;
             /** Format: double */
@@ -6717,6 +6806,7 @@ export type AddSlack = components['schemas']['AddSlack'];
 export type AddSource = components['schemas']['AddSource'];
 export type AddWebhook = components['schemas']['AddWebhook'];
 export type AddedWebhook = components['schemas']['AddedWebhook'];
+export type Additional = components['schemas']['Additional'];
 export type AdditionalCategory = components['schemas']['AdditionalCategory'];
 export type AdditionalIn = components['schemas']['AdditionalIn'];
 export type Advance = components['schemas']['Advance'];
@@ -6736,6 +6826,7 @@ export type Allow = components['schemas']['Allow'];
 export type AnswerState = components['schemas']['AnswerState'];
 export type Approval = components['schemas']['Approval'];
 export type Area = components['schemas']['Area'];
+export type AreaInput = components['schemas']['AreaInput'];
 export type Areas = components['schemas']['Areas'];
 export type Ask = components['schemas']['Ask'];
 export type Attachment = components['schemas']['Attachment'];
@@ -6768,6 +6859,7 @@ export type Catalog = components['schemas']['Catalog'];
 export type Categories = components['schemas']['Categories'];
 export type Category = components['schemas']['Category'];
 export type CategoryHistory = components['schemas']['CategoryHistory'];
+export type CategoryInput = components['schemas']['CategoryInput'];
 export type CategoryMove = components['schemas']['CategoryMove'];
 export type CategorySettings = components['schemas']['CategorySettings'];
 export type CategoryVersion = components['schemas']['CategoryVersion'];
@@ -6788,6 +6880,7 @@ export type Cost = components['schemas']['Cost'];
 export type CostInput = components['schemas']['CostInput'];
 export type Country = components['schemas']['Country'];
 export type CreditInput = components['schemas']['CreditInput'];
+export type Definition = components['schemas']['Definition'];
 export type Demand = components['schemas']['Demand'];
 export type Destination = components['schemas']['Destination'];
 export type DestinationKind = components['schemas']['DestinationKind'];
@@ -6812,6 +6905,7 @@ export type FlowKindDto = components['schemas']['FlowKindDto'];
 export type Flows = components['schemas']['Flows'];
 export type GbpCountry = components['schemas']['GbpCountry'];
 export type GbpRole = components['schemas']['GbpRole'];
+export type Gcid = components['schemas']['Gcid'];
 export type GeneralAccess = components['schemas']['GeneralAccess'];
 export type Gmail = components['schemas']['Gmail'];
 export type GmailForPerson = components['schemas']['GmailForPerson'];
@@ -6857,6 +6951,7 @@ export type KitTarget = components['schemas']['KitTarget'];
 export type Kits = components['schemas']['Kits'];
 export type LabelPhoto = components['schemas']['LabelPhoto'];
 export type LatLng = components['schemas']['LatLng'];
+export type LatLng2 = components['schemas']['LatLng2'];
 export type Layer = components['schemas']['Layer'];
 export type Ledger = components['schemas']['Ledger'];
 export type LedgerEntry = components['schemas']['LedgerEntry'];
@@ -29231,6 +29326,138 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Catalog"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    pull_definition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Definition"];
+            };
+        };
+        responses: {
+            /** @description `pulled` or `refused`, once it ends. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": unknown;
                 };
             };
             /** @description `bad_request` */

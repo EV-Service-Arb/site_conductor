@@ -336,6 +336,24 @@
         ],
         "type": "object"
       },
+      "Additional": {
+        "additionalProperties": false,
+        "properties": {
+          "google": {
+            "$ref": "#/components/schemas/Gcid"
+          },
+          "weight": {
+            "description": "A competitor of its tier against one of the trade's.",
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "google",
+          "weight"
+        ],
+        "type": "object"
+      },
       "AdditionalCategory": {
         "description": "An additional Google category and what one competitor of its tier weighs against one of the\ntrade's.",
         "properties": {
@@ -846,6 +864,76 @@
           "city"
         ],
         "type": "object"
+      },
+      "AreaInput": {
+        "description": "An area as the conductor keeps it: a city's viewport or a circle, and a margin around it that\nis still \"next to it\".",
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "country": {
+                "$ref": "#/components/schemas/BaseCountry"
+              },
+              "kind": {
+                "const": "city",
+                "type": "string"
+              },
+              "margin_m": {
+                "format": "double",
+                "type": "number"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "viewport": {
+                "$ref": "#/components/schemas/Viewport"
+              }
+            },
+            "required": [
+              "kind",
+              "slug",
+              "country",
+              "viewport",
+              "margin_m"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "center": {
+                "$ref": "#/components/schemas/LatLng2"
+              },
+              "country": {
+                "$ref": "#/components/schemas/BaseCountry"
+              },
+              "kind": {
+                "const": "circle",
+                "type": "string"
+              },
+              "margin_m": {
+                "format": "double",
+                "type": "number"
+              },
+              "radius_m": {
+                "format": "double",
+                "type": "number"
+              },
+              "slug": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "slug",
+              "country",
+              "center",
+              "radius_m",
+              "margin_m"
+            ],
+            "type": "object"
+          }
+        ]
       },
       "Areas": {
         "properties": {
@@ -1986,6 +2074,59 @@
         ],
         "type": "object"
       },
+      "CategoryInput": {
+        "additionalProperties": false,
+        "description": "A trade set up for a country: everything a study of it reads, whichever area it is applied to.\nIts competitors are tiered by which of its Google categories' searches found them, first match\nwins (docs/ARCHITECTURE.md, Placement).",
+        "properties": {
+          "additional": {
+            "description": "A tier each after the trade's, in this order: what the search of its exact name returns.",
+            "items": {
+              "$ref": "#/components/schemas/Additional"
+            },
+            "type": "array"
+          },
+          "country": {
+            "$ref": "#/components/schemas/BaseCountry"
+          },
+          "demand": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Demand"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "None: no demand surface, and nothing that reads one."
+          },
+          "excluded": {
+            "$ref": "#/components/schemas/Excluded"
+          },
+          "keywords": {
+            "description": "[`keywords`]' form, the trade's name among them at weight 1.",
+            "items": {
+              "$ref": "#/components/schemas/KeywordInput"
+            },
+            "type": "array"
+          },
+          "trade": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Gcid"
+              }
+            ],
+            "description": "Tier 1, what its searches return, and the weight of 1 the rest is weighed against: searched by\nits name and by each keyword. Its name is what a study is called by."
+          }
+        },
+        "required": [
+          "trade",
+          "country",
+          "additional",
+          "keywords",
+          "excluded"
+        ],
+        "type": "object"
+      },
       "CategoryMove": {
         "description": "A move of a category's head.",
         "properties": {
@@ -2614,6 +2755,29 @@
           "read",
           "left",
           "ends"
+        ],
+        "type": "object"
+      },
+      "Definition": {
+        "additionalProperties": false,
+        "properties": {
+          "area": {
+            "$ref": "#/components/schemas/AreaInput"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryInput"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "None is the area on its own: the grid's layers, and not one billed call."
+          }
+        },
+        "required": [
+          "area"
         ],
         "type": "object"
       },
@@ -3290,6 +3454,23 @@
           "manager"
         ],
         "type": "string"
+      },
+      "Gcid": {
+        "additionalProperties": false,
+        "description": "One of Google's Business Profile categories, named in the country's language.",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "type": "object"
       },
       "GeneralAccess": {
         "description": "Who beyond the owner and members may read a chat by its link.\n\n- `view`: Everyone in Service-Arb: a signed-in holder of any `sa` permission.",
@@ -4856,6 +5037,23 @@
         "type": "object"
       },
       "LatLng": {
+        "properties": {
+          "lat": {
+            "format": "double",
+            "type": "number"
+          },
+          "lng": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lat",
+          "lng"
+        ],
+        "type": "object"
+      },
+      "LatLng2": {
         "properties": {
           "lat": {
             "format": "double",
@@ -41196,6 +41394,176 @@
           "unstudied": 422
         },
         "x-permission": "sa:placement:study:read"
+      }
+    },
+    "/placement/pull": {
+      "post": {
+        "description": "400 a definition placement refuses, or an area not a circle of an area's radius, its margin\nincluded; 503 placement not connected. Its end is the answer's one event: `pulled`, or `refused`\nwith the refusal a pull answers.",
+        "operationId": "pull_definition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Definition"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {}
+            },
+            "description": "`pulled` or `refused`, once it ends."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unaffordable`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`csrf`, `forbidden`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`conflict`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_large`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_many`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`, `browsers_not_connected`"
+          }
+        },
+        "summary": "Builds a definition again, its area and category kept here or not, buying what it lacks at the caller's tokens, as a pull does.",
+        "tags": [
+          "placement"
+        ],
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        },
+        "x-permission": "sa:placement:study:spend",
+        "x-spends": [
+          "placement.search"
+        ]
       }
     },
     "/placement/studies/{sha}": {

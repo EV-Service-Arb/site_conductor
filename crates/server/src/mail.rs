@@ -533,6 +533,36 @@ pub async fn run(w: Worker, shutdown: watch::Receiver<bool>) {
 	tokio::join!(reading, sending, telling);
 }
 
+/// A document kept for a GBP.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "GmbDocument")]
+pub struct DocumentDto {
+	pub id: i64,
+	pub name: String,
+	pub r#type: String,
+	/// Bytes.
+	pub size: i64,
+	/// What Google asked that it answers.
+	pub given_for: Option<String>,
+	/// RFC 3339.
+	pub added_at: String,
+}
+
+/// `GET /gmbs/{id}/documents`, newest first.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "GmbDocuments")]
+pub struct DocumentsDto {
+	pub documents: Vec<DocumentDto>,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "GmbDocumentFile")]
+pub struct DocumentFileDto {
+	pub name: String,
+	pub r#type: String,
+	pub base64: String,
+}
+
 /// What `cases` hold of GBP `gmb`, newest first, each message with its case.
 fn about(cases: &[Case], gmb: i64) -> Vec<(&Case, &Kept)> {
 	let mut held: Vec<_> = cases
@@ -850,36 +880,6 @@ async fn give_mail(State(state): State<ApiState>, Extension(caller): Extension<C
 	detail(&state, caller.user_id, id).await
 }
 
-/// A document kept for a GBP.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "GmbDocument")]
-pub struct DocumentDto {
-	pub id: i64,
-	pub name: String,
-	pub r#type: String,
-	/// Bytes.
-	pub size: i64,
-	/// What Google asked that it answers.
-	pub given_for: Option<String>,
-	/// RFC 3339.
-	pub added_at: String,
-}
-
-/// `GET /gmbs/{id}/documents`, newest first.
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "GmbDocuments")]
-pub struct DocumentsDto {
-	pub documents: Vec<DocumentDto>,
-}
-
-#[derive(Clone, Debug, JsonSchema, Serialize)]
-#[schemars(rename = "GmbDocumentFile")]
-pub struct DocumentFileDto {
-	pub name: String,
-	pub r#type: String,
-	pub base64: String,
-}
-
 async fn documents_of(panel: &Panel, owner: Uuid, gmb: i64) -> ApiResult<Json<DocumentsDto>> {
 	let documents = panel.documents(owner, gmb).await??;
 	Ok(Json(DocumentsDto {
@@ -914,9 +914,7 @@ pub(crate) struct AddDocument {
 /// Keeps a document for a GBP, ≤ 10 MiB, sealed. 409 it has 50. Answers its documents.
 async fn add_document(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>, Body(b): Body<AddDocument>) -> ApiResult<Json<DocumentsDto>> {
 	let file = File::try_from(b.file)?;
-	let document = panel
-		.add_document(caller.user_id, caller.person(), id, &file, b.given_for.as_deref(), Timestamp::now())
-		.await??;
+	let document = panel.add_document(caller.user_id, caller.person(), id, &file, b.given_for.as_deref(), Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, gmb_id = id, document, "a document kept");
 	documents_of(&panel, caller.user_id, id).await
 }
@@ -996,11 +994,7 @@ async fn dismiss_mail_draft(State(panel): State<Panel>, Extension(caller): Exten
 
 /// Brings a dismissed draft back, for its person to send. 409 another message came, or another reply was written.
 async fn restore_mail_draft(_: Outward, State(state): State<ApiState>, Extension(caller): Extension<Caller>, Ids(Id { id }): Ids<Id<i64>>) -> ApiResult<Json<CaseDetailDto>> {
-	let case = state
-		.sign_in
-		.panel
-		.restore_mail_draft(caller.user_id, caller.person(), id, Timestamp::now())
-		.await??;
+	let case = state.sign_in.panel.restore_mail_draft(caller.user_id, caller.person(), id, Timestamp::now()).await??;
 	tracing::info!(user_id = %caller.user_id, draft = id, case, "a draft brought back");
 	detail(&state, caller.user_id, case).await
 }
@@ -1399,13 +1393,19 @@ Answer with body and needs, nothing null; or, when no reply serves the goal, bod
 		needs.insert(0, format!("the list of its missing reviews: {why}"));
 	}
 	// a refusal is looked at again for what it was not shown
-	let refused = matches!(kind, Some(Kind::ReinstatementRefused | Kind::ReviewsNoData | Kind::ReviewsLiveAlready | Kind::ReinstatementPartial));
+	let refused = matches!(
+		kind,
+		Some(Kind::ReinstatementRefused | Kind::ReviewsNoData | Kind::ReviewsLiveAlready | Kind::ReinstatementPartial)
+	);
 	let shown = b.case.messages.iter().zip(&texts).any(|(m, text)| m.said.sent && text.contains("[attached: "));
 	let held: Vec<String> = seen.iter().filter(|r| r.captured).map(|r| one_line(&r.author, AUTHOR_MAX)).collect();
 	if refused && !shown && !held.is_empty() && !needs.iter().any(|n| n.to_lowercase().contains("screenshot")) {
 		let more = held.len().saturating_sub(AUTHORS);
 		let and = if more == 0 { String::new() } else { format!(" and {more} more") };
-		needs.push(format!("the screenshots the archive holds, of the reviews by {}{and}", held[..held.len().min(AUTHORS)].join(", ")));
+		needs.push(format!(
+			"the screenshots the archive holds, of the reviews by {}{and}",
+			held[..held.len().min(AUTHORS)].join(", ")
+		));
 	}
 	let said = |s: Option<String>| s.map(|s| s.trim().to_owned()).filter(|s| !s.is_empty()); // it leaves one out either way
 	match (said(body), said(nothing)) {

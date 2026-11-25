@@ -10,6 +10,8 @@
 //!                                             again until it lacks none → built again, charged what was bought
 //! GET  /placement/studies/{sha}             a published one, as the study above
 //! POST /placement/studies/{sha}/pull        as the pull above, charged to whoever pulls
+//! POST /placement/pull                      a Definition handed in whole, as the pull above; its end
+//!                                             an event, the stream kept alive until it
 //! POST /library/studies                     publish: on a released version, or releasing it
 //! GET  /library/studies?trade&country&area
 //! POST /library/studies/{sha}/withdraw
@@ -17,9 +19,10 @@
 
 use std::{
 	collections::HashMap,
+	convert::Infallible,
 	path::PathBuf,
 	sync::{Arc, Mutex},
-	time::SystemTime,
+	time::{Duration, SystemTime},
 };
 
 use axum::{
@@ -27,7 +30,10 @@ use axum::{
 	body::Bytes,
 	extract::State,
 	http::{Method, header},
-	response::{IntoResponse, NoContent, Response},
+	response::{
+		IntoResponse, NoContent, Response,
+		sse::{Event, KeepAlive, Sse},
+	},
 };
 use ev_lib::api::{
 	Body, Created, GenContext, Ids, JsonSchema, OperationOutput, Params, Refusal,
@@ -43,6 +49,7 @@ use sa_core::{
 	queries_cache::{Key, Scheme, gop},
 };
 use sa_panel::{
+	areas::MAX_RADIUS_M,
 	library::{NewListing, Release},
 	store::Store,
 };
@@ -61,6 +68,9 @@ const PULL: Gate = sa_auth::Gate::USER.with(Flags {
 	freshness: Freshness::Fresh,
 	slow: true,
 });
+
+/// As every slow route's: a stream outlives the bound on its answer.
+const PULL_BOUND: Duration = Duration::from_secs(600);
 
 type Slot = Arc<tokio::sync::Mutex<Option<Bytes>>>;
 
@@ -106,6 +116,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/placement/study/pull", PULL.needs(Study::Spend), pull),
 		ApiRoute::new(M::GET, "/placement/studies/{sha}", SLOW.needs(Study::Read), published_study),
 		ApiRoute::new(M::POST, "/placement/studies/{sha}/pull", PULL.needs(Study::Spend), pull_published_study),
+		ApiRoute::new(M::POST, "/placement/pull", PULL.needs(Study::Spend), pull_definition),
 		ApiRoute::new(M::POST, "/library/studies", USER, publish_study),
 		ApiRoute::new(M::GET, "/library/studies", USER, published_studies),
 		ApiRoute::new(M::POST, "/library/studies/{sha}/withdraw", USER, withdraw_study),
@@ -217,6 +228,31 @@ impl OperationOutput for Payload {
 	}
 }
 
+/// A pull under way. The edge drops a request it hears nothing of for 100 s, and a pull takes minutes.
+struct Pulling(Response);
+
+impl IntoResponse for Pulling {
+	fn into_response(self) -> Response {
+		self.0
+	}
+}
+
+impl OperationOutput for Pulling {
+	type Inner = Self;
+
+	fn operation_response(_: &mut GenContext, _: &mut Operation) -> Option<Answer> {
+		Some(Answer {
+			description: "`pulled` or `refused`, once it ends.".to_owned(),
+			content: [("text/event-stream".into(), MediaType::default())].into_iter().collect(),
+			..Answer::default()
+		})
+	}
+
+	fn inferred_responses(ctx: &mut GenContext, op: &mut Operation) -> Vec<(Option<Status>, Answer)> {
+		Self::operation_response(ctx, op).map(|r| (Some(Status::Code(200)), r)).into_iter().collect()
+	}
+}
+
 /// The countries placement holds a base for.
 ///
 /// 503 placement not connected.
@@ -276,6 +312,31 @@ async fn pull_published_study(State(s): State<ApiState>, Spends(caller, _): Spen
 	let p = connected(&s)?.clone();
 	let def = s.sign_in.panel.published_study(caller.user_id, &sha, Timestamp::now()).await??.definition;
 	pulled(&s, &caller, &p, def).await
+}
+
+/// Builds a definition again, its area and category kept here or not, buying what it lacks at the
+/// caller's tokens, as a pull does.
+///
+/// 400 a definition placement refuses, or an area not a circle of an area's radius, its margin
+/// included; 503 placement not connected. Its end is the answer's one event: `pulled`, or `refused`
+/// with the refusal a pull answers.
+async fn pull_definition(State(s): State<ApiState>, Spends(caller, _): Spends<PlacementRequest, Caller>, Body(def): Body<Definition>) -> ApiResult<Pulling> {
+	let p = connected(&s)?.clone();
+	def.check().map_err(|e| Refusal::new(Code::BadRequest, e.0))?;
+	match &def.area {
+		Area::Circle { radius_m, margin_m, .. } if radius_m + margin_m <= MAX_RADIUS_M as f64 => {}
+		_ => return Err(Refusal::new(Code::BadRequest, format!("a study is of a circle of at most {MAX_RADIUS_M} m"))),
+	}
+	opened(&s, &p, def.clone()).await?; // what does not build buys nothing
+	let end = async move {
+		let ended = tokio::time::timeout(PULL_BOUND, pulled(&s, &caller, &p, def)).await;
+		let ended = ended.unwrap_or_else(|_| Err(Refusal::new(Code::Unavailable, "stopped part-way, out of time: pulled again, it buys the rest")));
+		Ok::<_, Infallible>(match ended {
+			Ok(_) => Event::default().event("pulled").data("{}"),
+			Err(refused) => Event::default().event("refused").json_data(refused).expect("a refusal serialises"),
+		})
+	};
+	Ok(Pulling(Sse::new(futures::stream::once(end)).keep_alive(KeepAlive::default()).into_response()))
 }
 
 /// `def` built again, what it lacks bought at `caller`'s tokens.

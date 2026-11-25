@@ -18,7 +18,10 @@ use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Button, Call, Rule, Tier};
 use sa_core::{
 	gbp::State as Stands,
-	mail::{self as rules, About, Draft as Reply, DraftState, Goal, HOLD, Halt, Holds, Joining, Kind, MAX_READS, Message, Pursuit, READ_BACK, Reading, Ruled, Said, Sender, Settled, Spoken, State, Topic, Why},
+	mail::{
+		self as rules, About, Draft as Reply, DraftState, Goal, HOLD, Halt, Holds, Joining, Kind, MAX_READS, Message, Pursuit, READ_BACK, Reading, Ruled, Said, Sender, Settled, Spoken,
+		State, Topic, Why,
+	},
 	notify::{Locale, Note, Rendered, one_line},
 };
 use sqlx::SqliteConnection;
@@ -43,10 +46,10 @@ pub use crate::{smtp::Gmail, store::mail::ReadBy};
 pub const PORTS: [u16; 2] = [crate::imap::PORT, crate::smtp::PORT];
 /// Topics a person may have answered automatically.
 pub const AUTO: [Topic; 2] = [Topic::Verification, Topic::Reviews];
-/// Unread mail the model is handed in one pass, per person.
-const READS: usize = 20;
 /// A reply's files, in all.
 pub const FILES_MAX: usize = 18 << 20;
+/// Unread mail the model is handed in one pass, per person.
+const READS: usize = 20;
 const SUMMARY_MAX: usize = 160;
 /// A turn older than this is told of no more: the marks of what was told are kept a little longer.
 const TELL_WITHIN: SignedDuration = SignedDuration::from_hours(24 * 6);
@@ -64,6 +67,9 @@ const UNREAD_FOR: SignedDuration = SignedDuration::from_hours(1);
 const BEFORE_MAX: usize = 500;
 
 pub type Sending<'a> = Pin<Box<dyn Future<Output = Result<(), SendError>> + Send + 'a>>;
+
+/// A message's text, or why it does not open.
+pub type Text = Result<Zeroizing<String>, String>;
 
 /// How a gmail's mail goes out.
 pub trait Smtp: std::fmt::Debug + Send + Sync {
@@ -265,9 +271,6 @@ pub struct Sent<'a> {
 	/// With no file, whatever the draft lacks.
 	pub as_is: bool,
 }
-
-/// A message's text, or why it does not open.
-pub type Text = Result<Zeroizing<String>, String>;
 
 /// A message the model is to read.
 pub struct Unread {
@@ -927,7 +930,13 @@ impl Panel {
 			&& sent.files.is_empty()
 			&& !sent.as_is
 		{
-			let lacks: Vec<&str> = case.wanted().iter().filter(|w| !w.given).filter_map(|w| d.needs.iter().find(|n| **n == w.item)).map(String::as_str).collect();
+			let lacks: Vec<&str> = case
+				.wanted()
+				.iter()
+				.filter(|w| !w.given)
+				.filter_map(|w| d.needs.iter().find(|n| **n == w.item))
+				.map(String::as_str)
+				.collect();
 			if !lacks.is_empty() {
 				return Ok(Err(Refused::Conflict(format!("it lacks {}: attach it, or say it goes as it is", lacks.join("; ")))));
 			}
@@ -1043,14 +1052,7 @@ impl Panel {
 		};
 		db::decide(&mut tx, id, &after).await?;
 		tx.commit().await.wrap_err("committing a draft's send")?;
-		tracing::info!(
-			draft = id,
-			case = d.case,
-			gmail_id = case.gmail,
-			person = by.is_some(),
-			sent = sent.is_ok(),
-			"a reply to Google"
-		);
+		tracing::info!(draft = id, case = d.case, gmail_id = case.gmail, person = by.is_some(), sent = sent.is_ok(), "a reply to Google");
 		Ok(answer)
 	}
 
@@ -1201,7 +1203,9 @@ impl Panel {
 				_ => picked.get(&m.case_id).or_else(|| picked.get(&one(m.case_id))).copied().filter(|_| m.gmb_id.is_none()),
 			};
 			let said = [by_hand, m.gmb_id, seen];
-			let Some((rank, gmb)) = (0_u8..).zip(said).find_map(|(rank, gmb)| Some((rank, gmb?))) else { continue };
+			let Some((rank, gmb)) = (0_u8..).zip(said).find_map(|(rank, gmb)| Some((rank, gmb?))) else {
+				continue;
+			};
 			if known.get(listing).is_none_or(|(had, _)| rank <= *had) {
 				known.insert(listing.clone(), (rank, gmb));
 			}

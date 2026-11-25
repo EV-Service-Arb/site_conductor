@@ -2503,6 +2503,10 @@
     "en": "Attach files",
     "t": "Прикрепить файлы"
   },
+  "gmbs.documents.attach.one": {
+    "en": "Attach",
+    "t": "Прикрепить"
+  },
   "gmbs.edit": {
     "en": "Edit…",
     "t": "Изменить…"
@@ -2614,6 +2618,18 @@
   "gmbs.issue.failing": {
     "en": "Failing",
     "t": "Сбой обхода"
+  },
+  "gmbs.issue.mail_asks": {
+    "en": "Google's mail",
+    "t": "Письмо от Google"
+  },
+  "gmbs.issue.mail_deadline": {
+    "en": "Google's deadline",
+    "t": "Срок от Google"
+  },
+  "gmbs.issue.mail_reply": {
+    "en": "Reply to confirm",
+    "t": "Ответьте для подтверждения"
   },
   "gmbs.issue.no_category": {
     "en": "No category",
@@ -2763,6 +2779,10 @@
     "en": "Google shows {name} at no point: set its location on the map",
     "t": "Google не показывает точку для {name}: укажите её положение на карте"
   },
+  "gmbs.tag.held": {
+    "en": "replies {at}",
+    "t": "ответ {at}"
+  },
   "gmbs.tag.overdue": {
     "en": "{n} overdue",
     "t": "просрочено: {n}"
@@ -2787,6 +2807,10 @@
     "en": "Managing gmails",
     "t": "Управляющие gmail"
   },
+  "gmbs.unplaced": {
+    "en": "Google's mail to {gmail}, its GBP not known",
+    "t": "Письмо от Google на {gmail}, его GBP неизвестен"
+  },
   "gmbs.unselected": {
     "en": "Not selected",
     "t": "Не выбрано"
@@ -2810,6 +2834,10 @@
   "home.peek.fine": {
     "en": "Nothing needs you",
     "t": "Ничего не требует внимания"
+  },
+  "home.peek.held": {
+    "en": "Replies to Google at {at}, by itself",
+    "t": "Ответы Google в {at}, сам по себе"
   },
   "home.peek.hours": {
     "en": "Hours",
@@ -3643,13 +3671,37 @@
     "en": "This browser gives no location here",
     "t": "Этот браузер не предоставляет данные о местоположении здесь"
   },
+  "mail.auto.all": {
+    "en": "every GBP of {gmail}",
+    "t": "все GBP аккаунта {gmail}"
+  },
+  "mail.auto.confirm": {
+    "en": "{topic}: let replies about {of} go by themselves?",
+    "t": "{topic}: отвечать на {of} автоматически?"
+  },
+  "mail.auto.confirm.how": {
+    "en": "Each goes {minutes} minutes after it is written unless you stop it, again after 48 h of silence, at most {limit} unanswered. Any that needs something of yours stays by hand.",
+    "t": "Каждый ответ уходит через {minutes} мин после написания, если вы его не остановите; повторно — после 48 ч молчания, не более {limit} без ответа. Всё, для чего нужно что-то от вас, остаётся на ручной обработке."
+  },
+  "mail.auto.confirm.none": {
+    "en": "None is written now.",
+    "t": "Сейчас ничего не написано."
+  },
   "mail.auto.confirm.on": {
     "en": "Switch on",
     "t": "Включить"
   },
+  "mail.auto.confirm.written": {
+    "en": "Written now, yours to send:",
+    "t": "Написано сейчас, отправить предстоит вам:"
+  },
   "mail.auto.here": {
     "en": "This conductor sends nothing by itself: production's does.",
     "t": "Этот conductor сам ничего не отправляет: это делает боевой."
+  },
+  "mail.auto.noGbps": {
+    "en": "No GBP on Google under it",
+    "t": "Под ним нет GBP в Google"
   },
   "mail.auto.none": {
     "en": "No gmails in scope",
@@ -3659,13 +3711,77 @@
     "en": "Review reinstatement",
     "t": "Восстановление отзывов"
   },
+  "mail.auto.reviews.goes": {
+    "en": "They ask Google support for its missing reviews.",
+    "t": "В них просят поддержку Google вернуть пропавшие отзывы."
+  },
+  "mail.auto.some": {
+    "en": "{on} of {n}",
+    "t": "{on} из {n}"
+  },
+  "mail.auto.switch": {
+    "en": "{topic}: replies about {of} go by themselves",
+    "t": "{topic}: ответы на {of} уходят автоматически"
+  },
   "mail.auto.verification": {
     "en": "Live verification",
     "t": "Живая верификация"
   },
+  "mail.auto.verification.goes": {
+    "en": "They ask Google support for the live call while it is verifying.",
+    "t": "В них просят поддержку Google о видеозвонке, пока идёт верификация."
+  },
+  "mail.automation.asked": {
+    "en": "asked {n} of {limit}",
+    "t": "запрошено {n} из {limit}"
+  },
+  "mail.automation.due": {
+    "en": "asks next once its reply is written",
+    "t": "следующий запрос — когда будет написан ответ"
+  },
+  "mail.automation.goes": {
+    "en": "goes at {at}",
+    "t": "уйдёт {at}"
+  },
+  "mail.automation.here": {
+    "en": "nothing goes from this conductor",
+    "t": "из этого проводника ничего не уходит"
+  },
+  "mail.automation.lacks": {
+    "en": "what its reply lacks is yours to give",
+    "t": "то, чего не хватает в ответе, должны дать вы"
+  },
+  "mail.automation.never": {
+    "en": "Never automatic on {topic}",
+    "t": "По теме «{topic}» автоматически не отвечать никогда"
+  },
+  "mail.automation.off": {
+    "en": "Automatic replies off",
+    "t": "Автоответы выключены"
+  },
+  "mail.automation.on": {
+    "en": "Automatic replies on",
+    "t": "Автоответы включены"
+  },
+  "mail.automation.unknown": {
+    "en": "Automatic replies off: which GBP it is about is not known",
+    "t": "Автоответы выключены: неизвестно, о каком GBP речь"
+  },
+  "mail.automation.waiting": {
+    "en": "asks again after {until}",
+    "t": "повторный запрос после {until}"
+  },
+  "mail.automation.yours": {
+    "en": "this reply is yours to send",
+    "t": "этот ответ вам предстоит отправить самим"
+  },
   "mail.cancel": {
     "en": "Cancel",
     "t": "Отмена"
+  },
+  "mail.conversation.whole": {
+    "en": "The whole thread",
+    "t": "Вся переписка"
   },
   "mail.correct": {
     "en": "GBP, topic",
@@ -3682,6 +3798,10 @@
   "mail.correct.topic": {
     "en": "Topic",
     "t": "Тема"
+  },
+  "mail.correct.trashed": {
+    "en": "In the trash",
+    "t": "В корзине"
   },
   "mail.correct.unknown": {
     "en": "Not known",
@@ -3731,6 +3851,10 @@
     "en": "The reply's text",
     "t": "Текст ответа"
   },
+  "mail.files.reading": {
+    "en": "Its documents are being read",
+    "t": "Его документы обрабатываются"
+  },
   "mail.files.remove": {
     "en": "Take {name} off",
     "t": "Убрать {name}"
@@ -3742,6 +3866,18 @@
   "mail.forged": {
     "en": "Not from Google: Gmail could not prove who sent it. Open nothing in it.",
     "t": "Не от Google: Gmail не смог подтвердить отправителя. Ничего в нём не открывайте."
+  },
+  "mail.gbp.unknown": {
+    "en": "GBP not known",
+    "t": "GBP неизвестен"
+  },
+  "mail.goal.call": {
+    "en": "Live verification call",
+    "t": "Видеозвонок для верификации"
+  },
+  "mail.goal.reviews": {
+    "en": "Missing reviews",
+    "t": "Пропавшие отзывы"
   },
   "mail.gone": {
     "en": "Missing reviews",
@@ -3786,6 +3922,54 @@
   "mail.gone.unrated": {
     "en": "no stars",
     "t": "без звёзд"
+  },
+  "mail.halt.account": {
+    "en": "its inbox is two accounts', or it was written to another",
+    "t": "в его ящике два аккаунта, или письмо написано на другой"
+  },
+  "mail.halt.asked": {
+    "en": "what Google asks is yours to give",
+    "t": "то, что просит Google, должны дать вы"
+  },
+  "mail.halt.elsewhere": {
+    "en": "its GBP's latest conversation on this asks",
+    "t": "последняя переписка его GBP с этим запросом"
+  },
+  "mail.halt.google": {
+    "en": "Google's turn until {until}, then it asks again",
+    "t": "ход за Google до {until}, затем запрос повторится"
+  },
+  "mail.halt.limit": {
+    "en": "nothing new in {n}: the next is yours to send",
+    "t": "ничего нового за {n}: следующий ответ отправляете вы"
+  },
+  "mail.halt.no_reply": {
+    "en": "nothing in it takes a reply",
+    "t": "в нём нет ничего, на что можно ответить"
+  },
+  "mail.halt.operators": {
+    "en": "what Google said is yours to act on",
+    "t": "то, что сказал Google, нужно выполнить вам"
+  },
+  "mail.halt.removed": {
+    "en": "its GBP is in the trash",
+    "t": "его GBP в корзине"
+  },
+  "mail.halt.settled": {
+    "en": "what it asks for is given",
+    "t": "то, что запрашивалось, предоставлено"
+  },
+  "mail.halt.stale": {
+    "en": "its inbox was not read for an hour",
+    "t": "его ящик не читался больше часа"
+  },
+  "mail.halt.uncertain": {
+    "en": "which GBP it is about is not certain",
+    "t": "нет уверенности, о каком GBP речь"
+  },
+  "mail.halt.unread": {
+    "en": "Google's last word is not read",
+    "t": "последнее сообщение Google не прочитано"
   },
   "mail.held": {
     "en": "Goes by itself at {at}",
@@ -4027,6 +4211,18 @@
     "en": "Video rejected",
     "t": "Видео отклонено"
   },
+  "mail.likely": {
+    "en": "Likely {name}",
+    "t": "Вероятно, {name}"
+  },
+  "mail.likely.confirm": {
+    "en": "Likely {name}: confirm",
+    "t": "Вероятно, {name}: подтвердить"
+  },
+  "mail.likely.why": {
+    "en": "Nothing of it goes by itself until its GBP is certain",
+    "t": "Ничего не уйдёт автоматически, пока не станет точно известен его GBP"
+  },
   "mail.mend.connect": {
     "en": "Connect your own model",
     "t": "Подключить свою модель"
@@ -4070,6 +4266,10 @@
   "mail.message.unread": {
     "en": "Not read",
     "t": "Не прочитано"
+  },
+  "mail.message.us": {
+    "en": "Us",
+    "t": "Мы"
   },
   "mail.method.call": {
     "en": "Live call",
@@ -4175,6 +4375,26 @@
     "en": "Pick a thread to read it here.",
     "t": "Выберите цепочку, чтобы прочитать её здесь."
   },
+  "mail.pick.documents": {
+    "en": "Its documents",
+    "t": "Его документы"
+  },
+  "mail.pick.kept": {
+    "en": "Kept",
+    "t": "Сохранённое"
+  },
+  "mail.pick.photo": {
+    "en": "Photo {id}",
+    "t": "Фото {id}"
+  },
+  "mail.pick.photo.failed": {
+    "en": "The photo did not load: {status}",
+    "t": "Не удалось загрузить фото: {status}"
+  },
+  "mail.pick.photos": {
+    "en": "Its photos on Google",
+    "t": "Его фото в Google"
+  },
   "mail.prev": {
     "en": "Previous thread",
     "t": "Предыдущая цепочка"
@@ -4267,6 +4487,14 @@
     "en": "Sent to {to} · {at}",
     "t": "Отправлено на {to} · {at}"
   },
+  "mail.sentBy.gmail": {
+    "en": "in Gmail",
+    "t": "в Gmail"
+  },
+  "mail.sentBy.itself": {
+    "en": "by itself",
+    "t": "автоматически"
+  },
   "mail.settled.hand": {
     "en": "Marked done.",
     "t": "Отмечено выполненным."
@@ -4343,6 +4571,58 @@
     "en": "with Google until {at}",
     "t": "у Google до {at}"
   },
+  "mail.stats.all": {
+    "en": "All",
+    "t": "Все"
+  },
+  "mail.stats.asking": {
+    "en": "Asking now",
+    "t": "Запрашивается сейчас"
+  },
+  "mail.stats.asks": {
+    "en": "Asks until",
+    "t": "Запросов до"
+  },
+  "mail.stats.days": {
+    "en": "Days until",
+    "t": "Дней до"
+  },
+  "mail.stats.given": {
+    "en": "Given",
+    "t": "Получено"
+  },
+  "mail.stats.givenOf": {
+    "en": "{given} of {of}",
+    "t": "{given} из {of}"
+  },
+  "mail.stats.median": {
+    "en": "Median, of those given",
+    "t": "Медиана среди полученных"
+  },
+  "mail.stats.none": {
+    "en": "Nothing was asked of Google yet",
+    "t": "У Google пока ничего не запрашивали"
+  },
+  "mail.stats.open": {
+    "en": "{n, plural, one {# ask} other {# asks}}, {days} d",
+    "t": "{n, plural, one {# запрос} few {# запроса} many {# запросов} other {# запроса}}, {days} дн."
+  },
+  "mail.stats.removed": {
+    "en": "A removed GBP",
+    "t": "Удалённый GBP"
+  },
+  "mail.stats.silence": {
+    "en": "No answer",
+    "t": "Нет ответа"
+  },
+  "mail.stats.wording": {
+    "en": "What we wrote, and what Google answered",
+    "t": "Что мы написали и что ответил Google"
+  },
+  "mail.stats.worked": {
+    "en": "worked {worked} of {used}",
+    "t": "сработало {worked} из {used}"
+  },
   "mail.stuck": {
     "en": "{n, plural, one {# thread waits} other {# threads wait}}: {why}",
     "t": "{n, plural, one {# цепочка ждёт} few {# цепочки ждут} many {# цепочек ждут} other {# цепочки ждут}}: {why}"
@@ -4350,6 +4630,18 @@
   "mail.tab.automatic": {
     "en": "Automatic replies",
     "t": "Автоответы"
+  },
+  "mail.tab.automatic.description": {
+    "en": "Which GBPs' mail is answered by itself",
+    "t": "Почта каких GBP обрабатывается автоматически"
+  },
+  "mail.tab.stats": {
+    "en": "Stats",
+    "t": "Статистика"
+  },
+  "mail.tab.stats.description": {
+    "en": "What it took to get what Google was asked for",
+    "t": "Чего стоило добиться того, о чём просили Google"
   },
   "mail.tab.threads": {
     "en": "Threads",
@@ -4410,6 +4702,42 @@
   "mail.unsure": {
     "en": "May have gone out to {to}",
     "t": "Возможно, ушло на {to}"
+  },
+  "mail.wanted": {
+    "en": "Wanted of you",
+    "t": "Требуется от вас"
+  },
+  "mail.wanted.bare": {
+    "en": "without a file",
+    "t": "без файла"
+  },
+  "mail.wanted.copied": {
+    "en": "Copied",
+    "t": "Скопировано"
+  },
+  "mail.wanted.copy": {
+    "en": "Copy",
+    "t": "Копировать"
+  },
+  "mail.wanted.given": {
+    "en": "Given",
+    "t": "Предоставлено"
+  },
+  "mail.wanted.mark": {
+    "en": "Given without a file",
+    "t": "Предоставлено без файла"
+  },
+  "mail.wanted.missing": {
+    "en": "Not given",
+    "t": "Не предоставлено"
+  },
+  "mail.wanted.n": {
+    "en": "{n} of {all} given",
+    "t": "Предоставлено {n} из {all}"
+  },
+  "mail.wanted.undo": {
+    "en": "Take back",
+    "t": "Отменить"
   },
   "mail.which": {
     "en": "Which GBP?",
@@ -6611,6 +6939,30 @@
     "en": "Documents",
     "t": "Документы"
   },
+  "window.appeal.documents.confirm": {
+    "en": "Remove {name} for good?",
+    "t": "Удалить {name} насовсем?"
+  },
+  "window.appeal.documents.confirm.why": {
+    "en": "What it was given as is not given any more.",
+    "t": "То, чем это было передано, больше не передаётся."
+  },
+  "window.appeal.documents.confirm.yes": {
+    "en": "Remove",
+    "t": "Удалить"
+  },
+  "window.appeal.documents.none": {
+    "en": "None kept yet: a Kbis, a bill, a photo of the sign.",
+    "t": "Пока ничего не сохранено: выписка Kbis, счёт, фото вывески."
+  },
+  "window.appeal.documents.profile": {
+    "en": "profile",
+    "t": "профиль"
+  },
+  "window.appeal.documents.remove": {
+    "en": "Remove {name}",
+    "t": "Удалить {name}"
+  },
   "window.appeal.linked": {
     "en": "Linked to it",
     "t": "Связано с ним"
@@ -7207,6 +7559,22 @@
     "en": "Verification",
     "t": "Верификация"
   },
+  "window.mail": {
+    "en": "With Google",
+    "t": "С Google"
+  },
+  "window.mail.also": {
+    "en": "Also about {names}",
+    "t": "Также о {names}"
+  },
+  "window.mail.gone": {
+    "en": "one in the trash",
+    "t": "одно в корзине"
+  },
+  "window.mail.likely": {
+    "en": "Likely about this one: not certain",
+    "t": "Вероятно, об этом: не наверняка"
+  },
   "window.minimize": {
     "en": "To the hotbar",
     "t": "На панель"
@@ -7599,6 +7967,30 @@
     "en": "avg rank, my quadrant",
     "t": "средняя позиция, мой квадрант"
   },
+  "window.stats.asked": {
+    "en": "Asked of Google",
+    "t": "Запросы к Google"
+  },
+  "window.stats.askedAll": {
+    "en": "Every GBP, and the wording",
+    "t": "Все GBP и формулировки"
+  },
+  "window.stats.askedFor": {
+    "en": "{n, plural, one {# ask} other {# asks}} · {days} d",
+    "t": "{n, plural, one {# запрос} few {# запроса} many {# запросов} other {# запроса}} · {days} дн."
+  },
+  "window.stats.askedGiven": {
+    "en": "given",
+    "t": "выдано"
+  },
+  "window.stats.askedOpen": {
+    "en": "asking",
+    "t": "запрашивается"
+  },
+  "window.stats.askedWithout": {
+    "en": "verified without",
+    "t": "подтверждено без этого"
+  },
   "window.stats.atrp": {
     "en": "avg rank, all points",
     "t": "средняя позиция, все точки"
@@ -7775,6 +8167,14 @@
     "en": "{from} → {to} · {ago}",
     "t": "{from} → {to} · {ago}"
   },
+  "window.verification.days": {
+    "en": "{n, plural, =0 {First tried today} one {# day since the first try} other {# days since the first try}}",
+    "t": "{n, plural, =0 {Первая попытка сегодня} one {# день с первой попытки} few {# дня с первой попытки} many {# дней с первой попытки} other {# дня с первой попытки}}"
+  },
+  "window.verification.emails": {
+    "en": "Other emails with Google",
+    "t": "Другие письма с Google"
+  },
   "window.verification.kit": {
     "en": "Verification kit",
     "t": "Набор для верификации"
@@ -7815,9 +8215,37 @@
     "en": "What Google shows of it now, read every 6 h, and how that changed",
     "t": "Что Google показывает о нём сейчас, читается каждые 6 ч, и как это менялось"
   },
+  "window.verification.step.asked": {
+    "en": "Live call asked",
+    "t": "Запрошен живой звонок"
+  },
+  "window.verification.step.deflected": {
+    "en": "Deflected",
+    "t": "Отклонено"
+  },
+  "window.verification.step.held": {
+    "en": "Call held",
+    "t": "Звонок проведён"
+  },
+  "window.verification.step.offered": {
+    "en": "Call offered",
+    "t": "Звонок предложен"
+  },
+  "window.verification.step.rejected": {
+    "en": "Video rejected",
+    "t": "Видео отклонено"
+  },
+  "window.verification.step.verified": {
+    "en": "Verified",
+    "t": "Подтверждено"
+  },
   "window.verification.support": {
     "en": "With Google support",
     "t": "В поддержке Google"
+  },
+  "window.verification.support.none": {
+    "en": "No conversation with support.",
+    "t": "Переписки с поддержкой нет."
   },
   "window.verification.waits": {
     "en": "Waits for Verified",

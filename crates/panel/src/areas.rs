@@ -11,6 +11,8 @@ use uuid::Uuid;
 
 use crate::{Panel, Refused, store::areas as db};
 
+pub const MAX_RADIUS_M: i64 = 100_000;
+
 /// A circle on the map, everyone's: the kit's `/<slug>/` lists a caller's GBPs in it, a study's frame.
 #[derive(Clone, Debug)]
 pub struct Area {
@@ -55,7 +57,7 @@ impl Panel {
 		let Some(name) = Some(name.trim().to_owned()).filter(|n| !n.is_empty()) else {
 			return Ok(Err(Refused::Invalid("an area has a name".to_owned())));
 		};
-		if !(1..=100_000).contains(&radius_m) {
+		if !(1..=MAX_RADIUS_M).contains(&radius_m) {
 			return Ok(Err(Refused::Invalid("an area's radius is 1 m to 100 km".to_owned())));
 		}
 		let country = match &city {

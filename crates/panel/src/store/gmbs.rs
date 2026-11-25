@@ -21,6 +21,9 @@ const GMB: &str = "SELECT b.id, b.owner, b.gmail_id, b.place_id, b.name, b.addre
 /// Whether the gmail's browser's last check went through.
 const BROWSER: &str = "EXISTS (SELECT 1 FROM gmail_browsers w WHERE w.gmail_id = gmails.id AND w.check_error IS NULL)";
 
+/// Of which GBP a message kept is, by its gmail and Gmail's id of it, and who sent it.
+pub type Filed = HashMap<(i64, String), (Option<i64>, Option<SentBy>)>;
+
 type GmailRow = (i64, Uuid, String, i64, bool, Option<i64>, Option<String>);
 
 /// A GBP, by its id.
@@ -324,9 +327,6 @@ pub struct Logged {
 	pub sent_by: Option<SentBy>,
 	pub event: Event,
 }
-
-/// Of which GBP a message kept is, by its gmail and Gmail's id of it, and who sent it.
-pub type Filed = HashMap<(i64, String), (Option<i64>, Option<SentBy>)>;
 
 /// A page of GBP `gmb`'s log before event `before`, newest first, of `kinds` (none: every kind); each of its
 /// gmails' own while it was under it; an email `filed` with a GBP is that one's. `None`: no live GBP of the owner's.

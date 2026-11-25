@@ -7,24 +7,24 @@ use jiff::{SignedDuration, Timestamp};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
-/// Google is asked again after this long without an answer, if it gave no other term.
-const RE_ASK: SignedDuration = SignedDuration::from_hours(48);
-/// A video or an appeal is decided on within it, if Google gave no other term.
-const IN_REVIEW: SignedDuration = SignedDuration::from_hours(24 * 7);
 /// Ours in a case since Google last gave something new; past it a person decides.
 pub const MAX_ASKS: usize = 6;
-/// What goes by itself waits this long after ours before it.
-const APART: SignedDuration = SignedDuration::from_hours(12);
-/// An inbox not read for this long may hold Google's answer.
-const STALE: SignedDuration = SignedDuration::from_hours(1);
 /// A draft that goes by itself waits this long.
 pub const HOLD: SignedDuration = SignedDuration::from_mins(15);
-/// A case whose last message is older needs nothing.
-const QUIET_AFTER: SignedDuration = SignedDuration::from_hours(24 * 21);
 /// Older mail is kept, not read by the model.
 pub const READ_BACK: SignedDuration = SignedDuration::from_hours(24 * 90);
 /// A reading failed this often is a person's.
 pub const MAX_READS: i64 = 3;
+/// Google is asked again after this long without an answer, if it gave no other term.
+const RE_ASK: SignedDuration = SignedDuration::from_hours(48);
+/// A video or an appeal is decided on within it, if Google gave no other term.
+const IN_REVIEW: SignedDuration = SignedDuration::from_hours(24 * 7);
+/// What goes by itself waits this long after ours before it.
+const APART: SignedDuration = SignedDuration::from_hours(12);
+/// An inbox not read for this long may hold Google's answer.
+const STALE: SignedDuration = SignedDuration::from_hours(1);
+/// A case whose last message is older needs nothing.
+const QUIET_AFTER: SignedDuration = SignedDuration::from_hours(24 * 21);
 /// A send not over by then was cut off.
 const SENDING_FOR: SignedDuration = SignedDuration::from_mins(5);
 /// A shorter name, place id or address line is in every other message.
@@ -445,10 +445,7 @@ pub fn named(text: &str, gbps: &[Named]) -> BTreeSet<i64> {
 		}
 		found
 	};
-	let names = by(
-		gbps.iter().flat_map(|g| g.names.iter().enumerate().map(|(rank, n)| (g.id, rank, n.clone()))).collect(),
-		true,
-	);
+	let names = by(gbps.iter().flat_map(|g| g.names.iter().enumerate().map(|(rank, n)| (g.id, rank, n.clone()))).collect(), true);
 	let places = by(gbps.iter().filter_map(|g| Some((g.id, 0, g.place_id.clone()?))).collect(), false);
 	let named: BTreeSet<i64> = names.union(&places).copied().collect();
 	if !named.is_empty() {
@@ -983,11 +980,7 @@ pub fn pursuits(goal: Goal, spoken: &[Spoken]) -> Vec<Pursuit> {
 		match (s.said, s.message) {
 			(None, Some(message)) => {
 				let (p, case) = open.get_or_insert_with(|| {
-					let p = Pursuit {
-						goal,
-						asks: Vec::new(),
-						over: None,
-					};
+					let p = Pursuit { goal, asks: Vec::new(), over: None };
 					(p, s.case)
 				});
 				p.asks.push((message, s.at, None));
@@ -1023,6 +1016,18 @@ pub fn attempt(kind: Kind) -> Option<(Method, Outcome)> {
 		Kind::Verified => (Method::Unknown, Outcome::Verified),
 		_ => return None,
 	})
+}
+
+/// Ours since Google last gave something new.
+pub fn asked(messages: &[Message]) -> usize {
+	let new = |k: Kind| matches!(k.turn(), Turn::Operator | Turn::Settled) || matches!(k, Kind::Asks | Kind::ReinstatementPartial);
+	messages
+		.iter()
+		.rev()
+		.filter(|m| m.heard())
+		.take_while(|m| m.sent || !m.reading.as_ref().is_some_and(|r| new(r.kind)))
+		.filter(|m| m.sent)
+		.count()
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -1212,25 +1217,17 @@ fn term(heard: &[&Message], sent_at: Option<Timestamp>) -> Timestamp {
 	promised.into_iter().chain(ours.map(|at| later(at, RE_ASK))).max().expect("what is heard is Google's or ours")
 }
 
-/// Ours since Google last gave something new.
-pub fn asked(messages: &[Message]) -> usize {
-	let new = |k: Kind| matches!(k.turn(), Turn::Operator | Turn::Settled) || matches!(k, Kind::Asks | Kind::ReinstatementPartial);
-	messages
-		.iter()
-		.rev()
-		.filter(|m| m.heard())
-		.take_while(|m| m.sent || !m.reading.as_ref().is_some_and(|r| new(r.kind)))
-		.filter(|m| m.sent)
-		.count()
-}
-
 /// What of its GBP's other mail, or the GBP's moves, leaves nothing of it to do.
 fn over(c: &Case<'_>, heard: &[&Message]) -> Option<Settled> {
 	let (last, w) = (heard.last()?, word(c, heard)?);
 	let operators = w.turn == Turn::Operator;
 	let settles = |k: Kind| !operators && matches!(k, Kind::Verified | Kind::AppealApproved | Kind::ReinstatementDone) && k.resolves(c.topic);
 	let since = last.at.max(w.at);
-	let later = c.elsewhere.iter().filter(|s| s.at > since && (w.kind.superseded_by(s.kind) || settles(s.kind))).max_by_key(|s| s.at);
+	let later = c
+		.elsewhere
+		.iter()
+		.filter(|s| s.at > since && (w.kind.superseded_by(s.kind) || settles(s.kind)))
+		.max_by_key(|s| s.at);
 	later.map(|s| Settled::Elsewhere(*s)).or_else(|| settled(c).filter(|_| !operators && w.kind != Kind::Asks))
 }
 
@@ -1460,7 +1457,13 @@ mod tests {
 		assert_eq!(alone("video for Plomberie Dupont - Lyon\n- Nord"), [] as [i64; 0], "wrapped");
 		assert_eq!(alone("You can now manage Plomberie Dupont - Lyon\n\nView profile"), [1]);
 		assert_eq!(alone("“Plomberie Dupont - Lyon, 3 Rue Haute”"), [1]);
-		let renamed = [Named { names: vec!["Dupont Lyon".into(), "Plomberie Dupont - Lyon".into()], ..gbps[0].clone() }, gbp(4, "Plomberie Dupont - Lyon", None)];
+		let renamed = [
+			Named {
+				names: vec!["Dupont Lyon".into(), "Plomberie Dupont - Lyon".into()],
+				..gbps[0].clone()
+			},
+			gbp(4, "Plomberie Dupont - Lyon", None),
+		];
 		assert_eq!(named("Dupont Lyon is verified", &renamed), BTreeSet::from([1]));
 		assert_eq!(named("Plomberie Dupont - Lyon is verified", &renamed), BTreeSet::from([4]), "whose name it is now");
 	}
@@ -1766,7 +1769,13 @@ mod tests {
 		};
 		let after = "2026-10-06T09:00:00Z";
 		for kind in [Kind::Verified, Kind::VideoRejected, Kind::CodeFailed] {
-			assert_eq!(on(Kind::VideoRejected, after, kind), State::Done { by: Settled::Elsewhere(told(after, kind)) }, "the newer one stands");
+			assert_eq!(
+				on(Kind::VideoRejected, after, kind),
+				State::Done {
+					by: Settled::Elsewhere(told(after, kind))
+				},
+				"the newer one stands"
+			);
 		}
 		assert_eq!(
 			on(Kind::VideoRejected, "2026-10-04T09:00:00Z", Kind::Verified),
@@ -1830,8 +1839,18 @@ mod tests {
 
 	#[test]
 	fn a_goal_is_pursued_from_our_first_ask_until_google_gives_it() {
-		let ours = |at, id| Spoken { at: t(at), message: Some(id), case: Some(1), said: None };
-		let said = |at, case, kind| Spoken { at: t(at), message: Some(99), case: Some(case), said: Some(kind) };
+		let ours = |at, id| Spoken {
+			at: t(at),
+			message: Some(id),
+			case: Some(1),
+			said: None,
+		};
+		let said = |at, case, kind| Spoken {
+			at: t(at),
+			message: Some(99),
+			case: Some(case),
+			said: Some(kind),
+		};
 		let spoken = [
 			said("2026-10-01T00:00:00Z", 1, Kind::SelfServe),
 			ours("2026-10-01T09:00:00Z", 1),
@@ -1849,7 +1868,15 @@ mod tests {
 		assert_eq!(answers, [(1, None), (2, Some(Kind::SelfServe)), (3, Some(Kind::CallOffered))]);
 		assert_eq!(got.over, Some((t("2026-10-05T09:00:00Z"), Kind::CallOffered)));
 		assert_eq!((open.asks.len(), open.over), (1, None), "asked again once the call failed");
-		let verified = [ours("2026-10-01T09:00:00Z", 1), Spoken { at: t("2026-10-02T00:00:00Z"), message: None, case: None, said: Some(Kind::Verified) }];
+		let verified = [
+			ours("2026-10-01T09:00:00Z", 1),
+			Spoken {
+				at: t("2026-10-02T00:00:00Z"),
+				message: None,
+				case: None,
+				said: Some(Kind::Verified),
+			},
+		];
 		let [over] = pursuits(Goal::Call, &verified).try_into().unwrap();
 		assert_eq!((over.asks[0].2, over.over.unwrap().1), (None, Kind::Verified), "over, and not by what we wrote");
 	}

@@ -343,21 +343,6 @@ impl Rendered {
 	}
 }
 
-/// `sa_alerts::Note::check` holds every entity to an offset and a length.
-fn offset(entity: &Value) -> usize {
-	usize::try_from(entity["offset"].as_u64().expect("checked when the note was taken")).expect("within a message")
-}
-
-fn length(entity: &Value) -> usize {
-	usize::try_from(entity["length"].as_u64().expect("checked when the note was taken")).expect("within a message")
-}
-
-fn at_offset(entity: &Value, offset: usize) -> Value {
-	let mut moved = entity.clone();
-	moved["offset"] = json!(offset);
-	moved
-}
-
 /// A user's text on one line: the characters `hidden` names made spaces, runs of spaces one, at
 /// most `max` characters (the last one "…" when cut).
 pub fn one_line(s: &str, max: usize) -> String {
@@ -482,6 +467,21 @@ pub fn after_failure(attempts: i32, failure: &Failure, now: Timestamp) -> Next {
 			at: now.saturating_add(backoff(attempts)).unwrap_or(Timestamp::MAX),
 		},
 	}
+}
+
+/// `sa_alerts::Note::check` holds every entity to an offset and a length.
+fn offset(entity: &Value) -> usize {
+	usize::try_from(entity["offset"].as_u64().expect("checked when the note was taken")).expect("within a message")
+}
+
+fn length(entity: &Value) -> usize {
+	usize::try_from(entity["length"].as_u64().expect("checked when the note was taken")).expect("within a message")
+}
+
+fn at_offset(entity: &Value, offset: usize) -> Value {
+	let mut moved = entity.clone();
+	moved["offset"] = json!(offset);
+	moved
 }
 
 fn callback_mac(key: &[u8; 32], chat_id: ChatId, message: OutboxId, button: &str) -> [u8; CALLBACK_MAC_LEN] {

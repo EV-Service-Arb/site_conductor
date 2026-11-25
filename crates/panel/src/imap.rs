@@ -406,6 +406,7 @@ mod tests {
 			assert!(read(date, &format!("{head}\r\nHello")).is_err(), "{date}");
 		}
 		let cut = read("01-Oct-2026 08:00:00 +0000", &format!("{head}\r\n{}", "x".repeat(BODY_MAX - head.len() - 2))).unwrap();
-		assert!(!cut.whole && cut.text.contains("were not read"), "what it says past there, and its files, are not known");
+		assert!(!cut.whole, "what it says past there, and its files, are not known");
+		assert!(cut.text.contains("were not read"), "what it says past there, and its files, are not known");
 	}
 }
