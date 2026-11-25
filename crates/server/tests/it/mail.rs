@@ -256,6 +256,12 @@ impl World {
 		(status.as_u16(), answer)
 	}
 
+	/// Its GBP's replies on `topic` go by themselves.
+	async fn switches(&mut self, topic: &str) {
+		let on = json!({ "gmbs": [self.gmb], "topic": topic, "on": true });
+		assert_eq!(self.call(Method::PUT, "/mail/auto", Some(on)).await.0, 200);
+	}
+
 	async fn cases(&mut self) -> Vec<Value> {
 		let (status, answer) = self.call(Method::GET, "/mail/cases", None).await;
 		assert_eq!(status, 200, "{answer}");
@@ -299,6 +305,7 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 		"Marie left a review for Plomberie Dupont - Lyon",
 	)
 	.await;
+	w.switches("verification").await;
 	w.worker.read_and_write().await.unwrap();
 	let cases = w.cases().await;
 	assert_eq!(cases.len(), 2, "a routine notice is none");
@@ -439,7 +446,10 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 		(200, &json!("call_offered"), &json!("person"))
 	);
 	let (status, auto) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmbs": [w.gmb], "topic": "reviews", "on": true }))).await;
-	assert_eq!((status, &auto["on"]), (200, &json!([{ "gmb_id": w.gmb, "topic": "reviews" }])));
+	assert_eq!(
+		(status, &auto["on"]),
+		(200, &json!([{ "gmb_id": w.gmb, "topic": "reviews" }, { "gmb_id": w.gmb, "topic": "verification" }]))
+	);
 	assert_eq!(auto["by_itself"], true);
 	assert_eq!(auto["re_ask_hours"], 48);
 	let (_, before) = w.call(Method::GET, &format!("/mail/cases/{id}"), None).await;
@@ -461,6 +471,7 @@ async fn what_google_asks_is_given_once_kept_and_sent() {
 	priced(&w.p, &[(Item::from(ClaudeTokens::Input), 0), (Item::from(ClaudeTokens::Output), 0)]).await;
 	w.arrives(1, SUPPORT, "[1-1234000056789] Your Request to Google", "Plomberie Dupont - Lyon: send a photo of the signage.")
 		.await;
+	w.switches("verification").await;
 	w.worker.read_and_write().await.unwrap();
 	let case = w.cases().await.remove(0);
 	assert_eq!(
@@ -627,6 +638,9 @@ async fn a_reply_is_not_written_where_none_goes_nor_while_the_archive_fails() {
 		.await;
 	let dead = services(&"http://127.0.0.1:9".parse().unwrap());
 	w.worker.services = Some(dead);
+	w.worker.read_and_write().await.unwrap();
+	assert_eq!(w.cases().await.remove(0)["state"]["why"]["code"], "unwritten", "not switched on: nothing is asked of either");
+	w.switches("reviews").await;
 	w.worker.read_and_write().await.unwrap();
 	let case = w.cases().await.remove(0);
 	assert_eq!((&case["state"]["is"], &case["draft"]), (&json!("reply_due"), &Value::Null), "it waits");

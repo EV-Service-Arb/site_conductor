@@ -1225,7 +1225,8 @@ follow (60 s) ─ kept, joined to its case ─ read ─┬─ by rule: the sende
                                                  └─ by a person, over either
 case's state: needs_you (why) │ reply_due │ reply_ready │ sending │ waiting │ done (by) │ quiet (because)
 reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ SMTP ─▶ sent | failed
-                     └─▶ held (≥ 15 min; its GBP's topic on, to be pressed) ─┘
+ (its GBP's topic on) └─▶ held (≥ 15 min; to be pressed) ─┘
+needs_you (unwritten: its topic off) ─ a person's press ─ the model ─▶ proposed
                          either ─ another message in its case ─▶ superseded
 ```
 
@@ -1246,7 +1247,7 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   message's own words, then its quote. A name whose words go on in capitals is another's, here or not: "Dupont - Lyon"
   begins "Dupont - Lyon, Est". Matched again as the owner's GBPs are added or renamed.
 - **The model** runs on the gmail's owner's own models, else the panel's, charged to them; without
-  any that answers or a balance, mail waits and its case says why. The writer's facts are the case, Google's other
+  any that answers or a balance, mail waits and its case says why. A reply is written unasked only where its GBP's topic is on. The writer's facts are the case, Google's other
   readings of the GBP, the GBP, and, of a case about reviews, those review_archive sees gone (a full page
   of them is no count); what it lacks is a need, and a draft with one never goes by itself. Where the
   archive does not track the GBP the list is a need; while it does not answer, the reply waits. A draft lacking
@@ -1264,7 +1265,7 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   gives it, or the GBP is verified without; an ask's answer is Google's last word before the next of ours, in its case.
 - **Settings.** How Google is pursued and its person told is theirs, once for every case (`mail_settings`; unsaid,
   `sa_core::mail::Settings::default`), within `LEAST` and `MOST`. A change moves every case as it is next
-  read; what it makes due is written, and held from then. A held reply's moment it never moves: the reply goes then if it
+  read; what it makes due is held from when it is written. A held reply's moment it never moves: the reply goes then if it
   still may, else it is its person's.
 - **A reply** goes as the gmail, to support's one address, to the last message of the case that takes one.
   `sending` is committed before SMTP; one left so is never tried again, nor is another sent to what it answers.

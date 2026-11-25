@@ -204,6 +204,12 @@ fn quiet(because: QuietBecause) -> State {
 	State::Quiet { because }
 }
 
+fn unwritten(since: &str) -> State {
+	State::NeedsYou {
+		why: Why::Unwritten { since: t(since) },
+	}
+}
+
 fn support(at: &str, thread: u64, subject: &str, text: &str) -> Mail {
 	Mail {
 		uid: 0,
@@ -345,9 +351,9 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 	assert_eq!(w.only("2026-10-01T09:01:00Z").await.state, State::NeedsYou { why: Why::Unread { error: None } });
 	w.reads("2026-10-01T09:01:00Z", Kind::SelfServe, |_| {}).await;
 	let case = w.only("2026-10-01T09:02:00Z").await;
-	assert!(case.due);
-	let draft = w.drafts(&case, &[], false, "2026-10-01T09:03:00Z").await;
-	assert_eq!(w.only("2026-10-01T09:03:00Z").await.state, State::ReplyReady, "automatic replies are off by default");
+	assert_eq!((&case.state, case.due), (&unwritten("2026-10-01T09:00:00Z"), false), "automatic replies are off by default");
+	let draft = w.drafts(&case, &[], true, "2026-10-01T09:03:00Z").await;
+	assert_eq!(w.only("2026-10-01T09:03:00Z").await.state, State::ReplyReady);
 	w.p.send_held_mail(t("2026-10-01T12:00:00Z")).await.unwrap();
 	assert!(w.sent().is_empty(), "nothing goes without its operator");
 	w.p.send_mail_draft(w.owner, w.owner, draft, bare("Please enable the live call."), t("2026-10-01T12:00:00Z"))
@@ -381,7 +387,7 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 	.await;
 	w.reads("2026-10-02T09:01:00Z", Kind::Routed, |r| r.answer_within_hours = Some(48)).await;
 	assert_eq!(w.only("2026-10-02T09:02:00Z").await.state, State::Waiting { until: t("2026-10-04T09:00:00Z") });
-	assert!(w.only("2026-10-04T09:01:00Z").await.due, "silent past its word");
+	assert_eq!(w.only("2026-10-04T09:01:00Z").await.state, unwritten("2026-10-04T09:00:00Z"), "silent past its word");
 
 	let followed = "Follow up to Business Profile Query [1-1234000056789] ";
 	w.arrives(support(
@@ -393,8 +399,9 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 	.await;
 	w.reads("2026-10-03T09:01:00Z", Kind::Asks, |r| r.asks = vec!["a picture of the permanent signage".into()]).await;
 	let case = w.only("2026-10-03T09:02:00Z").await;
-	assert_eq!((case.gmb, case.topic, case.due), (Some(w.est), Topic::Verification, true), "one case over two threads");
+	assert_eq!((case.gmb, case.topic), (Some(w.est), Topic::Verification), "one case over two threads");
 	w.p.set_mail_auto(w.owner, &[w.lyon, w.est], Topic::Verification, true).await.unwrap().unwrap();
+	assert!(w.only("2026-10-03T09:02:00Z").await.due);
 	let draft = w.drafts(&case, &["a photo of the signage"], false, "2026-10-03T09:03:00Z").await;
 	let needs = State::NeedsYou {
 		why: Why::Needs {
@@ -531,7 +538,7 @@ async fn a_look_alike_is_an_impersonation_and_is_never_answered() {
 	let now = "2026-10-01T11:00:00Z";
 	let cases = w.cases(now).await;
 	assert_eq!((cases.len(), cases[0].messages.len()), (3, 1), "it joins no case, whatever it carries");
-	assert_eq!(cases[0].state, State::ReplyDue, "nor quiets one");
+	assert_eq!(cases[0].state, unwritten("2026-10-01T09:00:00Z"), "nor quiets one");
 	for c in &cases[1..] {
 		let read = c.messages[0].said.reading.as_ref().unwrap();
 		assert_eq!(
@@ -634,15 +641,15 @@ async fn a_turn_to_a_person_is_told_once_to_the_owners_of_the_gbp_else_of_the_gm
 	w.arrives(support("2026-10-05T09:30:00Z", 1, "[1-1234000056789] Your Request", "Follow the prompts.")).await;
 	assert_eq!(tell("2026-10-05T10:00:00Z").await, 0, "not read yet");
 	w.reads("2026-10-05T10:00:00Z", Kind::SelfServe, |_| {}).await;
-	assert_eq!(tell("2026-10-05T10:00:00Z").await, 0, "a reply is being written");
+	assert_eq!(tell("2026-10-05T10:00:00Z").await, 1, "its reply is theirs to have written");
 	let case = w.cases("2026-10-05T10:00:00Z").await.remove(1);
 	assert_eq!(case.gmb, None, "it names none: the gmail's owners are told");
 	let written = || Written::Reply { body: "x".into(), needs: vec![] };
-	w.p.draft_mail(w.owner, &case, written(), false, now).await.unwrap().unwrap();
-	assert_eq!(tell("2026-10-05T10:01:00Z").await, 1);
-	assert_eq!(tell("2026-10-05T10:02:00Z").await, 0, "once");
+	assert!(w.p.draft_mail(w.owner, &case, written(), false, now).await.unwrap().is_none());
+	assert_eq!(tell("2026-10-05T10:01:00Z").await, 0, "once");
 	w.p.draft_mail(w.owner, &case, written(), true, now).await.unwrap().unwrap();
-	assert_eq!(tell("2026-10-05T10:03:00Z").await, 0, "nor again for a rewrite");
+	assert_eq!(tell("2026-10-05T10:02:00Z").await, 0, "nor of their own press");
+	assert_eq!(tell("2026-10-05T10:03:00Z").await, 0);
 	w.arrives(notice("2026-10-05T11:00:00Z", 8, "your profile has been suspended", "Plomberie Dupont - Lyon, Est is suspended"))
 		.await;
 	w.reads("2026-10-05T11:01:00Z", Kind::Suspended, |_| {}).await;
@@ -731,6 +738,7 @@ async fn by_itself_goes_what_presses_never_what_google_asked_for() {
 #[tokio::test]
 async fn a_case_is_not_pressed_once_its_gbp_is_verified_nor_when_it_is_old() {
 	let w = World::new().await;
+	w.p.set_mail_auto(w.owner, &[w.lyon, w.est], Topic::Verification, true).await.unwrap().unwrap();
 	let request = "[1-1234000056789] Your Request to Google";
 	w.arrives(support("2026-10-01T09:00:00Z", 1, request, "Plomberie Dupont - Lyon: follow the prompts.")).await;
 	w.arrives(notice("2026-10-01T10:00:00Z", 2, REJECTED, &rejected(" for Plomberie Dupont - Lyon, Est", "15"))).await;
@@ -836,6 +844,32 @@ async fn reopening_is_not_told_and_what_comes_of_it_is() {
 	assert_eq!(told("2026-10-04T09:00:00Z").await, 1, "their own press, nor again");
 	w.arrives(ours("2026-10-04T10:00:00Z", 1, &format!("Re: {REQUEST}"), SUPPORT, &["m1@mail"], "x")).await;
 	assert_eq!(told("2026-10-06T10:01:00Z").await, 2, "unanswered");
+}
+
+#[tokio::test]
+async fn nothing_is_written_unasked_where_replies_are_not_switched_on() {
+	let w = World::new().await;
+	let switch = async |on| w.p.set_mail_auto(w.owner, &[w.lyon], Topic::Verification, on).await.unwrap().unwrap();
+	w.arrives(support("2026-10-01T09:00:00Z", 1, REQUEST, LYON)).await;
+	w.reads("2026-10-01T09:01:00Z", Kind::Acknowledged, |_| {}).await;
+	let silent = "2026-10-03T09:01:00Z";
+	let off = w.only(silent).await;
+	assert_eq!((&off.state, off.due), (&unwritten("2026-10-03T09:00:00Z"), false));
+	switch(true).await;
+	let on = w.only(silent).await;
+	assert_eq!((on.state, on.due), (State::ReplyDue, true), "switched on, it is written next");
+	switch(false).await;
+	w.p.mail_stuck(w.owner, Some("no Claude")).await.unwrap();
+	assert_eq!(w.only(silent).await.state, off.state, "nothing waits on a model");
+	for n in 0..Settings::default().limit {
+		let at = format!("2026-10-03T{}:00:00Z", 10 + n);
+		w.arrives(ours(&at, 1, &format!("Re: {REQUEST}"), SUPPORT, &["m1@mail"], "x")).await;
+	}
+	let often = w.only("2026-10-06T10:00:00Z").await;
+	assert!(matches!(often.state, State::NeedsYou { why: Why::AskedOften { .. } }), "{:?}", often.state);
+	assert!(!often.due, "past the limit neither");
+	switch(true).await;
+	assert!(w.only("2026-10-06T10:00:00Z").await.due);
 }
 
 #[tokio::test]
@@ -1116,7 +1150,7 @@ async fn google_is_pressed_over_days_as_far_as_it_should_be() {
 			"done d0",
 		),
 		("its GBP trashed", vec![(0, says(Acknowledged, LYON)), (30, Trashed)], None, 8, "quiet (removed) d1"),
-		("its GBP never named", vec![(0, says(SelfServe, "Hello"))], None, 8, "reply_ready d0"),
+		("its GBP never named", vec![(0, says(SelfServe, "Hello"))], None, 8, "unwritten d0"),
 		(
 			"a survey in the thread",
 			vec![(0, says(Acknowledged, LYON)), (24, says(Noise, "How did we do?"))],
@@ -1670,6 +1704,7 @@ async fn a_mail_not_read_to_its_end_takes_no_reply_and_a_copy_to_support_is_ours
 #[tokio::test]
 async fn one_conversation_under_two_numbers_is_one_case_once_its_person_says_so() {
 	let w = World::new().await;
+	w.p.set_mail_auto(w.owner, &[w.lyon, w.est], Topic::Verification, true).await.unwrap().unwrap();
 	let now = "2026-10-03T09:00:00Z";
 	for (at, thread, subject) in [("2026-10-01T09:00:00Z", 1, REQUEST), ("2026-10-02T09:00:00Z", 2, "[1-9876000054321] Your Request to Google")] {
 		w.arrives(support(at, thread, subject, "Plomberie Dupont - Lyon: follow the prompts.")).await;
@@ -1735,6 +1770,7 @@ async fn a_dismissed_reply_comes_back_until_something_newer_stands() {
 #[tokio::test]
 async fn what_cannot_be_read_is_said_of_its_case_alone() {
 	let w = World::new().await;
+	w.p.set_mail_auto(w.owner, &[w.est], Topic::Verification, true).await.unwrap().unwrap();
 	let pool = w.db.pool().await;
 	let now = "2026-10-01T10:00:00Z";
 	for n in 1..=3 {
@@ -1889,12 +1925,13 @@ async fn a_switch_is_one_gbps_and_off_once_it_moves() {
 	let cases = w.cases("2026-10-01T09:02:00Z").await;
 	assert_eq!(cases[0].press, Err(Halt::Off));
 	assert!(cases[1].press.is_ok());
-	for c in &cases {
+	for (c, on) in cases.iter().zip([false, true]) {
 		let written = Written::Reply {
 			body: "Enable the live call.".into(),
 			needs: vec![],
 		};
-		w.p.draft_mail(w.owner, c, written, false, t("2026-10-01T09:05:00Z")).await.unwrap().unwrap();
+		let kept = w.p.draft_mail(w.owner, c, written, false, t("2026-10-01T09:05:00Z")).await.unwrap();
+		assert_eq!((c.due, kept.is_some()), (on, on), "nor is one written unasked");
 	}
 	w.cases("2026-10-01T09:20:00Z").await;
 	assert_eq!(w.p.send_held_mail(t("2026-10-01T09:20:00Z")).await.unwrap(), 1, "Est's alone");

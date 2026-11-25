@@ -137,7 +137,7 @@ pub struct Case {
 	pub state: State,
 	/// Why none of its owner's mail is read or answered now.
 	pub stuck: Option<String>,
-	/// A reply is due and none is written, whatever it waits on.
+	/// A reply is to be written unasked, and is not, whatever it waits on.
 	pub due: bool,
 	/// From when a reply lacking nothing may go by itself, or why none does.
 	pub press: Result<Timestamp, Halt>,
@@ -1158,7 +1158,9 @@ impl Panel {
 				State::NeedsYou {
 					why: Why::Reopened | Why::NothingToSay { .. },
 				} if c.press == Err(Halt::Reopened) => continue,
-				State::NeedsYou { why: Why::Unanswered { since } } => ("needs_you", *since),
+				State::NeedsYou {
+					why: Why::Unanswered { since } | Why::Unwritten { since },
+				} => ("needs_you", *since),
 				State::NeedsYou { .. } => ("needs_you", at),
 				State::ReplyReady => ("reply_ready", at),
 				State::Sending { .. } if c.draft.as_ref().is_some_and(|d| d.reply.state == DraftState::Held) => ("held", at),
@@ -1171,6 +1173,10 @@ impl Panel {
 			let remind = SignedDuration::from_hours(c.settings.remind_hours);
 			let again = matches!(turn, "needs_you" | "reply_ready") && now.duration_since(at) >= remind;
 			let (turn, at) = if again { ("again", at + remind) } else { (turn, at) };
+			// what is written there is by their own press
+			if turn == "reply_ready" && c.press == Err(Halt::Off) {
+				continue;
+			}
 			// what goes by itself unless it is stopped
 			let reply = c.draft.as_ref().filter(|_| turn == "held").and_then(|d| d.body.as_deref()).map(|b| one_line(b, BEFORE_MAX));
 			let note = |summary, reply| Note::GoogleMail {

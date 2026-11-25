@@ -41,7 +41,7 @@ export function useGist(c: MailCase): string | null {
   const t = useT();
   const locale = useLocale();
   const now = useNow(60_000);
-  if (c.state.is === "needs_you" && c.state.why.code !== "kind" && c.state.why.code !== "deadline" && c.state.why.code !== "stuck") return whyText(c, c.state.why, t, locale, now);
+  if (c.state.is === "needs_you" && c.state.why.code !== "kind" && c.state.why.code !== "unwritten" && c.state.why.code !== "deadline" && c.state.why.code !== "stuck") return whyText(c, c.state.why, t, locale, now);
   return c.last.summary;
 }
 

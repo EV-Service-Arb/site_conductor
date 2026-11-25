@@ -18,7 +18,7 @@ use sa_core::{
 	agent::Outward,
 	feeds::{GONE_MAX, GoneReview},
 	gbp::Country,
-	mail::{self as rules, DraftState, Goal, Kind, Method as Tried, Outcome, Reading, Standing, State as Standings, Topic},
+	mail::{self as rules, DraftState, Goal, Kind, Method as Tried, Outcome, Reading, Standing, State as Standings, Topic, Why},
 	notify::{Locale, one_line},
 	prices::{ModelTokens, Spender, Spends},
 	usage::Bill,
@@ -1074,7 +1074,8 @@ pub(crate) struct SwitchAuto {
 	on: bool,
 }
 
-/// Lets replies on a topic of each of the caller's GBPs named go by themselves, or no more. 400 a topic that never does; 404 one not theirs.
+/// Lets replies on a topic of each of the caller's GBPs named be written and go by themselves, or no more: what is due of
+/// them is written, and charged, at once. 400 a topic that never does; 404 one not theirs.
 async fn set_mail_auto(_: Outward, State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<SwitchAuto>) -> ApiResult<Json<AutosDto>> {
 	panel.set_mail_auto(caller.user_id, &b.gmbs, b.topic, b.on).await??;
 	tracing::info!(user_id = %caller.user_id, gmbs = ?b.gmbs, topic = ?b.topic, on = b.on, "automatic replies switched");
@@ -1090,8 +1091,8 @@ async fn mail_settings(State(panel): State<Panel>, Extension(caller): Extension<
 	}))
 }
 
-/// Sets it, whole: every case is as it says from its next read on. What that makes due is written, and charged, at once, and
-/// held before it goes by itself; a reply held already goes at its moment, or waits for its person. 400 one past its bounds.
+/// Sets it, whole: every case is as it says from its next read on. What that makes due is written, and charged, at once where
+/// its replies go by themselves, and held before it goes; a reply held already goes at its moment, or waits for its person. 400 one past its bounds.
 async fn set_mail_settings(_: Outward, State(panel): State<Panel>, Extension(caller): Extension<Caller>, Body(b): Body<rules::Settings>) -> ApiResult<Json<SettingsDto>> {
 	panel.set_mail_settings(caller.user_id, b).await??;
 	tracing::info!(user_id = %caller.user_id, settings = ?b, "how Google is pursued, set");
@@ -1422,12 +1423,19 @@ Answer with body and needs, nothing null; or, when no reply serves the goal, bod
 		}
 	};
 	let last = b.case.last();
+	let called = b.case.due
+		|| matches!(
+			b.case.state,
+			Standings::NeedsYou {
+				why: Why::Unwritten { .. } | Why::AskedOften { .. }
+			}
+		);
 	let on = day(last.said.at);
 	let due = match last.said.reading.as_ref().map(|r| r.kind) {
 		_ if last.said.sent => format!("our last email, of {on}, has no answer: Google is asked again"),
-		Some(Kind::CallOffered) if b.case.due => format!("the call offered in Google's last email, of {on}, was held since and failed: another is needed"),
+		Some(Kind::CallOffered) if called => format!("the call offered in Google's last email, of {on}, was held since and failed: another is needed"),
 		Some(Kind::ReinstatementPartial) => format!("Google's last email, of {on}: what it brought back is back, what is listed is missing still"),
-		Some(Kind::Acknowledged | Kind::Routed) if b.case.due => format!("Google's last email, of {on}, and the answer due since, which did not come: Google is asked again"),
+		Some(Kind::Acknowledged | Kind::Routed) if called => format!("Google's last email, of {on}, and the answer due since, which did not come: Google is asked again"),
 		_ => format!("Google's last email, of {on}"),
 	};
 	let mail = format!(

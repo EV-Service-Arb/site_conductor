@@ -42,7 +42,9 @@ export function Why({ c }: { c: MailCase }) {
       <p className="text-sm text-ink-soft">
         {c.last.who === "us" || c.draft?.state === "sent"
           ? t(mail.routed.pressed, "Asked again. With no answer by {until}, it needs you.", { until })
-          : t(mail.routed, "A specialist is to answer by {until}. Silent past it, one reply asks again.", { until })}
+          : c.auto.halt?.is === "off"
+            ? t(mail.routed.off, "A specialist is to answer by {until}. Silent past it, it needs you.", { until })
+            : t(mail.routed, "A specialist is to answer by {until}. Silent past it, one reply asks again.", { until })}
       </p>
     );
   }

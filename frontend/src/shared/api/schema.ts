@@ -2076,7 +2076,7 @@ export interface paths {
         };
         /** The GBPs and topics whose replies go by themselves, and how. */
         get: operations["mail_auto"];
-        /** Lets replies on a topic of each of the caller's GBPs named go by themselves, or no more. 400 a topic that never does; 404 one not theirs. */
+        /** Lets replies on a topic of each of the caller's GBPs named be written and go by themselves, or no more: what is due of them is written, and charged, at once. 400 a topic that never does; 404 one not theirs. */
         put: operations["set_mail_auto"];
         post?: never;
         delete?: never;
@@ -2245,7 +2245,7 @@ export interface paths {
         };
         /** How the caller's mail with Google is pursued, in every case of theirs, and when they are told of it. */
         get: operations["mail_settings"];
-        /** Sets it, whole: every case is as it says from its next read on. What that makes due is written, and charged, at once, and held before it goes by itself; a reply held already goes at its moment, or waits for its person. 400 one past its bounds. */
+        /** Sets it, whole: every case is as it says from its next read on. What that makes due is written, and charged, at once where its replies go by themselves, and held before it goes; a reply held already goes at its moment, or waits for its person. 400 one past its bounds. */
         put: operations["set_mail_settings"];
         post?: never;
         delete?: never;
@@ -5297,7 +5297,7 @@ export interface components {
          *
          *     - `reply_ready`: A draft waits for the operator.
          *     - `sending`: A draft goes by itself.
-         *     - `reply_due`: Google waits for an answer, or has been silent too long; no draft yet.
+         *     - `reply_due`: Google waits for an answer, or has been silent too long: it is written by itself next.
          *     - `waiting`: Google's turn.
          *     - `quiet`: Nothing to do.
          * @enum {string}
@@ -5384,6 +5384,11 @@ export interface components {
         } | {
             /** @constant */
             code: "reopened";
+        } | {
+            /** @constant */
+            code: "unwritten";
+            /** Format: date-time */
+            since: string;
         } | {
             /** @constant */
             code: "no_reply";

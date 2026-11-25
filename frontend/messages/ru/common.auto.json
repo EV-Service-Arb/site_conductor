@@ -3679,10 +3679,6 @@
     "en": "{topic}: let replies about {of} go by themselves?",
     "t": "{topic}: отвечать на {of} автоматически?"
   },
-  "mail.auto.confirm.how": {
-    "en": "Each goes {minutes} minutes after it is written unless you stop it, again after {hours} h of silence, at most {limit} unanswered. Any that needs something of yours stays by hand.",
-    "t": "Каждый уходит через {minutes} мин после написания, если вы его не остановите, и повторно после {hours} ч молчания, но не более {limit} без ответа. Всё, что требует чего-то от вас, остаётся на ручной обработке."
-  },
   "mail.auto.confirm.none": {
     "en": "None is written now.",
     "t": "Сейчас ничего не написано."

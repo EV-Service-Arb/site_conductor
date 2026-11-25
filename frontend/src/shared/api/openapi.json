@@ -7423,7 +7423,7 @@
         ]
       },
       "MailStanding": {
-        "description": "A case's state, by its name.\n\n- `reply_ready`: A draft waits for the operator.\n- `sending`: A draft goes by itself.\n- `reply_due`: Google waits for an answer, or has been silent too long; no draft yet.\n- `waiting`: Google's turn.\n- `quiet`: Nothing to do.",
+        "description": "A case's state, by its name.\n\n- `reply_ready`: A draft waits for the operator.\n- `sending`: A draft goes by itself.\n- `reply_due`: Google waits for an answer, or has been silent too long: it is written by itself next.\n- `waiting`: Google's turn.\n- `quiet`: Nothing to do.",
         "enum": [
           "needs_you",
           "done",
@@ -7485,7 +7485,7 @@
             "type": "object"
           },
           {
-            "description": "Google waits for an answer, or has been silent too long; no draft yet.",
+            "description": "Google waits for an answer, or has been silent too long: it is written by itself next.",
             "properties": {
               "is": {
                 "const": "reply_due",
@@ -7717,6 +7717,24 @@
             },
             "required": [
               "code"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "A reply is due since then, its person's to have written: its GBP's replies on its topic are not switched on.",
+            "properties": {
+              "code": {
+                "const": "unwritten",
+                "type": "string"
+              },
+              "since": {
+                "format": "date-time",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "since"
             ],
             "type": "object"
           },
@@ -37231,7 +37249,7 @@
             "description": "`unavailable`, `browsers_not_connected`"
           }
         },
-        "summary": "Lets replies on a topic of each of the caller's GBPs named go by themselves, or no more. 400 a topic that never does; 404 one not theirs.",
+        "summary": "Lets replies on a topic of each of the caller's GBPs named be written and go by themselves, or no more: what is due of them is written, and charged, at once. 400 a topic that never does; 404 one not theirs.",
         "tags": [
           "mail"
         ],
@@ -39368,7 +39386,7 @@
             "description": "`unavailable`, `browsers_not_connected`"
           }
         },
-        "summary": "Sets it, whole: every case is as it says from its next read on. What that makes due is written, and charged, at once, and held before it goes by itself; a reply held already goes at its moment, or waits for its person. 400 one past its bounds.",
+        "summary": "Sets it, whole: every case is as it says from its next read on. What that makes due is written, and charged, at once where its replies go by themselves, and held before it goes; a reply held already goes at its moment, or waits for its person. 400 one past its bounds.",
         "tags": [
           "mail"
         ],

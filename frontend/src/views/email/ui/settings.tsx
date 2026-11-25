@@ -22,7 +22,7 @@ const LABEL: Record<Setting, (t: T) => string> = {
   deadline_hours: (t) => t(mail.settings.deadline, "Warn me before a date Google set (hours)"),
 };
 
-const lowered = (t: T) => t(mail.settings.lowered, "Set lower, every thread silent that long already gets its reply written at once, at its usual cost in tokens. One that goes by itself still waits first, and you can stop it.");
+const lowered = (t: T) => t(mail.settings.lowered, "Set lower, where automatic replies are on, every thread silent that long already gets its reply written at once, at its usual cost in tokens. It still waits before it goes, and you can stop it.");
 const unlessTold = (t: T) => t(mail.settings.unlessTold, "Where Google said how long it takes, that counts instead.");
 
 const NOTE: Partial<Record<Setting, (t: T) => string>> = {

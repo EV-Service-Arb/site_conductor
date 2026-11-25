@@ -83,7 +83,7 @@ export function standing(c: MailCase, t: T, locale: Locale, now: Date): { text: 
     case "needs_you": {
       const { why } = c.state;
       // what Google asks, its reply written: there to check
-      if (why.code === "kind" && why.kind === "asks") return ready;
+      if (why.code === "kind" && why.kind === "asks" && (c.draft?.state === "proposed" || c.draft?.state === "held")) return ready;
       return { text: `${chip(c, why, t)} · ${since}`, tone: TONE[why.code] ?? (why.code === "kind" ? KIND_TONE[why.kind] : undefined) ?? "warn" };
     }
     case "reply_ready":
@@ -129,6 +129,8 @@ function chip(c: MailCase, why: MailWhy, t: T): string {
       return t(mail.needs.unanswered, "no answer");
     case "reopened":
       return t(mail.needs.reopened, "reopened");
+    case "unwritten":
+      return t(mail.needs.unwritten, "reply due");
     case "no_reply":
       return t(mail.needs.no_reply, "takes no reply");
     case "unread":
@@ -161,6 +163,8 @@ export function whyText(c: MailCase, why: MailWhy, t: T, locale: Locale, now: Da
       return c.said === "routed" && c.last.who === "us" ? t(mail.why.silent, "Google's specialist stayed silent past the time given, and when asked again.") : t(mail.why.unanswered, "Google went silent, and nothing asks it again by itself.");
     case "reopened":
       return t(mail.why.reopened, "Reopened: until Google writes, nothing is written or sent here unasked.");
+    case "unwritten":
+      return t(mail.why.unwritten, "A reply is due, and none is written by itself here: have one written, or write it yourself.");
     case "no_reply":
       return t(mail.why.no_reply, "Google asks in a mail that takes no reply: answer it where it says.");
     case "unread":

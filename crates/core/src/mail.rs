@@ -718,7 +718,7 @@ pub enum State {
 	Sending {
 		at: Timestamp,
 	},
-	/// Google waits for an answer, or has been silent too long; no draft yet.
+	/// Google waits for an answer, or has been silent too long: it is written by itself next.
 	ReplyDue,
 	/// Google's turn.
 	Waiting {
@@ -751,6 +751,8 @@ pub enum Why {
 	Unanswered { since: Timestamp },
 	/// Its person reopened it, and nothing was said to Google since.
 	Reopened,
+	/// A reply is due since then, its person's to have written: its GBP's replies on its topic are not switched on.
+	Unwritten { since: Timestamp },
 	/// Google asks in a mail that takes no reply.
 	NoReply,
 	/// Not read; `null`: not yet.
@@ -882,13 +884,13 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 			}) => needs(Why::Kind { kind }),
 			_ if sent_at.is_some() => needs(Why::MayHaveGoneOut),
 			Some(Word { kind: Kind::Routed, .. }) if last.sent => needs(Why::Unanswered { since: until }),
-			_ => reply(c, Some(until)),
+			_ => reply(c, until, true),
 		}
 	};
 	if last.sent || sent_at.is_some() {
 		return match word {
 			Some(w) if !open && w.kind.resolves(c.topic) => State::Done { by: Settled::Here },
-			Some(w) if w.at > sent_at.unwrap_or(last.at) => reply(c, None),
+			Some(w) if w.at > sent_at.unwrap_or(last.at) => reply(c, w.at, false),
 			_ => silence(),
 		};
 	}
@@ -900,7 +902,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	};
 	let or_deadline = |otherwise| deadline.map_or(otherwise, |at| needs(Why::Deadline { at }));
 	match w.turn {
-		Turn::Reply => reply(c, None),
+		Turn::Reply => reply(c, w.at, false),
 		Turn::Google => or_deadline(silence()),
 		Turn::Nobody => or_deadline(quiet(QuietBecause::Nothing)),
 		Turn::Settled if w.kind.resolves(c.topic) => State::Done { by: Settled::Here },
@@ -914,13 +916,13 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	}
 }
 
-/// Whether a reply is to be written: one is due, or past its limit there for its operator.
+/// Whether a reply is to be written unasked: one is due, or past its limit there for its operator.
 pub fn due(c: &Case<'_>, now: Timestamp) -> bool {
 	let last = heard(c).last().map(|m| m.id);
 	let written = c.draft.is_some_and(|d| Some(d.answers) == last && d.state != DraftState::Superseded);
 	match state(&Case { stuck: None, ..c.clone() }, now) {
 		State::ReplyDue => true,
-		State::NeedsYou { why: Why::AskedOften { .. } } => !written,
+		State::NeedsYou { why: Why::AskedOften { .. } } => c.switched && !written,
 		_ => false,
 	}
 }
@@ -1380,14 +1382,15 @@ fn settled(c: &Case<'_>) -> Option<Settled> {
 	}
 }
 
-/// A reply of ours is due: of Google's word, or its `silence` since.
-fn reply(c: &Case<'_>, silence: Option<Timestamp>) -> State {
-	let why = match (counterpart(c.messages.iter()), silence) {
-		(_, None) if mark(c).is_some() => Why::Reopened,
-		(_, Some(since)) if mark(c).is_some() => Why::Unanswered { since },
-		(None, Some(since)) => Why::Unanswered { since },
-		(None, None) => Why::NoReply,
+/// A reply of ours is due since then: of Google's word, or its silence.
+fn reply(c: &Case<'_>, since: Timestamp, silent: bool) -> State {
+	let why = match (counterpart(c.messages.iter()), silent) {
+		(_, false) if mark(c).is_some() => Why::Reopened,
+		(_, true) if mark(c).is_some() => Why::Unanswered { since },
+		(None, true) => Why::Unanswered { since },
+		(None, false) => Why::NoReply,
 		(Some(_), _) if asked(c.messages) >= usize::from(c.settings.limit) => Why::AskedOften { asked: asked(c.messages) },
+		(Some(_), _) if !c.switched => Why::Unwritten { since },
 		(Some(_), _) => match c.stuck {
 			None => return State::ReplyDue,
 			Some(error) => Why::Stuck { error: error.to_owned() },
