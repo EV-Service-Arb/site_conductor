@@ -2,10 +2,10 @@
 //!
 //! ```text
 //! pull(user): the person's turn held, the search priced — budget = balance ÷ its price
-//!   ─ since(study): when its first pull since its last whole one began
+//!   ─ since(study), where everything is asked again: when its first pull since its last whole one began
 //!   ─ buy(ask, since) for each search placement says the study lacks, on the house's rotation,
 //!     refused past the budget ─ paid(study, failed): the searches bought × the price in the ledger,
-//!   owed back whole when the pull failed, as a failed walk's is; a whole one forgets `since`; the
+//!   owed back whole when the pull failed, as a failed walk's is; a whole one forgets its `since`; the
 //!   turn let go
 //! ```
 
@@ -42,6 +42,8 @@ pub struct Pull {
 	balance: i64,
 	/// Searches bought on the rotation so far.
 	bought: Arc<AtomicU64>,
+	/// Everything is asked again: [`Self::since`] is this pull's to forget.
+	every: bool,
 	turn: tokio::sync::OwnedMutexGuard<()>,
 }
 impl Pull {
@@ -65,7 +67,8 @@ impl Pull {
 
 	/// When the first pull of `study` since its last whole one began: what is fetched before it is
 	/// bought again, and what is fetched since is what a pull that stopped part-way already paid for.
-	pub async fn since(&self, study: &str) -> eyre::Result<Timestamp> {
+	pub async fn since(&mut self, study: &str) -> eyre::Result<Timestamp> {
+		self.every = true;
 		let mut tx = self.panel.store.begin_write().await?;
 		let since = store::placement::began(&mut tx, study, Timestamp::now()).await?;
 		tx.commit().await.wrap_err("committing a pull's beginning")?;
@@ -85,12 +88,20 @@ impl Pull {
 	pub async fn paid(self, sha: &str, failed: bool) -> eyre::Result<()> {
 		let bought = self.bought.load(Ordering::SeqCst);
 		let budget = self.budget();
-		let Self { panel, user, price, cost, turn, .. } = self;
+		let Self {
+			panel,
+			user,
+			price,
+			cost,
+			every,
+			turn,
+			..
+		} = self;
 		assert!(bought <= budget, "the purse holds no search past the budget");
 		let bought = i64::try_from(bought).wrap_err("searches bought")?;
 		let tokens = price * bought;
 		let mut tx = panel.store.begin_write().await?;
-		if !failed {
+		if every && !failed {
 			store::placement::ended(&mut tx, sha).await?;
 		}
 		if tokens == 0 {
@@ -165,6 +176,7 @@ impl Panel {
 			cost: rate.cost,
 			balance,
 			bought: Arc::default(),
+			every: false,
 			turn,
 		}))
 	}

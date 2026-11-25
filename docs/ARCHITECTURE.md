@@ -355,7 +355,8 @@ GET  /placement/studies/{sha} ─────── a published study's frozen D
 POST /placement/study/pull?…        ─ since: when the first pull since the study's last whole one began
      asks ─▶ [Ask], each bought into the queries cache (`gop`), asked again until none ─▶ build ◀── the payload
      a whole pull forgets since; a stopped one keeps it, so its retry buys only what it did not
-POST /placement/pull ─ a Definition ─▶ as a study's pull: for a host without the catalog, placement's CLI
+POST /placement/pull ─ a Definition, and which held answers are asked again (every, older_s, nothing) ─▶ as a
+     study's pull, which asks every one: for a host without the catalog, placement's CLI
 ```
 
 A study is an area and a category version: the version is its whole definition, the area applies

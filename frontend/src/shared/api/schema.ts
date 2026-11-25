@@ -2477,7 +2477,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Builds a definition again, its area and category kept here or not, buying what it lacks at the caller's tokens, as a pull does.
+         * Builds a definition again, its area and category kept here or not, buying what it lacks, and again what it says, at the caller's tokens, as a pull does.
          * @description 400 a definition placement refuses, or an area not a circle of an area's radius, its margin
          *     included; 503 placement not connected. Its end is the answer's one event: `pulled`, or `refused`
          *     with the refusal a pull answers.
@@ -2987,6 +2987,11 @@ export interface components {
             place?: string | null;
             /** @description One of the GBP's `next`. */
             state: components["schemas"]["State"];
+        };
+        /** @description Which of the answers held for a study its pull asks again. What is not held is bought whichever. */
+        Again: "nothing" | "every" | {
+            /** Format: uint32 */
+            older_s: number;
         };
         Alert: {
             /** Format: date-time */
@@ -5895,6 +5900,10 @@ export interface components {
             /** @description RFC 3339. */
             withdrawn_at: string | null;
         };
+        PullDefinition: {
+            again: components["schemas"]["Again"];
+            definition: components["schemas"]["Definition"];
+        };
         PutArea: {
             center: components["schemas"]["LatLng"];
             /** @description A locality's place id, from `/kit/cities`. */
@@ -6861,6 +6870,7 @@ export type Additional = components['schemas']['Additional'];
 export type AdditionalCategory = components['schemas']['AdditionalCategory'];
 export type AdditionalIn = components['schemas']['AdditionalIn'];
 export type Advance = components['schemas']['Advance'];
+export type Again = components['schemas']['Again'];
 export type Alert = components['schemas']['Alert'];
 export type AlertButton = components['schemas']['AlertButton'];
 export type AlertHours = components['schemas']['AlertHours'];
@@ -7108,6 +7118,7 @@ export type Provider = components['schemas']['Provider'];
 export type PublishStudy = components['schemas']['PublishStudy'];
 export type PublishedStudies = components['schemas']['PublishedStudies'];
 export type PublishedStudy = components['schemas']['PublishedStudy'];
+export type PullDefinition = components['schemas']['PullDefinition'];
 export type PutArea = components['schemas']['PutArea'];
 export type PutKit = components['schemas']['PutKit'];
 export type Question = components['schemas']['Question'];
@@ -29500,7 +29511,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["Definition"];
+                "application/json": components["schemas"]["PullDefinition"];
             };
         };
         responses: {
@@ -32232,6 +32243,7 @@ type ReadonlyArray<T> = [
     unknown[]
 ] ? Readonly<Exclude<T, undefined>> : Readonly<Exclude<T, undefined>[]>;
 export const actionStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["ActionState"]> = ["proposed", "done"];
+export const againOneOf0Values: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Again"]> = ["nothing"];
 export const answerStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["AnswerState"]> = ["working", "writing", "done", "stopped"];
 export const approvalValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["Approval"]> = ["ask", "spend", "act"];
 export const baseCountryValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["BaseCountry"]> = ["FR"];
