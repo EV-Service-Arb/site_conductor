@@ -71,7 +71,7 @@
             lock="$(mktemp -d)"
             trap 'rm -r "$lock"' EXIT
             cp Cargo.lock "$lock/"
-            cargo --config "resolver.lockfile-path=\"$lock/Cargo.lock\"" run -q -p sa_gen "$@"
+            cargo --config "resolver.lockfile-path=\"$lock/Cargo.lock\"" run -q -p sa_gen -- "$@"
             cd frontend && npm run -s gen:api
           '';
         };
