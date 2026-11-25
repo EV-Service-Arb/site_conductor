@@ -7,11 +7,11 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { useNow } from "@/entities/alerts";
 import { gmbsOf, goes, pageOf, useGmails, useMailCases } from "@/entities/gmb";
-import { Automation, KINDS, KIND_NAME, Standing, TOPIC_NAME, TopicBadge, WHO_NAME, correctMail, editCase, mail, over, sentBy, settledText, subjectOf, unnamed, useAutos, useOpenThread } from "@/entities/mail";
+import { Automation, KINDS, KIND_NAME, Standing, TOPIC_NAME, TopicBadge, WHO_NAME, correctMail, editCase, mail, over, quietText, sentBy, settledText, subjectOf, unnamed, useAutos, useOpenThread } from "@/entities/mail";
 import { GbpOptions, Held, Likely, Note, Reply, Wanted, WhichGbp, Why } from "@/features/answer-mail";
 import { api } from "@/shared/api";
 import { type Gmails, type Gmb, type MailCase, type MailCaseDetail, type MailKind, type MailMessage, type MailTopic, mailTopicValues } from "@/shared/api/schema";
-import { useLocale, useT } from "@/shared/i18n";
+import { type Locale, type T, useLocale, useT } from "@/shared/i18n";
 import { formatDateTime } from "@/shared/lib/format";
 import { ViewLink } from "@/shared/lib/location";
 import { when } from "@/shared/lib/time";
@@ -77,8 +77,7 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
   // removed with its cases, here or in another tab: the read that follows answers 404
   if (gmail === undefined) return <Skeleton className="m-5 h-60" />;
   const isDone = c.state.is === "done";
-  const by = c.state.is === "done" ? c.state.by : null;
-  const byHand = by?.is === "hand";
+  const rests = restsOn(c, t, locale, now);
   const reply = { detail, gmail: gmail.gmail, onChanged: answered };
   return (
     <article ref={box} tabIndex={-1} className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-4 py-5 outline-none @3xl:px-7">
@@ -93,6 +92,7 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
           {unnamed(c) && <WhichGbp c={c} onChanged={named} className="max-w-60" />}
           <span className="min-w-0 truncate">{gmail.gmail}</span>
           {c.numbers.length > 0 && <span className="font-mono text-xs">{c.numbers.join(" · ")}</span>}
+          {detail.cost.spent > 0 && <span className="text-xs tabular-nums">{t(mail.spent, "{n, plural, one {# token} other {# tokens}} spent", { n: detail.cost.spent })}</span>}
         </p>
         {!over(c) && <Likely c={c} onChanged={named} />}
         {!over(c) && autos.status === "ok" && <Automation c={c} autos={autos.data} />}
@@ -101,12 +101,10 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
             <ExternalLink aria-hidden />
             {t(mail.thread.open, "Open thread")}
           </Button>
-          {(!isDone || byHand) && (
-            <Button variant="outline" size={button("sm")} className="@max-lg:[&>svg]:hidden" onClick={() => void done(!isDone)} title={isDone ? undefined : t(mail.done.means, "Until Google writes again")}>
-              {isDone ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
-              {isDone ? t(mail.reopen, "Reopen") : t(mail.done, "Mark done")}
-            </Button>
-          )}
+          <Button variant="outline" size={button("sm")} className="@max-lg:[&>svg]:hidden" onClick={() => void done(!isDone)} title={isDone ? t(mail.reopen.means, "Until Google writes again. Where its mail settles it, nothing is written or sent unasked") : t(mail.done.means, "Until Google writes again")}>
+            {isDone ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
+            {isDone ? t(mail.reopen, "Reopen") : t(mail.done, "Mark done")}
+          </Button>
           <Button variant="ghost" size={button("sm")} className="@max-lg:px-3" aria-expanded={correcting} onClick={() => setCorrecting(!correcting)}>
             <SlidersHorizontal aria-hidden />
             <span className="@max-lg:sr-only">{t(mail.correct, "GBP, topic")}</span>
@@ -120,13 +118,13 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
         </Note>
       )}
       <Why c={c} />
-      {by !== null && !byHand && (
+      {rests !== null && (
         <p className="text-sm text-ink-soft">
-          {settledText(by, t, locale, now)}
-          {by.is === "elsewhere" && by.case_id !== null && (
+          {rests.text}
+          {rests.on !== null && (
             <>
               {" "}
-              <ViewLink to={{ view: "email", params: { show: "all", case: by.case_id } }} className="rounded-sm text-ink underline outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <ViewLink to={{ view: "email", params: { show: "all", case: rests.on } }} className="rounded-sm text-ink underline outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 {t(mail.settled.open, "Open it")}
               </ViewLink>
             </>
@@ -140,6 +138,13 @@ function Shown({ detail, gmails, reload }: { detail: MailCaseDetail; gmails: Gma
       {!goes(c) && <Reply {...reply} />}
     </article>
   );
+}
+
+/** What leaves nothing to do in case `c`, and the case it is said in; `null`: something is, or a person says so. */
+function restsOn(c: MailCase, t: T, locale: Locale, now: Date): { text: string; on: number | null } | null {
+  if (c.state.is === "quiet") return { text: quietText(c, c.state.because, t, locale, now), on: c.state.because.is === "carried" ? c.state.because.case_id : null };
+  if (c.state.is !== "done" || c.state.by.is === "hand") return null;
+  return { text: settledText(c.state.by, t, locale, now), on: c.state.by.is === "elsewhere" ? c.state.by.case_id : null };
 }
 
 function GbpLink({ gbp }: { gbp: Gmb }) {

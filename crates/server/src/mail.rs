@@ -25,7 +25,7 @@ use sa_core::{
 };
 use sa_panel::{
 	Panel, Refused,
-	mail::{Brief, ByHand, Case, CaseEdit, Draft, FILES_MAX, File, Kept, Pursued, ReadBy, ReadingEdit, Sent, SentBy, Text, Unread, Wanted, Written},
+	mail::{Brief, ByHand, Case, CaseEdit, Charged, Draft, FILES_MAX, File, Kept, Pursued, ReadBy, ReadingEdit, Sent, SentBy, Text, Unread, Wanted, Written},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -53,6 +53,9 @@ const URL_MAX: usize = 200;
 const AUTHORS: usize = 10;
 /// A conversation's latest emails, as the writer is given them, bytes.
 const CONVERSATION_MAX: usize = 400_000;
+/// A reply's charge, as it is told before it is written: what a token reads, and what its answer takes, its thinking with it.
+const CHARS_PER_TOKEN: usize = 4;
+const ANSWER_TOKENS: i64 = 2000;
 /// A longer term is no word of Google's.
 const TERM_MAX_HOURS: u32 = 24 * 60;
 
@@ -103,7 +106,7 @@ impl CaseDto {
 		let (last, google) = (c.last(), c.google());
 		let read = google.and_then(|m| m.said.reading.as_ref());
 		let draft = c.draft.as_ref().filter(|d| d.reply.answers == last.said.id);
-		let over = matches!(c.state, Standings::Done { .. } | Standings::Quiet);
+		let over = matches!(c.state, Standings::Done { .. } | Standings::Quiet { .. });
 		let answered = last.said.sent || draft.is_some_and(|d| matches!(d.reply.state, DraftState::Sending | DraftState::Sent));
 		let stands = |d: &Timestamp| *d > now || !(over || answered);
 		Self {
@@ -308,6 +311,39 @@ pub struct CaseDetailDto {
 	pub attempts: Vec<AttemptDto>,
 	/// Its GBP's reviews missing now; `null`: it is not about reviews.
 	pub gone: Option<GoneDto>,
+	pub cost: CostDto,
+}
+
+/// What a case costs its caller, in tokens.
+#[derive(Clone, Copy, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MailCost")]
+pub struct CostDto {
+	/// The caller's own models write, at no charge here.
+	pub own: bool,
+	/// What writing a reply now is charged, about; `null`: none can be written.
+	pub reply: Option<i64>,
+	/// What its messages read and its replies written were charged.
+	pub spent: i64,
+}
+impl CostDto {
+	async fn of(state: &ApiState, owner: Uuid, b: &Brief, gone: Option<&GoneDto>) -> eyre::Result<Self> {
+		let chain = match &state.model {
+			Some(model) => Some(model.chain(&state.sign_in.panel, owner).await?),
+			None => None,
+		};
+		let own = chain.as_ref().is_some_and(|c| c.bill == Bill::Theirs);
+		let reply = match (asking(b, gone, None), chain) {
+			_ if recipient(&b.case).is_none() => None,
+			(Err(Written::Nothing(_)), _) => Some(0),
+			(Err(_), _) | (_, None) => None,
+			(Ok(_), Some(_)) if own => Some(0),
+			(Ok((system, mail)), Some(chain)) => {
+				let read = (system.chars().count() + mail.chars().count()) / CHARS_PER_TOKEN;
+				chain.charges(i64::try_from(read).expect("a prompt fits an address space"), ANSWER_TOKENS).await?
+			}
+		};
+		Ok(Self { own, reply, spent: b.spent })
+	}
 }
 
 /// The reviews of a GBP the review archive sees gone.
@@ -356,6 +392,8 @@ pub struct AutosDto {
 	pub by_itself: bool,
 	/// How long a reply waits before it goes, in minutes.
 	pub hold_minutes: i64,
+	/// How long Google is silent before it is asked again, where it gave no other term.
+	pub re_ask_hours: i64,
 	/// How often Google is asked, at most, until it gives something new.
 	pub limit: usize,
 }
@@ -625,21 +663,23 @@ fn recipient(c: &Case) -> Option<&str> {
 async fn detail(state: &ApiState, owner: Uuid, id: i64) -> ApiResult<Json<CaseDetailDto>> {
 	let panel = &state.sign_in.panel;
 	let now = Timestamp::now();
-	let Brief { case, texts, .. } = panel.mail_case(owner, id, now).await??;
+	let brief = panel.mail_case(owner, id, now).await??;
+	let Brief { case, texts, .. } = &brief;
 	let tried = match case.gmb {
 		Some(gmb) => attempts(&about(&panel.mail_cases(owner, now).await?, gmb)),
 		None => Vec::new(),
 	};
-	let gone = gone(state.sites.as_ref(), &case).await.unwrap_or_else(|e| {
+	let gone = gone(state.sites.as_ref(), case).await.unwrap_or_else(|e| {
 		Some(GoneDto::Unknown {
 			why: format!("the review archive did not answer: {e:#}"), // the case stands without it
 		})
 	});
 	Ok(Json(CaseDetailDto {
+		cost: CostDto::of(state, owner, &brief, gone.as_ref()).await?,
 		gone,
-		messages: case.messages.iter().zip(&texts).map(|(m, text)| MessageDto::of(m, text)).collect(),
-		case: CaseDto::of(&case, now),
-		recipient: recipient(&case).map(str::to_owned),
+		messages: case.messages.iter().zip(texts).map(|(m, text)| MessageDto::of(m, text)).collect(),
+		case: CaseDto::of(case, now),
+		recipient: recipient(case).map(str::to_owned),
 		files_max: FILES_MAX,
 		attempts: tried,
 	}))
@@ -711,14 +751,15 @@ pub(crate) struct EditCase {
 	/// As `gmb`.
 	#[serde(default, deserialize_with = "present")]
 	topic: Option<Option<Topic>>,
-	/// Done until Google speaks again.
+	/// Done, or open, until Google speaks again, whatever settled it or is written to Google meanwhile; open again, nothing
+	/// in it is written or sent unasked. Where its mail says the same, it is its mail's.
 	done: Option<bool>,
 	/// The case of the same gmail it is part of: one conversation under two numbers; `null`: one by itself again.
 	#[serde(default, deserialize_with = "present")]
 	join: Option<Option<i64>>,
 }
 
-/// Corrects a case's GBP or topic, makes it part of another, whose the answer then is, or marks it done; a draft
+/// Corrects a case's GBP or topic, makes it part of another, whose the answer then is, or marks it done or open; a draft
 /// going by itself waits for its person.
 ///
 /// 400 two gmails' cases, or one not proved Google's, are not one.
@@ -1007,6 +1048,7 @@ async fn mail_auto(State(panel): State<Panel>, Extension(caller): Extension<Call
 		on: auto.on.into_iter().map(|(gmb_id, topic)| AutoDto { gmb_id, topic }).collect(),
 		topics: sa_panel::mail::AUTO.to_vec(),
 		hold_minutes: rules::HOLD.as_mins(),
+		re_ask_hours: rules::RE_ASK.as_hours(),
 		limit: rules::MAX_ASKS,
 	}))
 }
@@ -1078,8 +1120,7 @@ impl From<eyre::Report> for Unanswered {
 
 /// What to ask of the model: its instructions, the mail, the shape of its answer.
 struct Asked<'a> {
-	/// Its charges' key.
-	key: &'a str,
+	key: Charged,
 	label: &'static str,
 	effort: ThinkingLevel,
 	system: String,
@@ -1093,7 +1134,7 @@ async fn answered<T: serde::de::DeserializeOwned>(panel: &Panel, model: &Model, 
 	let chain = model.chain(panel, by.user()).await?.awake().map_err(Unanswered::Stuck)?;
 	let mut tab = match chain.bill {
 		Bill::Theirs => None,
-		Bill::Ours => Some(panel.model_tab(by, a.key, a.label, Timestamp::now()).await?.map_err(Unanswered::Stuck)?),
+		Bill::Ours => Some(panel.model_tab(by, &a.key.to_string(), a.label, Timestamp::now()).await?.map_err(Unanswered::Stuck)?),
 	};
 	let mut asked = Conversation::new_with_system(a.system);
 	asked.add(Role::User, a.mail);
@@ -1195,7 +1236,7 @@ answer_within_hours: only when it says within how long Google answers, the longe
 		("answer_within_hours", json!({ "type": ["integer", "null"] })),
 	];
 	let asked = Asked {
-		key: &format!("mail:{}", m.mail),
+		key: Charged::Read(m.mail),
 		label: "Google's mail read",
 		effort: ThinkingLevel::Low,
 		system,
@@ -1243,22 +1284,17 @@ fn missing_line(r: &GoneReview) -> String {
 	format!("- {} ({}){text}", one_line(&r.author, AUTHOR_MAX), said.join(", "))
 }
 
-/// A reply to the case of `b`, whose missing reviews are `gone`, as the operator's `instruction` says.
-async fn write(panel: &Panel, model: &Model, by: Spender<ModelTokens>, b: &Brief, gone: Option<&GoneDto>, instruction: Option<&str>) -> Result<Written, Unanswered> {
-	#[derive(Deserialize)]
-	#[serde(deny_unknown_fields)]
-	struct Answer {
-		body: Option<String>,
-		needs: Vec<String>,
-		nothing: Option<String>,
-	}
-	let kind = b.case.google().and_then(|m| m.said.reading.as_ref()).map(|r| r.kind);
-	let seen = match gone {
-		Some(GoneDto::Read { reviews, .. }) => reviews.as_slice(),
-		Some(GoneDto::Unknown { .. }) | None => &[],
-	};
-	if matches!((kind, gone), (Some(Kind::ReinstatementPartial | Kind::ReviewsLiveAlready), Some(GoneDto::Read { .. }))) && seen.is_empty() {
-		return Ok(Written::Nothing("the review archive sees none missing".to_owned()));
+fn said_kind(c: &Case) -> Option<Kind> {
+	c.google()?.said.reading.as_ref().map(|r| r.kind)
+}
+
+/// What the writer is asked of the case of `b`, whose missing reviews are `gone`, as the operator's `instruction` says:
+/// its instructions, and the mail; `Err`, what there is without it.
+fn asking(b: &Brief, gone: Option<&GoneDto>, instruction: Option<&str>) -> Result<(String, String), Written> {
+	if let (Some(Kind::ReinstatementPartial | Kind::ReviewsLiveAlready), Some(GoneDto::Read { reviews, .. })) = (said_kind(&b.case), gone)
+		&& reviews.is_empty()
+	{
+		return Err(Written::Nothing("the review archive sees none missing".to_owned()));
 	}
 	let (goal, rule) = match b.case.topic {
 		Topic::Verification => (
@@ -1301,7 +1337,7 @@ Answer with body and needs, nothing null; or, when no reply serves the goal, bod
 		.iter()
 		.map(|t| t.as_ref().map(|t| t.as_str()))
 		.collect::<Result<_, _>>()
-		.map_err(|why| Unanswered::Unread(format!("a message of it does not open: {why}")))?;
+		.map_err(|why| Written::Failed(format!("a message of it does not open: {why}")))?;
 	let mut room = CONVERSATION_MAX;
 	let mut said: Vec<String> = b
 		.case
@@ -1375,13 +1411,30 @@ Answer with body and needs, nothing null; or, when no reply serves the goal, bod
 		or_none(&record),
 		said.join("\n"),
 	);
+	Ok((system, mail))
+}
+
+/// A reply to the case of `b`, whose missing reviews are `gone`, as the operator's `instruction` says.
+async fn write(panel: &Panel, model: &Model, by: Spender<ModelTokens>, b: &Brief, gone: Option<&GoneDto>, instruction: Option<&str>) -> Result<Written, Unanswered> {
+	#[derive(Deserialize)]
+	#[serde(deny_unknown_fields)]
+	struct Answer {
+		body: Option<String>,
+		needs: Vec<String>,
+		nothing: Option<String>,
+	}
+	let (system, mail) = match asking(b, gone, instruction) {
+		Ok(asked) => asked,
+		Err(without) => return Ok(without),
+	};
+	let kind = said_kind(&b.case);
 	let shape = [
 		("body", json!({ "type": ["string", "null"] })),
 		("needs", json!({ "type": "array", "items": { "type": "string" } })),
 		("nothing", json!({ "type": ["string", "null"] })),
 	];
 	let asked = Asked {
-		key: &format!("mail-case:{}", b.case.id),
+		key: Charged::Reply(b.case.id),
 		label: "A reply to Google written",
 		effort: ThinkingLevel::Medium,
 		system,
@@ -1397,7 +1450,16 @@ Answer with body and needs, nothing null; or, when no reply serves the goal, bod
 		kind,
 		Some(Kind::ReinstatementRefused | Kind::ReviewsNoData | Kind::ReviewsLiveAlready | Kind::ReinstatementPartial)
 	);
-	let shown = b.case.messages.iter().zip(&texts).any(|(m, text)| m.said.sent && text.contains("[attached: "));
+	let shown = b
+		.case
+		.messages
+		.iter()
+		.zip(&b.texts)
+		.any(|(m, text)| m.said.sent && text.as_ref().is_ok_and(|t| t.contains("[attached: ")));
+	let seen = match gone {
+		Some(GoneDto::Read { reviews, .. }) => reviews.as_slice(),
+		Some(GoneDto::Unknown { .. }) | None => &[],
+	};
 	let held: Vec<String> = seen.iter().filter(|r| r.captured).map(|r| one_line(&r.author, AUTHOR_MAX)).collect();
 	if refused && !shown && !held.is_empty() && !needs.iter().any(|n| n.to_lowercase().contains("screenshot")) {
 		let more = held.len().saturating_sub(AUTHORS);

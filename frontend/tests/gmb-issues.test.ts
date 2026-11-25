@@ -155,7 +155,7 @@ describe("Google's mail", () => {
     subject: null,
     numbers: [],
     thread: "a",
-    state: { is: "quiet" },
+    state: { is: "quiet", because: { is: "nothing" } },
     deadline: null,
     last: { id, case_id: id, at: "2026-11-24T00:00:00Z", who: "support", kind: null, subject: null, summary: null, reasons: [], spam: false, sent_by: null },
     said: null,

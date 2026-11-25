@@ -16,7 +16,7 @@ pub const READ_BACK: SignedDuration = SignedDuration::from_hours(24 * 90);
 /// A reading failed this often is a person's.
 pub const MAX_READS: i64 = 3;
 /// Google is asked again after this long without an answer, if it gave no other term.
-const RE_ASK: SignedDuration = SignedDuration::from_hours(48);
+pub const RE_ASK: SignedDuration = SignedDuration::from_hours(48);
 /// A video or an appeal is decided on within it, if Google gave no other term.
 const IN_REVIEW: SignedDuration = SignedDuration::from_hours(24 * 7);
 /// What goes by itself waits this long after ours before it.
@@ -546,6 +546,8 @@ pub struct Draft {
 	pub sent_at: Option<Timestamp>,
 	/// Why it was not sent, or nothing was written.
 	pub error: Option<String>,
+	/// Not sent: Gmail refused its login.
+	pub login: bool,
 }
 
 /// The GBP a case is about.
@@ -581,6 +583,29 @@ pub enum Settled {
 	Elsewhere(Said),
 }
 
+/// Why nothing is to do in a case.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, schemars::JsonSchema)]
+#[serde(tag = "is", rename_all = "snake_case")]
+#[schemars(rename = "MailQuietBecause")]
+pub enum QuietBecause {
+	/// What was said asks for nothing.
+	Nothing,
+	/// Nothing was said in it for long.
+	Old,
+	/// Its GBP is in the trash.
+	Removed,
+	/// Its GBP's latest conversation on the topic, that case, carries it.
+	Carried { case_id: i64 },
+}
+
+/// A person's word over a case's mail, until Google speaks in it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum Mark {
+	Done,
+	/// Open, whatever settled it: nothing in it is written or sent unasked.
+	Open,
+}
+
 /// What a case's state stands on.
 #[derive(Clone, Debug)]
 pub struct Case<'a> {
@@ -590,12 +615,12 @@ pub struct Case<'a> {
 	pub messages: &'a [Message],
 	/// The latest.
 	pub draft: Option<&'a Draft>,
-	/// The message a person marked it done at.
-	pub done: Option<i64>,
+	/// A person's, and the case's last message then.
+	pub mark: Option<(Mark, i64)>,
 	/// What its GBP's other cases and its moves say of it.
 	pub elsewhere: &'a [Said],
-	/// Another conversation, open, its latest of that topic, carries what is asked of Google for its GBP.
-	pub asked_elsewhere: bool,
+	/// Another conversation, open, its latest of that topic, which carries what is asked of Google for its GBP.
+	pub carried_by: Option<i64>,
 	/// Its GBP's replies on its topic go by themselves.
 	pub switched: bool,
 	/// Why its mail is not read or its reply not written: no Claude, no balance.
@@ -634,7 +659,9 @@ pub enum State {
 		by: Settled,
 	},
 	/// Nothing to do.
-	Quiet,
+	Quiet {
+		because: QuietBecause,
+	},
 }
 
 /// Why a case needs the operator.
@@ -650,8 +677,11 @@ pub enum Why {
 	Needs { needs: Vec<String> },
 	/// Google answers nothing new, asked that often.
 	AskedOften { asked: usize },
-	/// Google is silent, and nothing here takes a reply, or its specialist was asked again already.
+	/// Google is silent, and nothing asks it again by itself: nothing here takes a reply, its specialist was asked again
+	/// already, or its person reopened the case.
 	Unanswered { since: Timestamp },
+	/// Its person reopened it, and nothing was said to Google since.
+	Reopened,
 	/// Google asks in a mail that takes no reply.
 	NoReply,
 	/// Not read; `null`: not yet.
@@ -664,14 +694,19 @@ pub enum Why {
 	MayHaveGoneOut,
 	/// The reply was not written, or not sent.
 	Failed { error: String },
+	/// The reply was not sent: Gmail refused its gmail's login.
+	Login { error: String },
 }
 
 pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	let heard = heard(c);
-	let Some(last) = heard.last() else { return State::Quiet };
-	if c.done.is_some() && c.messages.iter().rev().take_while(|m| Some(m.id) != c.done).all(|m| !m.heard()) {
+	let quiet = |because| State::Quiet { because };
+	let Some(last) = heard.last() else { return quiet(QuietBecause::Nothing) };
+	let mark = mark(c);
+	if let Some((Mark::Done, _)) = mark {
 		return State::Done { by: Settled::Hand };
 	}
+	let open = mark.is_some();
 	let draft = c.draft.filter(|d| d.answers == last.id);
 	let needs = |why| State::NeedsYou { why };
 	if let Some(Draft {
@@ -688,15 +723,15 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 		};
 	}
 	if c.about == About::Removed {
-		return State::Quiet;
+		return quiet(QuietBecause::Removed);
 	}
 	let sent_at = draft.filter(|d| d.state == DraftState::Sent).map(|d| d.sent_at.expect("a sent draft went out at a moment"));
 	let word = word(c, &heard);
 	let deadline = word.and_then(|w| w.deadline).filter(|at| now < *at);
-	if deadline.is_none() && now.duration_since(sent_at.unwrap_or(last.at)) > QUIET_AFTER {
-		return State::Quiet;
+	if !open && deadline.is_none() && now.duration_since(sent_at.unwrap_or(last.at)) > QUIET_AFTER {
+		return quiet(QuietBecause::Old);
 	}
-	if let Some(by) = over(c, &heard) {
+	if !open && let Some(by) = over(c, &heard) {
 		return State::Done { by };
 	}
 	let unread = !last.sent && last.reading.is_none();
@@ -706,8 +741,8 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 		Turn::Operator => matches!(w.kind, Kind::VideoRejected | Kind::CodeFailed | Kind::CallFailed),
 		Turn::Settled | Turn::Nobody => false,
 	});
-	if c.asked_elsewhere && !unread && carried {
-		return State::Quiet;
+	if let Some(case_id) = c.carried_by.filter(|_| !open && !unread && carried) {
+		return quiet(QuietBecause::Carried { case_id });
 	}
 	// what Google asks is the operator's to give or to confirm
 	let asks = last.reading.as_ref().is_some_and(|r| r.kind == Kind::Asks);
@@ -734,30 +769,35 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 				(true, false, _) => State::ReplyReady,
 			},
 		Some(Draft {
-			state: DraftState::Failed, error, ..
+			state: DraftState::Failed,
+			error,
+			login,
+			..
 		}) => {
-			return needs(Why::Failed {
-				error: error.clone().expect("a failed draft says why"),
-			});
+			let error = error.clone().expect("a failed draft says why");
+			return needs(if *login { Why::Login { error } } else { Why::Failed { error } });
 		}
 		// nothing of what came back is missing
 		Some(Draft {
 			state: DraftState::Dismissed,
 			error: Some(_),
 			..
-		}) if word.is_some_and(|w| matches!(w.kind, Kind::ReinstatementPartial | Kind::ReviewsLiveAlready)) => return State::Done { by: Settled::Here },
+		}) if !open && word.is_some_and(|w| matches!(w.kind, Kind::ReinstatementPartial | Kind::ReviewsLiveAlready)) => return State::Done { by: Settled::Here },
 		Some(Draft {
 			state: DraftState::Dismissed,
 			error: Some(why),
 			..
 		}) => return needs(Why::NothingToSay { why: why.clone() }),
-		Some(Draft { state: DraftState::Dismissed, .. }) if asks => return needs(Why::Kind { kind: Kind::Asks }),
+		Some(Draft { state: DraftState::Dismissed, .. }) if !open && asks => return needs(Why::Kind { kind: Kind::Asks }),
 		Some(Draft {
 			state: DraftState::Dismissed,
 			written_at,
 			..
-		}) if now < later(*written_at, RE_ASK) => return State::Waiting { until: later(*written_at, RE_ASK) },
+		}) if !open && now < later(*written_at, RE_ASK) => return State::Waiting { until: later(*written_at, RE_ASK) },
 		_ => {}
+	}
+	if mark.is_some_and(|(_, ours)| !ours) && sent_at.is_none() {
+		return needs(Why::Reopened);
 	}
 	let silence = || {
 		let until = term(&heard, sent_at);
@@ -778,7 +818,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	};
 	if last.sent || sent_at.is_some() {
 		return match word {
-			Some(w) if w.kind.resolves(c.topic) => State::Done { by: Settled::Here },
+			Some(w) if !open && w.kind.resolves(c.topic) => State::Done { by: Settled::Here },
 			Some(w) if w.at > sent_at.unwrap_or(last.at) => reply(c, None),
 			_ => silence(),
 		};
@@ -793,7 +833,7 @@ pub fn state(c: &Case<'_>, now: Timestamp) -> State {
 	match w.turn {
 		Turn::Reply => reply(c, None),
 		Turn::Google => or_deadline(silence()),
-		Turn::Nobody => or_deadline(State::Quiet),
+		Turn::Nobody => or_deadline(quiet(QuietBecause::Nothing)),
 		Turn::Settled if w.kind.resolves(c.topic) => State::Done { by: Settled::Here },
 		// resolved, and not what the case is about
 		Turn::Settled | Turn::Operator => needs(Why::Kind { kind: w.kind }),
@@ -835,6 +875,8 @@ pub enum Halt {
 	Elsewhere,
 	/// What it asks for is given.
 	Settled,
+	/// Its person reopened it.
+	Reopened,
 	/// What Google asks is its operator's to give.
 	Asked,
 	/// Google was asked that often and gave nothing new.
@@ -851,6 +893,9 @@ pub enum Halt {
 
 /// From when a reply lacking nothing may go to Google by itself.
 pub fn press(c: &Case<'_>, now: Timestamp) -> Result<Timestamp, Halt> {
+	if let Some((Mark::Open, _)) = mark(c) {
+		return Err(Halt::Reopened);
+	}
 	if !c.switched {
 		return Err(Halt::Off);
 	}
@@ -862,7 +907,7 @@ pub fn press(c: &Case<'_>, now: Timestamp) -> Result<Timestamp, Halt> {
 	let heard = heard(c);
 	let (w, r) = word(c, &heard).zip(said(&heard)).ok_or(Halt::Unread)?;
 	let to = counterpart(c.messages.iter()).ok_or(Halt::NoReply)?;
-	if c.asked_elsewhere {
+	if c.carried_by.is_some() {
 		return Err(Halt::Elsewhere);
 	}
 	if settled(c).is_some() || over(c, &heard).is_some() {
@@ -1165,6 +1210,13 @@ fn heard<'a>(c: &Case<'a>) -> Vec<&'a Message> {
 	c.messages.iter().filter(|m| m.heard()).collect()
 }
 
+/// A person's mark that still holds, and whether ours went since.
+fn mark(c: &Case<'_>) -> Option<(Mark, bool)> {
+	let (mark, at) = c.mark?;
+	let since = || c.messages.iter().rev().take_while(|m| m.id != at).filter(|m| m.heard());
+	since().all(|m| m.sent).then(|| (mark, since().next().is_some()))
+}
+
 /// Google's last word, once read.
 fn said<'a>(heard: &[&'a Message]) -> Option<&'a Reading> {
 	heard.iter().rev().find(|m| !m.sent)?.reading.as_ref()
@@ -1260,6 +1312,8 @@ fn settled(c: &Case<'_>) -> Option<Settled> {
 /// A reply of ours is due: of Google's word, or its `silence` since.
 fn reply(c: &Case<'_>, silence: Option<Timestamp>) -> State {
 	let why = match (counterpart(c.messages.iter()), silence) {
+		(_, None) if mark(c).is_some() => Why::Reopened,
+		(_, Some(since)) if mark(c).is_some() => Why::Unanswered { since },
 		(None, Some(since)) => Why::Unanswered { since },
 		(None, None) => Why::NoReply,
 		(Some(_), _) if asked(c.messages) >= MAX_ASKS => Why::AskedOften { asked: asked(c.messages) },
@@ -1569,9 +1623,9 @@ mod tests {
 			about: About::Live,
 			messages,
 			draft: None,
-			done: None,
+			mark: None,
 			elsewhere: &[],
-			asked_elsewhere: false,
+			carried_by: None,
 			switched: true,
 			stuck: None,
 			read: Some(Timestamp::MAX),
@@ -1587,11 +1641,16 @@ mod tests {
 			send_at: Some(t("2026-10-06T10:00:00Z")),
 			sent_at: (state == DraftState::Sent).then(|| t("2026-10-06T10:00:00Z")),
 			error: (state == DraftState::Failed).then(|| "550 no".to_owned()),
+			login: false,
 		}
 	}
 
 	fn needs(why: Why) -> State {
 		State::NeedsYou { why }
+	}
+
+	fn quiet(because: QuietBecause) -> State {
+		State::Quiet { because }
 	}
 
 	#[test]
@@ -1669,13 +1728,28 @@ mod tests {
 		assert_eq!(press(&failed, now), Ok(t("2026-10-05T22:00:00Z")));
 		let held = [later[0], told("2026-10-06T10:15:00Z", Kind::Verified)];
 		assert_eq!(state(&Case { elsewhere: &held, ..case(&m) }, now), State::Done { by: Settled::Elsewhere(held[1]) });
-		assert_eq!(state(&Case { done: Some(5), ..case(&m) }, now), State::Done { by: Settled::Hand });
 		assert_eq!(
-			state(&Case { done: Some(4), ..case(&m) }, now),
+			state(
+				&Case {
+					mark: Some((Mark::Done, 5)),
+					..case(&m)
+				},
+				now
+			),
+			State::Done { by: Settled::Hand }
+		);
+		assert_eq!(
+			state(
+				&Case {
+					mark: Some((Mark::Done, 4)),
+					..case(&m)
+				},
+				now
+			),
 			needs(Why::Kind { kind: Kind::CallOffered }),
 			"Google spoke since"
 		);
-		assert_eq!(state(&case(&m), t("2026-11-20T00:00:00Z")), State::Quiet);
+		assert_eq!(state(&case(&m), t("2026-11-20T00:00:00Z")), quiet(QuietBecause::Old));
 		m.push(google(6, "2026-10-06T10:20:00Z", Kind::Closed));
 		assert_eq!(state(&case(&m), now), needs(Why::Kind { kind: Kind::CallOffered }), "closed, the call there to take");
 		let closed = |before: Kind| state(&case(&[google(1, "2026-10-06T09:00:00Z", before), google(2, "2026-10-06T09:30:00Z", Kind::Closed)]), now);
@@ -1745,7 +1819,7 @@ mod tests {
 		unread.read_error = Some("no such kind".into());
 		assert_eq!(state(&case(&[unread]), now), needs(Why::Unread { error: Some("no such kind".into()) }));
 		let mut dated = notice(1, "2026-10-06T09:00:00Z", Kind::ChangedByGoogle);
-		assert_eq!(state(&case(std::slice::from_ref(&dated)), now), State::Quiet);
+		assert_eq!(state(&case(std::slice::from_ref(&dated)), now), quiet(QuietBecause::Nothing));
 		dated.reading.as_mut().unwrap().deadline = Some(t("2026-10-10T00:00:00Z"));
 		assert_eq!(state(&case(&[dated]), now), needs(Why::Deadline { at: t("2026-10-10T00:00:00Z") }));
 	}
@@ -1755,7 +1829,11 @@ mod tests {
 		let now = t("2026-10-06T10:30:00Z");
 		let m = [notice(1, "2026-10-05T09:00:00Z", Kind::VideoRejected)];
 		assert_eq!(state(&case(&m), now), needs(Why::Kind { kind: Kind::VideoRejected }));
-		assert_eq!(state(&Case { asked_elsewhere: true, ..case(&m) }, now), State::Quiet, "a conversation asks for its verification");
+		assert_eq!(
+			state(&Case { carried_by: Some(9), ..case(&m) }, now),
+			quiet(QuietBecause::Carried { case_id: 9 }),
+			"a conversation asks for its verification"
+		);
 		let on = |said: Kind, at: &str, kind| {
 			let m = [notice(1, "2026-10-05T09:00:00Z", said)];
 			state(
@@ -1803,9 +1881,9 @@ mod tests {
 			needs(Why::Kind { kind: Kind::VideoRejected }),
 			"nobody read ours"
 		);
-		assert_eq!(state(&case(&[to_noreply]), now), State::Quiet);
+		assert_eq!(state(&case(&[to_noreply]), now), quiet(QuietBecause::Nothing));
 		for k in [Kind::Noise, Kind::Impersonation, Kind::AccessGranted] {
-			assert_eq!(state(&case(&[notice(1, "2026-10-06T09:00:00Z", k)]), now), State::Quiet);
+			assert_eq!(state(&case(&[notice(1, "2026-10-06T09:00:00Z", k)]), now), quiet(QuietBecause::Nothing));
 		}
 	}
 

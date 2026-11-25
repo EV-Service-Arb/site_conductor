@@ -5,7 +5,7 @@ use std::time::Duration;
 use lettre::{
 	AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 	message::{Attachment, MultiPart, SinglePart, header::ContentType},
-	transport::smtp::authentication::Credentials,
+	transport::smtp::{self, authentication::Credentials},
 };
 
 use crate::{
@@ -37,12 +37,20 @@ async fn send(account: Account<'_>, mail: &Outgoing) -> Result<(), SendError> {
 	match gmail.test_connection().await {
 		Ok(true) => {}
 		Ok(false) => return Err(SendError::NotSent(format!("{HOST} does not answer"))),
-		Err(e) => return Err(SendError::NotSent(format!("{HOST}: {e}"))),
+		Err(e) => return Err(failed(&e, SendError::NotSent(format!("{HOST}: {e}")))),
 	}
 	match gmail.send(message).await {
 		Ok(_) => Ok(()),
-		Err(e) if e.is_permanent() || e.is_transient() => Err(SendError::NotSent(format!("{HOST} refused it: {e}"))),
-		Err(e) => Err(SendError::Unknown(format!("{HOST}: {e}"))),
+		Err(e) if e.is_permanent() || e.is_transient() => Err(failed(&e, SendError::NotSent(format!("{HOST} refused it: {e}")))),
+		Err(e) => Err(failed(&e, SendError::Unknown(format!("{HOST}: {e}")))),
+	}
+}
+
+/// `otherwise`, unless it is the login that is refused.
+fn failed(e: &smtp::Error, otherwise: SendError) -> SendError {
+	match e.status().map(u16::from) {
+		Some(534 | 535) => SendError::Login(format!("{HOST}: {e}")),
+		_ => otherwise,
 	}
 }
 

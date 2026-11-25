@@ -6,7 +6,7 @@ use jiff::{SignedDuration, Timestamp};
 use sa_alerts::Tier;
 use sa_core::{
 	gbp::Country,
-	mail::{DraftState, Halt, Kind, Method, Outcome, Reading, Said, Settled, State, Topic, Why, attempt},
+	mail::{DraftState, Halt, Kind, MAX_ASKS, Method, Outcome, QuietBecause, Reading, Said, Settled, State, Topic, Why, attempt},
 	notify::Locale,
 	prices::Spender,
 };
@@ -179,9 +179,24 @@ impl World {
 		self.only(now).await.draft.unwrap().id
 	}
 
+	/// Its person marks case `id` done, or reopens it.
+	async fn marks(&self, id: i64, done: bool, now: Timestamp) {
+		let edit = CaseEdit {
+			gmb: None,
+			topic: None,
+			done: Some(done),
+			join: None,
+		};
+		self.p.edit_mail_case(self.owner, self.owner, id, edit, now).await.unwrap().unwrap();
+	}
+
 	fn sent(&self) -> Vec<Outgoing> {
 		self.outbox.sent.lock().unwrap().clone()
 	}
+}
+
+fn quiet(because: QuietBecause) -> State {
+	State::Quiet { because }
 }
 
 fn support(at: &str, thread: u64, subject: &str, text: &str) -> Mail {
@@ -419,7 +434,8 @@ async fn a_support_conversation_goes_through_its_turns_over_two_threads() {
 	w.arrives(notice("2026-10-06T10:00:00Z", 9, REJECTED, &rejected(" for Plomberie Dupont - Lyon, Est", "1559")))
 		.await;
 	w.reads("2026-10-06T10:01:00Z", Kind::VideoRejected, |_| {}).await;
-	assert_eq!(w.cases("2026-10-06T10:02:00Z").await[1].state, State::Quiet);
+	let cases = w.cases("2026-10-06T10:02:00Z").await;
+	assert_eq!(cases[1].state, quiet(QuietBecause::Carried { case_id: cases[0].id }));
 	w.arrives(notice("2026-10-07T10:00:00Z", 10, "Your profile is verified", "Plomberie Dupont - Lyon, Est is verified"))
 		.await;
 	w.reads("2026-10-07T10:01:00Z", Kind::Verified, |_| {}).await;
@@ -515,7 +531,7 @@ async fn a_look_alike_is_an_impersonation_and_is_never_answered() {
 		let read = c.messages[0].said.reading.as_ref().unwrap();
 		assert_eq!(
 			(read.kind, c.messages[0].read_by, c.gmb, &c.state, c.due),
-			(Kind::Impersonation, Some(ReadBy::Rule), None, &State::Quiet, false)
+			(Kind::Impersonation, Some(ReadBy::Rule), None, &quiet(QuietBecause::Nothing), false)
 		);
 		let written = Written::Reply { body: "x".into(), needs: vec![] };
 		w.p.draft_mail(w.owner, c, written, true, t(now)).await.unwrap().unwrap();
@@ -551,27 +567,34 @@ async fn a_draft_left_sending_is_never_tried_again_and_one_refused_may_be() {
 	w.reads("2026-10-01T09:01:00Z", Kind::SelfServe, |_| {}).await;
 	let case = w.only("2026-10-01T09:02:00Z").await;
 	let draft = w.drafts(&case, &[], true, "2026-10-01T09:03:00Z").await;
-	*w.outbox.answers.lock().unwrap() = vec![Err(SendError::NotSent("535 bad credentials".into())), Err(SendError::Unknown("timed out".into()))];
+	*w.outbox.answers.lock().unwrap() = vec![
+		Err(SendError::Login("refused".into())),
+		Err(SendError::NotSent("550 no".into())),
+		Err(SendError::Login("refused".into())),
+		Err(SendError::Unknown("timed out".into())),
+	];
 	let send = |at: &'static str| w.p.send_mail_draft(w.owner, w.owner, draft, bare("x"), t(at));
+	let stands = async |at: &'static str| w.only(at).await.state;
+	let needs = |why| State::NeedsYou { why };
+	let login = || needs(Why::Login { error: "refused".into() });
 	assert!(matches!(send("2026-10-01T09:04:00Z").await.unwrap(), Err(Refused::Unavailable(_))));
-	assert_eq!(
-		w.only("2026-10-01T09:04:00Z").await.state,
-		State::NeedsYou {
-			why: Why::Failed {
-				error: "535 bad credentials".into()
-			}
-		}
-	);
+	assert_eq!(stands("2026-10-01T09:04:00Z").await, login());
+	assert!(matches!(send("2026-10-01T09:04:10Z").await.unwrap(), Err(Refused::Unavailable(_))));
+	assert_eq!(stands("2026-10-01T09:04:10Z").await, needs(Why::Failed { error: "550 no".into() }), "another failure is no login");
+	assert!(matches!(send("2026-10-01T09:04:20Z").await.unwrap(), Err(Refused::Unavailable(_))));
+	assert_eq!(stands("2026-10-01T09:04:20Z").await, login());
+	w.p.edit_mail_draft(w.owner, w.owner, draft, "y").await.unwrap().unwrap();
+	assert_eq!(stands("2026-10-01T09:04:30Z").await, State::ReplyReady, "an edit clears it");
 	assert!(
 		matches!(send("2026-10-01T09:05:00Z").await.unwrap(), Err(Refused::Unavailable(_))),
 		"tried again, its end unknown"
 	);
-	assert_eq!(w.sent().len(), 2);
+	assert_eq!(w.sent().len(), 4);
 	assert!(matches!(send("2026-10-01T09:06:00Z").await.unwrap(), Err(Refused::Conflict(_))), "and never after");
 	assert!(matches!(w.p.edit_mail_draft(w.owner, w.owner, draft, "y").await.unwrap(), Err(Refused::Conflict(_))));
 	assert!(matches!(w.p.dismiss_mail_draft(w.owner, w.owner, draft).await.unwrap(), Err(Refused::Conflict(_))));
 	assert_eq!(w.p.send_held_mail(t("2026-10-09T09:00:00Z")).await.unwrap(), 0);
-	assert_eq!(w.sent().len(), 2);
+	assert_eq!(w.sent().len(), 4);
 	let case = w.only("2026-10-01T10:00:00Z").await;
 	assert_eq!(case.state, State::NeedsYou { why: Why::MayHaveGoneOut });
 	let written = Written::Reply { body: "x".into(), needs: vec![] };
@@ -722,13 +745,92 @@ async fn a_case_is_not_pressed_once_its_gbp_is_verified_nor_when_it_is_old() {
 	}
 	assert!(w.cases("2026-10-02T09:00:00Z").await[0].due);
 	let old = w.cases("2026-10-23T09:00:00Z").await;
-	assert_eq!((&old[0].state, old[0].due), (&State::Quiet, false), "first read long after");
+	assert_eq!((&old[0].state, old[0].due), (&quiet(QuietBecause::Old), false), "first read long after");
 	for gmb in [w.lyon, w.est] {
 		w.p.advance(Some(Spender::new(w.owner)), gmb, sa_core::gbp::State::Verified, None).await.unwrap().unwrap();
 	}
 	let settled = w.cases("2026-10-02T09:00:00Z").await;
 	let moved = |c: &Case| matches!(c.state, State::Done { by: Settled::Elsewhere(s) } if s.kind == Kind::Verified && s.case_id.is_none());
 	assert!(settled.iter().all(|c| moved(c) && !c.due), "{settled:#?}");
+}
+
+#[tokio::test]
+async fn a_reopened_case_is_its_persons_until_google_speaks() {
+	let w = World::new().await;
+	w.p.set_mail_auto(w.owner, &[w.lyon, w.est], Topic::Verification, true).await.unwrap().unwrap();
+	w.arrives(support("2026-10-01T09:00:00Z", 1, REQUEST, "Plomberie Dupont - Lyon: follow the prompts.")).await;
+	w.reads("2026-10-01T09:01:00Z", Kind::SelfServe, |_| {}).await;
+	let now = "2026-10-01T09:02:00Z";
+	let case = w.only(now).await;
+	assert!(case.due);
+	assert!(case.press.is_ok());
+	w.marks(case.id, true, t(now)).await;
+	assert_eq!(w.only(now).await.state, State::Done { by: Settled::Hand });
+	w.marks(case.id, false, t(now)).await;
+	let case = w.only(now).await;
+	assert!(case.due, "its mail settles nothing: no mark is left");
+	assert!(case.press.is_ok(), "its mail settles nothing: no mark is left");
+
+	w.p.advance(Some(Spender::new(w.owner)), w.lyon, sa_core::gbp::State::Verified, None).await.unwrap().unwrap();
+	let moved = w.only(now).await;
+	assert!(matches!(moved.state, State::Done { by: Settled::Elsewhere(_) }), "{:?}", moved.state);
+	w.marks(case.id, false, t(now)).await;
+	let reopened = State::NeedsYou { why: Why::Reopened };
+	let open = w.only(now).await;
+	assert_eq!((&open.state, open.due, open.press), (&reopened, false, Err(Halt::Reopened)));
+	let written = || Written::Reply { body: "x".into(), needs: vec![] };
+	assert!(w.p.draft_mail(w.owner, &open, written(), false, t(now)).await.unwrap().is_none(), "nothing is written unasked");
+	w.marks(case.id, true, t(now)).await;
+	assert_eq!(w.only(now).await.state, moved.state, "settled by what settled it");
+	w.marks(case.id, false, t(now)).await;
+	assert_eq!(w.only("2026-12-01T09:00:00Z").await.state, reopened, "however long after");
+	let draft = w.drafts(&open, &[], true, now).await;
+	assert_eq!(w.only(now).await.state, State::ReplyReady);
+	w.p.send_held_mail(t("2026-10-01T12:00:00Z")).await.unwrap();
+	assert!(w.sent().is_empty());
+	w.p.dismiss_mail_draft(w.owner, w.owner, draft).await.unwrap().unwrap();
+	assert_eq!(w.only(now).await.state, reopened, "let go, it waits for nothing");
+
+	w.p.send_mail_draft(w.owner, w.owner, w.drafts(&open, &[], true, now).await, bare("x"), t(now))
+		.await
+		.unwrap()
+		.unwrap();
+	let until = t("2026-10-03T09:02:00Z");
+	assert_eq!(w.only(now).await.state, State::Waiting { until }, "sent, and not in the inbox yet");
+	for n in 0..MAX_ASKS {
+		let at = format!("2026-10-01T{}:00:00Z", 10 + n);
+		w.arrives(ours(&at, 1, &format!("Re: {REQUEST}"), SUPPORT, &["m1@mail"], "x")).await;
+	}
+	let late = w.only("2026-10-09T09:00:00Z").await;
+	let since = t("2026-10-03T15:00:00Z");
+	assert_eq!(
+		(&late.state, late.due, late.press),
+		(&State::NeedsYou { why: Why::Unanswered { since } }, false, Err(Halt::Reopened)),
+		"asked often or not"
+	);
+	w.arrives(support("2026-10-09T10:00:00Z", 1, REQUEST, "Plomberie Dupont - Lyon: follow the prompts.")).await;
+	w.reads("2026-10-09T10:01:00Z", Kind::SelfServe, |_| {}).await;
+	let spoke = w.only("2026-10-09T10:02:00Z").await;
+	assert!(matches!(spoke.state, State::Done { by: Settled::Elsewhere(_) }), "{:?}", spoke.state);
+}
+
+#[tokio::test]
+async fn reopening_is_not_told_and_what_comes_of_it_is() {
+	let w = World::new().await;
+	let told = async |at: &str| {
+		w.p.alerts_access_seen(w.owner, &sa_panel::testing::operator(), "owner", t(at)).await.unwrap();
+		w.only(at).await;
+		w.p.tell_mail(Locale::En, t(at)).await.unwrap();
+		w.p.alerts_inbox(w.owner, &sa_panel::testing::operator(), &Sought::default()).await.unwrap().len()
+	};
+	w.arrives(support("2026-10-01T09:00:00Z", 1, REQUEST, LYON)).await;
+	w.reads("2026-10-01T09:01:00Z", Kind::Verified, |_| {}).await;
+	assert_eq!(told("2026-10-01T09:02:00Z").await, 1, "settled");
+	let case = w.only("2026-10-01T09:03:00Z").await;
+	w.marks(case.id, false, t("2026-10-01T09:03:00Z")).await;
+	assert_eq!(told("2026-10-04T09:00:00Z").await, 1, "their own press, nor again");
+	w.arrives(ours("2026-10-04T10:00:00Z", 1, &format!("Re: {REQUEST}"), SUPPORT, &["m1@mail"], "x")).await;
+	assert_eq!(told("2026-10-06T10:01:00Z").await, 2, "unanswered");
 }
 
 #[tokio::test]
@@ -754,7 +856,7 @@ async fn a_persons_mail_is_theirs_alone_corrected_by_them_and_gone_with_its_gmai
 		Kind::Invited,
 		"by rule; the calendar's is kept nowhere but the log"
 	);
-	assert_eq!((case.gmb, &case.state), (Some(w.lyon), &State::Quiet));
+	assert_eq!((case.gmb, &case.state), (Some(w.lyon), &quiet(QuietBecause::Nothing)));
 
 	let other = Uuid::now_v7();
 	let user = User {
@@ -820,6 +922,8 @@ enum Happens {
 	/// Ours, by hand, in Gmail.
 	Ours(&'static str),
 	Trashed,
+	/// Its person reopens that case, by order.
+	Reopened(usize),
 }
 
 fn says(kind: Kind, of: &str) -> Happens {
@@ -857,6 +961,10 @@ async fn lived(w: World, mut happens: Vec<(i64, Happens)>, robot: Option<Kind>, 
 					keep(ours("2026-10-01T09:00:00Z", 1, &format!("Re: {REQUEST}"), SUPPORT, &[], text), now);
 				}
 				Happens::Trashed => w.p.remove_gmb(w.owner, w.lyon, now).await.unwrap().unwrap(),
+				Happens::Reopened(nth) => {
+					let case = w.cases(&now.to_string()).await[nth].id;
+					w.marks(case, false, now).await;
+				}
 			}
 		}
 		w.p.follow_inbox(w.gmail, &w.inbox, now).await.unwrap();
@@ -904,7 +1012,7 @@ async fn lived(w: World, mut happens: Vec<(i64, Happens)>, robot: Option<Kind>, 
 			State::NeedsYou { why } => serde_json::to_value(why).unwrap()["code"].as_str().unwrap().to_owned(),
 			State::ReplyReady => "reply_ready".to_owned(),
 			State::Done { .. } => "done".to_owned(),
-			State::Quiet => "quiet".to_owned(),
+			State::Quiet { because } => format!("quiet ({})", serde_json::to_value(because).unwrap()["is"].as_str().unwrap()),
 		};
 		if stands != stood {
 			if !stands.is_empty() {
@@ -918,7 +1026,7 @@ async fn lived(w: World, mut happens: Vec<(i64, Happens)>, robot: Option<Kind>, 
 
 #[tokio::test]
 async fn google_is_pressed_over_days_as_far_as_it_should_be() {
-	use Happens::{Google, Ours, Trashed};
+	use Happens::{Google, Ours, Reopened, Trashed};
 	use Kind::*;
 	let verified = || {
 		Google(
@@ -966,14 +1074,14 @@ async fn google_is_pressed_over_days_as_far_as_it_should_be() {
 			vec![(0, says(Acknowledged, LYON))],
 			None,
 			36,
-			"us d2, us d4, us d6, us d8, us d10, us d12, asked_often d14, quiet d33",
+			"us d2, us d4, us d6, us d8, us d10, us d12, asked_often d14, quiet (old) d33",
 		),
 		(
 			"a specialist, silent past its word",
 			vec![(0, says(SelfServe, LYON)), (3, says(Routed, LYON))],
 			None,
 			26,
-			"us d0, us d2, unanswered d4, quiet d23",
+			"us d0, us d2, unanswered d4, quiet (old) d23",
 		),
 		(
 			"a robot deflects at once",
@@ -998,7 +1106,7 @@ async fn google_is_pressed_over_days_as_far_as_it_should_be() {
 			8,
 			"done d0",
 		),
-		("its GBP trashed", vec![(0, says(Acknowledged, LYON)), (30, Trashed)], None, 8, "quiet d1"),
+		("its GBP trashed", vec![(0, says(Acknowledged, LYON)), (30, Trashed)], None, 8, "quiet (removed) d1"),
 		("its GBP never named", vec![(0, says(SelfServe, "Hello"))], None, 8, "reply_ready d0"),
 		(
 			"a survey in the thread",
@@ -1047,14 +1155,14 @@ async fn google_is_pressed_over_days_as_far_as_it_should_be() {
 			vec![(0, says(SelfServe, LYON)), (30, anew(Acknowledged))],
 			None,
 			6,
-			"us d0, quiet d1, us d3, us d5",
+			"us d0, quiet (carried) d1, us d3, us d5",
 		),
 		(
 			"two tickets, one call offered",
 			vec![(0, says(SelfServe, LYON)), (30, anew(CallOffered))],
 			None,
 			6,
-			"us d0, quiet d1",
+			"us d0, quiet (carried) d1",
 		),
 		("a duplicate of another", vec![(0, anew(Acknowledged)), (3, says(DuplicateTicket, LYON))], None, 3, "us d2"),
 		("a duplicate of none known", vec![(0, says(DuplicateTicket, LYON))], None, 3, "kind d0"),
@@ -1071,6 +1179,28 @@ async fn google_is_pressed_over_days_as_far_as_it_should_be() {
 		("refused", vec![(0, says(ReinstatementRefused, LYON))], None, 3, "us d0, us d2"),
 		("seen live already", vec![(0, says(ReviewsLiveAlready, LYON))], None, 3, "us d0, us d2"),
 		("partly brought back", vec![(0, says(ReinstatementPartial, LYON))], None, 5, "us d2, us d4"),
+		(
+			"settled, reopened, written to by hand, then silent",
+			vec![(0, says(Verified, LYON)), (24, Reopened(0)), (30, Ours("And the call?"))],
+			None,
+			31,
+			"done d0, reopened d1, unanswered d3",
+		),
+		(
+			"settled, reopened, and Google speaks",
+			vec![(0, says(Verified, LYON)), (24, Reopened(0)), (48, says(Acknowledged, LYON))],
+			None,
+			6,
+			"done d0, reopened d1, done d2",
+		),
+		("settled, reopened, let be", vec![(0, says(Verified, LYON)), (24, Reopened(0))], None, 31, "done d0, reopened d1"),
+		(
+			"reopened, it carries the older",
+			vec![(0, says(ReviewsNoData, LYON)), (30, anew(RestrictionLifted)), (32, Reopened(1))],
+			None,
+			6,
+			"us d0, quiet (carried) d1",
+		),
 	];
 	let mut runs = Vec::new();
 	for (what, happens, robot, days, want) in rows {
@@ -1177,13 +1307,7 @@ async fn what_a_reply_was_written_of_is_what_it_answers() {
 	let case = w.only("2026-10-01T09:05:00Z").await;
 	w.drafts(&case, &[], true, "2026-10-01T09:05:00Z").await;
 	for done in [true, false] {
-		let edit = CaseEdit {
-			gmb: None,
-			topic: None,
-			done: Some(done),
-			join: None,
-		};
-		w.p.edit_mail_case(w.owner, w.owner, case.id, edit, now).await.unwrap().unwrap();
+		w.marks(case.id, done, now).await;
 	}
 	let case = w.only("2026-10-01T09:05:00Z").await;
 	assert_eq!(case.state, State::ReplyReady, "reopened: its reply as it was");
@@ -1192,7 +1316,7 @@ async fn what_a_reply_was_written_of_is_what_it_answers() {
 	assert!(w.p.draft_mail(w.owner, &case, written(), true, now).await.unwrap().is_none(), "a reply to it went meanwhile");
 	let pool = w.db.pool().await;
 	sqlx::query(
-		"INSERT INTO mail_drafts SELECT 99, case_id, answers, body_sealed, data_key_fp, needs, 'proposed', NULL, created_at, NULL, NULL, NULL, NULL FROM mail_drafts WHERE state = 'sent'",
+		"INSERT INTO mail_drafts (id, case_id, answers, body_sealed, data_key_fp, needs, state, created_at) SELECT 99, case_id, answers, body_sealed, data_key_fp, needs, 'proposed', created_at FROM mail_drafts WHERE state = 'sent'",
 	)
 	.execute(&pool)
 	.await
@@ -1200,7 +1324,7 @@ async fn what_a_reply_was_written_of_is_what_it_answers() {
 	assert!(matches!(w.p.send_mail_draft(w.owner, w.owner, 99, bare("x"), now).await.unwrap(), Err(Refused::Conflict(_))));
 	assert_eq!(w.sent().len(), 1, "answered once");
 	let twice = sqlx::query(
-		"INSERT INTO mail_drafts SELECT 100, case_id, answers, body_sealed, data_key_fp, needs, 'proposed', NULL, created_at, NULL, NULL, NULL, NULL FROM mail_drafts WHERE id = 99",
+		"INSERT INTO mail_drafts (id, case_id, answers, body_sealed, data_key_fp, needs, state, created_at) SELECT 100, case_id, answers, body_sealed, data_key_fp, needs, 'proposed', created_at FROM mail_drafts WHERE id = 99",
 	)
 	.execute(&pool)
 	.await;
@@ -1276,7 +1400,7 @@ async fn a_running_deadline_and_a_long_silence_are_told() {
 	assert_eq!(told("2026-10-30T08:59:00Z").await.0, 1);
 	assert_eq!(told("2026-10-30T09:01:00Z").await.0, 2, "again a day before");
 	assert_eq!(told("2026-10-30T10:01:00Z").await.0, 2, "once");
-	assert_eq!(w.only("2026-11-01T09:00:00Z").await.state, State::Quiet);
+	assert_eq!(w.only("2026-11-01T09:00:00Z").await.state, quiet(QuietBecause::Old));
 	sqlx::query("DELETE FROM mails").execute(&pool).await.unwrap();
 	sqlx::query("DELETE FROM mail_cases").execute(&pool).await.unwrap();
 
@@ -1312,7 +1436,8 @@ async fn one_conversation_under_two_numbers_is_one_case_once_its_person_says_so(
 		w.reads(now, Kind::SelfServe, |_| {}).await;
 	}
 	let cases = w.cases(now).await;
-	assert_eq!((&cases[0].state, &cases[1].state), (&State::Quiet, &State::ReplyDue), "the newer is asked of");
+	let carried = quiet(QuietBecause::Carried { case_id: cases[1].id });
+	assert_eq!((&cases[0].state, &cases[1].state), (&carried, &State::ReplyDue), "the newer is asked of");
 	let (first, second) = (cases[0].id, cases[1].id);
 	let written = Written::Reply { body: "x".into(), needs: vec![] };
 	w.p.draft_mail(w.owner, &cases[1], written, true, t(now)).await.unwrap().unwrap();

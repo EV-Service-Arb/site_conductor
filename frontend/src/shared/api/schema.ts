@@ -2117,7 +2117,7 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Corrects a case's GBP or topic, makes it part of another, whose the answer then is, or marks it done; a draft going by itself waits for its person.
+         * Corrects a case's GBP or topic, makes it part of another, whose the answer then is, or marks it done or open; a draft going by itself waits for its person.
          * @description 400 two gmails' cases, or one not proved Google's, are not one.
          */
         patch: operations["edit_mail_case"];
@@ -4759,6 +4759,11 @@ export interface components {
              */
             limit: number;
             on: components["schemas"]["MailAuto"][];
+            /**
+             * Format: int64
+             * @description How long Google is silent before it is asked again, where it gave no other term.
+             */
+            re_ask_hours: number;
             /** @description The topics that can be. */
             topics: components["schemas"]["MailTopic"][];
         };
@@ -4815,6 +4820,7 @@ export interface components {
             /** @description Of its GBP, newest first. */
             attempts: components["schemas"]["VerificationAttempt"][];
             case: components["schemas"]["MailCase"];
+            cost: components["schemas"]["MailCost"];
             /**
              * Format: uint
              * @description What a reply's files may be in all, bytes.
@@ -4829,7 +4835,10 @@ export interface components {
         };
         /** @description Absent fields stay. */
         MailCaseEdit: {
-            /** @description Done until Google speaks again. */
+            /**
+             * @description Done, or open, until Google speaks again, whatever settled it or is written to Google meanwhile; open again, nothing
+             *     in it is written or sent unasked. Where its mail says the same, it is its mail's.
+             */
             done?: boolean | null;
             /**
              * Format: int64
@@ -4852,6 +4861,21 @@ export interface components {
         /** @description `GET /mail/cases`, those last spoken in first. */
         MailCases: {
             cases: components["schemas"]["MailCase"][];
+        };
+        /** @description What a case costs its caller, in tokens. */
+        MailCost: {
+            /** @description The caller's own models write, at no charge here. */
+            own: boolean;
+            /**
+             * Format: int64
+             * @description What writing a reply now is charged, about; `null`: none can be written.
+             */
+            reply: number | null;
+            /**
+             * Format: int64
+             * @description What its messages read and its replies written were charged.
+             */
+            spent: number;
         };
         /** @description A reply written to a case. */
         MailDraft: {
@@ -4945,6 +4969,9 @@ export interface components {
         } | {
             /** @constant */
             is: "settled";
+        } | {
+            /** @constant */
+            is: "reopened";
         } | {
             /** @constant */
             is: "asked";
@@ -5085,6 +5112,22 @@ export interface components {
             /** @description RFC 3339; `null`: still asked for. */
             over_at: string | null;
         };
+        /** @description Why nothing is to do in a case. */
+        MailQuietBecause: {
+            /** @constant */
+            is: "nothing";
+        } | {
+            /** @constant */
+            is: "old";
+        } | {
+            /** @constant */
+            is: "removed";
+        } | {
+            /** Format: int64 */
+            case_id: number;
+            /** @constant */
+            is: "carried";
+        };
         /**
          * @description Who read a message.
          *
@@ -5218,6 +5261,7 @@ export interface components {
             /** @constant */
             is: "done";
         } | {
+            because: components["schemas"]["MailQuietBecause"];
             /** @constant */
             is: "quiet";
         };
@@ -5272,6 +5316,9 @@ export interface components {
             since: string;
         } | {
             /** @constant */
+            code: "reopened";
+        } | {
+            /** @constant */
             code: "no_reply";
         } | {
             /** @constant */
@@ -5291,6 +5338,10 @@ export interface components {
         } | {
             /** @constant */
             code: "failed";
+            error: string;
+        } | {
+            /** @constant */
+            code: "login";
             error: string;
         };
         /**
@@ -6974,6 +7025,7 @@ export type MailCase = components['schemas']['MailCase'];
 export type MailCaseDetail = components['schemas']['MailCaseDetail'];
 export type MailCaseEdit = components['schemas']['MailCaseEdit'];
 export type MailCases = components['schemas']['MailCases'];
+export type MailCost = components['schemas']['MailCost'];
 export type MailDraft = components['schemas']['MailDraft'];
 export type MailDraftAsk = components['schemas']['MailDraftAsk'];
 export type MailDraftEdit = components['schemas']['MailDraftEdit'];
@@ -6987,6 +7039,7 @@ export type MailKind = components['schemas']['MailKind'];
 export type MailLine = components['schemas']['MailLine'];
 export type MailMessage = components['schemas']['MailMessage'];
 export type MailPursuit = components['schemas']['MailPursuit'];
+export type MailQuietBecause = components['schemas']['MailQuietBecause'];
 export type MailReader = components['schemas']['MailReader'];
 export type MailReading = components['schemas']['MailReading'];
 export type MailReadingEdit = components['schemas']['MailReadingEdit'];

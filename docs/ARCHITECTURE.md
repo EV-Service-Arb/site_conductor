@@ -1220,7 +1220,7 @@ verify a GBP, is derived from its messages' readings (`sa_core::mail`), never st
 follow (60 s) ─ kept, joined to its case ─ read ─┬─ by rule: the sender, a notice's fixed subject
                                                  ├─ by the model (≤ 90 days old), 3 tries
                                                  └─ by a person, over either
-case's state: needs_you (why) │ reply_due │ reply_ready │ sending │ waiting │ done (by) │ quiet
+case's state: needs_you (why) │ reply_due │ reply_ready │ sending │ waiting │ done (by) │ quiet (because)
 reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ SMTP ─▶ sent | failed
                      └─▶ held (≥ 15 min; its GBP's topic on, to be pressed) ─┘
                          either ─ another message in its case ─▶ superseded
@@ -1253,7 +1253,8 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   asks for is its operator's, the reply ready around it. A specialist of Google's is waited for, told of, and
   pressed once. What a notice says stands until a kind that supersedes it; a verification is over once its GBP is
   verified, a suspension once it is reinstated, a case once its GBP is in the trash. Of a GBP's open
-  conversations on one topic the latest asks, its other cases quiet meanwhile.
+  conversations on one topic the latest asks, its other cases quiet meanwhile. A person's mark, done or open, holds until
+  Google speaks in the case, and is kept only where its mail says otherwise; open, nothing in it is written or sent unasked.
 - **What it wants** of its person (what the draft lacks, else what Google asks) is given or not, by a document of the GBP's
   (kept sealed, for the next ask and the appeal) or otherwise.
 - **What works** (`/mail/stats`): a goal (the live call, the missing reviews) is pursued from our first ask until Google

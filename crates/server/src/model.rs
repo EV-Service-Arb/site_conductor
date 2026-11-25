@@ -179,6 +179,18 @@ impl Chain<'_> {
 			.fallback_chain(self.asked.iter().map(|own| self.model.source(own.provider, &own.secret, self.bill)))
 	}
 
+	/// What an answer of `written` tokens to a prompt of `read` is charged on ours, asked now; `None`, none is awake.
+	pub(crate) async fn charges(self, read: i64, written: i64) -> eyre::Result<Option<i64>> {
+		let Ok(awake) = self.awake() else {
+			return Ok(None); // why none is, is told where it is asked
+		};
+		let (prices, _) = awake.panel.spending(awake.user).await?;
+		let used = awake.asked[0].provider.used([read, 0, 0, written]);
+		let owed: i64 = used.iter().map(|(item, units)| prices[item] * units).sum();
+		let per = used[0].0.per();
+		Ok(Some((owed + per - 1).div_euclid(per)))
+	}
+
 	/// Who gave an answer's first `step`.
 	pub(crate) fn provider(&self, step: &Step) -> Provider {
 		self.asked[step.failed.len()].provider

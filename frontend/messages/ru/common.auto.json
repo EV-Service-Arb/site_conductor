@@ -3680,8 +3680,8 @@
     "t": "{topic}: отвечать на {of} автоматически?"
   },
   "mail.auto.confirm.how": {
-    "en": "Each goes {minutes} minutes after it is written unless you stop it, again after 48 h of silence, at most {limit} unanswered. Any that needs something of yours stays by hand.",
-    "t": "Каждый ответ уходит через {minutes} мин после написания, если вы его не остановите; повторно — после 48 ч молчания, не более {limit} без ответа. Всё, для чего нужно что-то от вас, остаётся на ручной обработке."
+    "en": "Each goes {minutes} minutes after it is written unless you stop it, again after {hours} h of silence, at most {limit} unanswered. Any that needs something of yours stays by hand.",
+    "t": "Каждый уходит через {minutes} мин после написания, если вы его не остановите, и повторно после {hours} ч молчания, но не более {limit} без ответа. Всё, что требует чего-то от вас, остаётся на ручной обработке."
   },
   "mail.auto.confirm.none": {
     "en": "None is written now.",
@@ -3954,6 +3954,10 @@
   "mail.halt.removed": {
     "en": "its GBP is in the trash",
     "t": "его GBP в корзине"
+  },
+  "mail.halt.reopened": {
+    "en": "it was reopened: what goes is yours to send",
+    "t": "он был открыт заново: то, что уходит, отправляете вы"
   },
   "mail.halt.settled": {
     "en": "what it asks for is given",
@@ -4295,6 +4299,10 @@
     "en": "not sent",
     "t": "не отправлено"
   },
+  "mail.needs.login": {
+    "en": "login refused",
+    "t": "в входе отказано"
+  },
   "mail.needs.may_have_gone_out": {
     "en": "check the thread",
     "t": "проверьте цепочку"
@@ -4310,6 +4318,10 @@
   "mail.needs.nothing_to_say": {
     "en": "no reply written",
     "t": "ответ не написан"
+  },
+  "mail.needs.reopened": {
+    "en": "reopened",
+    "t": "открыто заново"
   },
   "mail.needs.stuck": {
     "en": "waits for Claude",
@@ -4399,6 +4411,22 @@
     "en": "Previous thread",
     "t": "Предыдущая цепочка"
   },
+  "mail.quiet.carried": {
+    "en": "The GBP's latest conversation on this carries it.",
+    "t": "Его ведёт последняя переписка GBP по этому делу."
+  },
+  "mail.quiet.nothing": {
+    "en": "Nothing it says is to act on.",
+    "t": "В нём нет ничего, на что нужно действовать."
+  },
+  "mail.quiet.old": {
+    "en": "Nothing was said since {at}.",
+    "t": "С {at} ничего не говорилось."
+  },
+  "mail.quiet.removed": {
+    "en": "Its GBP is in the trash.",
+    "t": "Его GBP в корзине."
+  },
   "mail.removed": {
     "en": "This thread is gone",
     "t": "Этой цепочки больше нет"
@@ -4410,6 +4438,10 @@
   "mail.reopen.label": {
     "en": "{subject} reopened",
     "t": "{subject} открыто снова"
+  },
+  "mail.reopen.means": {
+    "en": "Until Google writes again. Where its mail settles it, nothing is written or sent unasked",
+    "t": "Пока Google не напишет снова. Там, где это решает его почта, ничего не пишется и не отправляется без запроса"
   },
   "mail.reply": {
     "en": "Reply",
@@ -4535,6 +4567,14 @@
     "en": "in Spam",
     "t": "в спаме"
   },
+  "mail.spent": {
+    "en": "{n, plural, one {# token} other {# tokens}} spent",
+    "t": "{n, plural, one {потрачен # токен} few {потрачено # токена} many {потрачено # токенов} other {потрачено # токена}}"
+  },
+  "mail.state.carried": {
+    "en": "carried · {since}",
+    "t": "ведётся · {since}"
+  },
   "mail.state.deadline": {
     "en": "by {at}",
     "t": "до {at}"
@@ -4566,6 +4606,10 @@
   "mail.state.sending": {
     "en": "sending",
     "t": "отправляется"
+  },
+  "mail.state.trashed": {
+    "en": "in the trash · {since}",
+    "t": "в корзине · {since}"
   },
   "mail.state.waiting": {
     "en": "with Google until {at}",
@@ -4819,6 +4863,10 @@
     "en": "The reply did not go: {error}",
     "t": "Ответ не ушёл: {error}"
   },
+  "mail.why.login": {
+    "en": "The reply did not go, Gmail refused the login: {error}",
+    "t": "Ответ не ушёл, Gmail отказал во входе: {error}"
+  },
   "mail.why.management_requested": {
     "en": "Somebody asks to manage it: accept or refuse it on the profile.",
     "t": "Кто-то просит управление профилем: примите или отклоните это в профиле."
@@ -4851,6 +4899,10 @@
     "en": "Google warns of a policy broken on the profile.",
     "t": "Google предупреждает о нарушении правил в профиле."
   },
+  "mail.why.reopened": {
+    "en": "Reopened: until Google writes, nothing is written or sent here unasked.",
+    "t": "Открыто заново: пока Google не напишет, здесь ничего не пишется и не отправляется без запроса."
+  },
   "mail.why.reverification_required": {
     "en": "Google wants it verified again: start it from the profile.",
     "t": "Google требует подтвердить профиль заново: начните это из профиля."
@@ -4876,8 +4928,8 @@
     "t": "Google заблокировал профиль: апелляция отправляется через собственную форму Google."
   },
   "mail.why.unanswered": {
-    "en": "Google went silent, and nothing here takes a reply.",
-    "t": "Google замолчал, а ответить здесь нельзя."
+    "en": "Google went silent, and nothing asks it again by itself.",
+    "t": "Google замолчал, и ничто само не спросит его снова."
   },
   "mail.why.unread": {
     "en": "Not read yet.",

@@ -95,7 +95,12 @@ impl Mailbox for Inbox {
 		let mails = self.0.lock().unwrap();
 		Ok(Batch {
 			validity: 7,
-			mails: mails.iter().filter(|m| folder == Folder::All && m.uid > after.map_or(0, |c| c.uid)).take(limit).cloned().collect(),
+			mails: mails
+				.iter()
+				.filter(|m| folder == Folder::All && m.uid > after.map_or(0, |c| c.uid))
+				.take(limit)
+				.cloned()
+				.collect(),
 		})
 	}
 }
@@ -286,8 +291,13 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 		"About “Plomberie Dupont - Lyon”: please share a photo of the signage.",
 	)
 	.await;
-	w.arrives(1, "businessprofile-noreply@google.com", "Marie left a review for Plomberie Dupont - Lyon", "Marie left a review for Plomberie Dupont - Lyon")
-		.await;
+	w.arrives(
+		1,
+		"businessprofile-noreply@google.com",
+		"Marie left a review for Plomberie Dupont - Lyon",
+		"Marie left a review for Plomberie Dupont - Lyon",
+	)
+	.await;
 	w.worker.read_and_write().await.unwrap();
 	let cases = w.cases().await;
 	assert_eq!(cases.len(), 2, "a routine notice is none");
@@ -298,8 +308,8 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	);
 	assert_eq!(case["state"], json!({ "is": "needs_you", "why": { "code": "needs", "needs": ["a photo of the signage"] } }));
 	assert_eq!(case["draft"]["state"], "proposed");
-	assert_eq!(rejected["state"], json!({ "is": "quiet" }), "the conversation carries it");
 	let id = case["id"].as_i64().unwrap();
+	assert_eq!(rejected["state"], json!({ "is": "quiet", "because": { "is": "carried", "case_id": id } }));
 
 	{
 		let asked = w.asked.lock().unwrap();
@@ -324,6 +334,18 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	assert_eq!(detail["recipient"], SUPPORT);
 	assert_eq!(detail["files_max"], 18 << 20);
 	assert_eq!(detail["messages"][0]["read_by"], "model");
+	let keys = [format!("mail:{}", detail["messages"][0]["id"]), format!("mail-case:{id}")];
+	let charges = w.p.ledger(w.owner, None, 10).await.unwrap().unwrap();
+	let spent: i64 = charges
+		.iter()
+		.filter(|(_, e)| e.charged.as_ref().is_some_and(|c| keys.contains(&c.key)))
+		.map(|(_, e)| -e.delta)
+		.sum();
+	assert!(spent > 0);
+	assert_eq!((&detail["cost"]["own"], &detail["cost"]["spent"]), (&json!(false), &json!(spent)));
+	assert!(detail["cost"]["reply"].as_i64().unwrap() > 0, "{}", detail["cost"]);
+	let (_, notice) = w.call(Method::GET, &format!("/mail/cases/{}", rejected["id"]), None).await;
+	assert!(notice["cost"]["reply"].is_null(), "nothing in it takes one: {}", notice["cost"]);
 	assert_eq!((&detail["attempts"][0]["method"], &detail["attempts"][0]["outcome"]), (&json!("video"), &json!("rejected")));
 	let (_, of_gmb) = w.call(Method::GET, &format!("/gmbs/{}/mail", w.gmb), None).await;
 	assert_eq!((of_gmb["attempts"].as_array().unwrap().len(), of_gmb["cases"].as_array().unwrap().len()), (1, 2));
@@ -388,11 +410,7 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 		(Method::POST, format!("/mail/drafts/{draft}/restore"), None),
 		(Method::PUT, "/mail/auto".to_owned(), Some(json!({ "gmbs": [w.gmb], "topic": "reviews", "on": true }))),
 		(Method::GET, format!("/gmbs/{}/mail", w.gmb), None),
-		(
-			Method::PUT,
-			format!("/mail/cases/{id}/given"),
-			Some(json!({ "item": "x", "given": false, "document": null })),
-		),
+		(Method::PUT, format!("/mail/cases/{id}/given"), Some(json!({ "item": "x", "given": false, "document": null }))),
 		(Method::GET, format!("/gmbs/{}/documents", w.gmb), None),
 		(
 			Method::POST,
@@ -422,6 +440,12 @@ async fn a_persons_mail_is_read_answered_by_a_draft_and_sent_by_them() {
 	let (status, auto) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmbs": [w.gmb], "topic": "reviews", "on": true }))).await;
 	assert_eq!((status, &auto["on"]), (200, &json!([{ "gmb_id": w.gmb, "topic": "reviews" }])));
 	assert_eq!(auto["by_itself"], true);
+	assert_eq!(auto["re_ask_hours"], 48);
+	let (_, before) = w.call(Method::GET, &format!("/mail/cases/{id}"), None).await;
+	let year = Timestamp::now() + SignedDuration::from_hours(24 * 365);
+	w.p.set_claude(w.owner, "theirs", year, Timestamp::now()).await.unwrap();
+	let (_, theirs) = w.call(Method::GET, &format!("/mail/cases/{id}"), None).await;
+	assert_eq!(theirs["cost"], json!({ "own": true, "reply": 0, "spent": before["cost"]["spent"] }));
 	let (status, _) = w.call(Method::PUT, "/mail/auto", Some(json!({ "gmbs": [w.gmb], "topic": "suspension", "on": true }))).await;
 	assert_eq!(status, 400);
 }
@@ -438,7 +462,11 @@ async fn what_google_asks_is_given_once_kept_and_sent() {
 		.await;
 	w.worker.read_and_write().await.unwrap();
 	let case = w.cases().await.remove(0);
-	assert_eq!(case["wanted"], json!([{ "item": "a photo of the signage", "given": false, "document": null }]), "asked and lacking, once");
+	assert_eq!(
+		case["wanted"],
+		json!([{ "item": "a photo of the signage", "given": false, "document": null }]),
+		"asked and lacking, once"
+	);
 	let path = format!("/gmbs/{}/documents", w.gmb);
 	let file = json!({ "name": "sign.jpg", "type": "image/jpeg", "base64": "AQID" });
 	let (status, kept) = w.call(Method::POST, &path, Some(json!({ "file": file, "given_for": "a photo of the signage" }))).await;
@@ -526,7 +554,9 @@ async fn missing_reviews_are_the_archives_for_the_writer_and_the_operator() {
 	assert!(context.contains("as our archive of it saw them (2):"), "{context}");
 	assert!(!context.contains("</email> The"), "an email ends where we end it: {context}");
 	assert!(
-		context.contains("- Claire Morel (5 stars, posted about 2026-11-04, first seen 2026-11-05, gone since 2026-11-20, a screenshot held, author's profile https://maps.example/Claire): Fuite réparée"),
+		context.contains(
+			"- Claire Morel (5 stars, posted about 2026-11-04, first seen 2026-11-05, gone since 2026-11-20, a screenshot held, author's profile https://maps.example/Claire): Fuite réparée"
+		),
 		"{context}"
 	);
 	assert!(context.contains("no screenshot, its reinstatement asked of Google on 2026-11-21"), "{context}");
@@ -575,7 +605,9 @@ async fn missing_reviews_are_the_archives_for_the_writer_and_the_operator() {
 	let done = json!({ "is": "done", "by": { "is": "here" } });
 	w.arrives(5, SUPPORT, subject, "They are live on the profile.").await;
 	w.worker.read_and_write().await.unwrap();
-	assert_eq!(detail(&mut w).await["case"]["state"], done, "nothing is missing: no reply is asked of the model");
+	let none = detail(&mut w).await;
+	assert_eq!(none["case"]["state"], done, "nothing is missing: no reply is asked of the model");
+	assert_eq!(none["cost"]["reply"], 0, "nor is one to be");
 	w.arrives(4, SUPPORT, subject, "We brought back those we can.").await;
 	w.worker.read_and_write().await.unwrap();
 	assert_eq!(detail(&mut w).await["case"]["state"]["is"], "waiting", "what came back is seen within its term");
@@ -605,7 +637,11 @@ async fn a_reply_is_not_written_where_none_goes_nor_while_the_archive_fails() {
 	assert_eq!((status, &refused["error"]), (400, &json!("nothing in it takes a reply")));
 	let draft = format!("/mail/cases/{}/draft", case["id"]);
 	let (status, own) = w.call(Method::POST, &draft, Some(json!({ "body": "" }))).await;
-	assert_eq!((status, &own["case"]["state"]["is"], &own["case"]["draft"]["body"]), (200, &json!("reply_ready"), &json!("")), "{own}");
+	assert_eq!(
+		(status, &own["case"]["state"]["is"], &own["case"]["draft"]["body"]),
+		(200, &json!("reply_ready"), &json!("")),
+		"{own}"
+	);
 	let (status, _) = w.call(Method::POST, &draft, Some(json!({ "body": "Ours.", "instruction": "shorter" }))).await;
 	assert_eq!(status, 400);
 	let id = own["case"]["draft"]["id"].as_i64().unwrap();
@@ -625,6 +661,8 @@ async fn mail_waits_without_a_claude_and_a_reading_that_never_reads_is_a_persons
 	assert_eq!(case["state"]["why"]["code"], "stuck", "{case}");
 	let (status, refused) = w.call(Method::POST, &format!("/mail/cases/{}/draft", case["id"]), Some(json!({ "instruction": null }))).await;
 	assert_eq!((status, &refused["code"]), (503, &json!("unavailable")));
+	let (_, detail) = w.call(Method::GET, &format!("/mail/cases/{}", case["id"]), None).await;
+	assert_eq!(detail["cost"], json!({ "own": false, "reply": null, "spent": 0 }), "no model");
 	assert!(!case["stuck"].is_null(), "{case}");
 	let message = case["last"]["id"].clone();
 	let (status, _) = w.call(Method::PATCH, &format!("/mail/messages/{message}"), Some(json!({ "kind": "noise" }))).await;

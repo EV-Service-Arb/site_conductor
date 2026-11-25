@@ -15,7 +15,6 @@ import { ErrorState } from "@/shared/ui/error-state";
 import { notifyFailure } from "@/shared/ui/notify";
 import { useButtonSize, useControlSize } from "@/shared/ui/touch";
 
-import { useDraftCost } from "../model/use-draft-cost";
 import { PickDocument } from "./pick-document";
 
 interface Props {
@@ -87,28 +86,28 @@ function Write({ detail, onChanged, over = false, onDone }: { detail: MailCaseDe
   const { busy, act } = useAct(onChanged);
   const held = useTokens();
   const spend = useSpendConfirm();
-  const runs = useDraftCost(detail.messages.flatMap((m) => m.text ?? []));
-  const stuck = detail.case.stuck ?? (runs !== null && !runs.own && held.status === "ok" && held.data.balance <= 0 ? t(mail.write.broke, "No tokens left") : null);
+  const { own, reply } = detail.cost;
+  const stuck = detail.case.stuck ?? (!own && held.status === "ok" && held.data.balance <= 0 ? t(mail.write.broke, "No tokens left") : null);
   const write = () =>
     act(async () => {
       await writeDraft(detail.case.id, instruction.trim() === "" ? null : instruction.trim());
       onDone?.();
     });
   const verb = over ? t(mail.write.again, "Rewrite") : t(mail.write, "Write a reply");
-  const cost = runs === null ? null : runs.own ? t(mail.write.own, "on your own model") : runs.cost === undefined ? null : t(mail.write.cost, "≈ {n} tokens", { n: runs.cost });
+  const cost = own ? t(mail.write.own, "on your own model") : reply === null ? null : t(mail.write.cost, "≈ {n} tokens", { n: reply });
   const form = (
     <form
       className="flex flex-wrap items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (runs !== null) void spend.ask(runs.own ? 0 : runs.cost, write);
+        void spend.ask(reply ?? undefined, write);
       }}
     >
       <label htmlFor={id} className="sr-only">
         {t(mail.write.instruction, "What it should say")}
       </label>
       <Input id={id} size={control} value={instruction} disabled={busy || stuck !== null} onChange={(e) => setInstruction(e.target.value)} placeholder={over ? t(mail.write.change, "What to change, optional") : t(mail.write.say, "What it should say, optional")} className="min-w-48 flex-1" />
-      <Button type="submit" variant="outline" size={button("sm")} disabled={busy || runs === null || held.status !== "ok"} {...(stuck !== null && { disabledReason: stuck })}>
+      <Button type="submit" variant="outline" size={button("sm")} disabled={busy || held.status !== "ok"} {...(stuck !== null && { disabledReason: stuck })}>
         {busy ? <Spinner aria-hidden /> : <PenLine aria-hidden />}
         {busy ? t(mail.write.busy, "Writing") : [verb, stuck === null && cost].filter(Boolean).join(" · ")}
       </Button>

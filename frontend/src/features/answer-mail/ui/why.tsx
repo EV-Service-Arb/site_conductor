@@ -51,7 +51,7 @@ export function Why({ c }: { c: MailCase }) {
   if (said === null && deadline === null) return null;
   const reasons = why !== null && c.last.who !== "us" ? c.last.reasons : [];
   return (
-    <Note tone={deadline !== null || why?.code === "failed" || why?.code === "may_have_gone_out" ? "error" : "warn"} icon={<TriangleAlert aria-hidden />}>
+    <Note tone={deadline !== null || why?.code === "failed" || why?.code === "login" || why?.code === "may_have_gone_out" ? "error" : "warn"} icon={<TriangleAlert aria-hidden />}>
       {deadline !== null && (
         <p className="font-medium">
           {Date.parse(deadline) > now.getTime() ? t(mail.deadline, "Google's deadline: {at}", { at: formatDateTime(deadline, locale) }) : t(mail.deadline.passed, "Google's deadline passed: {at}", { at: formatDateTime(deadline, locale) })}
@@ -64,8 +64,7 @@ export function Why({ c }: { c: MailCase }) {
         </p>
       ))}
       {why?.code === "stuck" && <Mend />}
-      {/* SMTP's codes of a login refused */}
-      {why?.code === "failed" && /\b53[45]\b/.test(why.error) && (
+      {why?.code === "login" && (
         <Button asChild variant="outline" size={button("sm")} className="self-start">
           <ViewLink to={pageOf({ kind: "account", gmail: c.gmail_id, tab: "connections" })}>{t(mail.inbox.reconnect, "Reconnect")}</ViewLink>
         </Button>

@@ -164,7 +164,7 @@ function Switches({ g, gmbs, of, auto, reload, className, hidden }: { g: Gmail; 
           description={
             <>
               {told(asked).goes(t)}{" "}
-              {t(mail.auto.confirm.how, "Each goes {minutes} minutes after it is written unless you stop it, again after 48 h of silence, at most {limit} unanswered. Any that needs something of yours stays by hand.", { minutes: auto.hold_minutes, limit: auto.limit })}
+              {t(mail.auto.confirm.how, "Each goes {minutes} minutes after it is written unless you stop it, again after {hours} h of silence, at most {limit} unanswered. Any that needs something of yours stays by hand.", { minutes: auto.hold_minutes, hours: auto.re_ask_hours, limit: auto.limit })}
               <Drafts gmbs={gmbs} topic={asked} />
             </>
           }

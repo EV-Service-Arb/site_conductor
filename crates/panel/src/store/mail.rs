@@ -6,7 +6,7 @@ use eyre::WrapErr;
 use jiff::Timestamp;
 use sa_core::{
 	gbp,
-	mail::{DraftState, Holds, Reading, Sender, Topic},
+	mail::{DraftState, Holds, Mark, Reading, Sender, Topic},
 };
 use sqlx::{SqliteConnection, types::Json};
 use uuid::Uuid;
@@ -19,7 +19,7 @@ const MAIL: &str = "SELECT m.id, m.case_id, m.gmail_id, m.message, m.thread, m.a
 /// The cases that are one with case $1.
 const WITH_IT: &str = "SELECT o.id FROM mail_cases o JOIN mail_cases c ON coalesce(o.joined, o.id) = coalesce(c.joined, c.id) WHERE c.id = $1";
 
-const DRAFT: &str = "SELECT d.id, d.case_id, d.answers, d.body_sealed, d.data_key_fp, d.needs, d.state, d.send_at, d.created_at, d.sent_at, d.error FROM mail_drafts d";
+const DRAFT: &str = "SELECT d.id, d.case_id, d.answers, d.body_sealed, d.data_key_fp, d.needs, d.state, d.send_at, d.created_at, d.sent_at, d.error, d.login FROM mail_drafts d";
 
 /// Who read a message.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, strum::EnumString, strum::IntoStaticStr, schemars::JsonSchema, serde::Serialize)]
@@ -110,13 +110,18 @@ pub(crate) struct CaseRow {
 	numbers: Json<BTreeSet<String>>,
 	pub gmb_id: Option<i64>,
 	topic: Option<String>,
-	pub done_mail: Option<i64>,
+	mark_mail: Option<i64>,
+	mark_open: bool,
 	/// The case it is part of.
 	pub joined: Option<i64>,
 }
 impl CaseRow {
 	pub(crate) fn numbers(&self) -> &BTreeSet<String> {
 		&self.numbers.0
+	}
+
+	pub(crate) fn mark(&self) -> Option<(Mark, i64)> {
+		Some((if self.mark_open { Mark::Open } else { Mark::Done }, self.mark_mail?))
 	}
 
 	pub(crate) fn topic(&self) -> eyre::Result<Option<Topic>> {
@@ -136,6 +141,7 @@ pub(crate) struct DraftRow {
 	pub created_at: Timestamp,
 	pub sent_at: Option<Timestamp>,
 	pub error: Option<String>,
+	pub login: bool,
 }
 
 #[derive(sqlx::FromRow)]
@@ -151,6 +157,7 @@ struct RawDraft {
 	created_at: i64,
 	sent_at: Option<i64>,
 	error: Option<String>,
+	login: bool,
 }
 
 fn draft(r: RawDraft) -> eyre::Result<DraftRow> {
@@ -168,6 +175,7 @@ fn draft(r: RawDraft) -> eyre::Result<DraftRow> {
 		created_at: from_db(r.created_at)?,
 		sent_at: r.sent_at.map(from_db).transpose()?,
 		error: r.error,
+		login: r.login,
 	})
 }
 
@@ -267,21 +275,25 @@ pub(crate) async fn add(conn: &mut SqliteConnection, m: &NewMail<'_>) -> eyre::R
 
 /// The drafts not handed to SMTP of the case, whatever is joined with it: another message came.
 pub(crate) async fn supersede(conn: &mut SqliteConnection, case: i64) -> eyre::Result<()> {
-	sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE mail_drafts SET state = 'superseded' WHERE case_id IN ({WITH_IT}) AND state IN ('proposed', 'held', 'failed')")))
-		.bind(case)
-		.execute(&mut *conn)
-		.await
-		.wrap_err("superseding a case's drafts")?;
+	sqlx::query(sqlx::AssertSqlSafe(format!(
+		"UPDATE mail_drafts SET state = 'superseded' WHERE case_id IN ({WITH_IT}) AND state IN ('proposed', 'held', 'failed')"
+	)))
+	.bind(case)
+	.execute(&mut *conn)
+	.await
+	.wrap_err("superseding a case's drafts")?;
 	Ok(())
 }
 
 /// The draft going by itself of the case, whatever is joined with it, waits for a person.
 pub(crate) async fn unhold(conn: &mut SqliteConnection, case: i64) -> eyre::Result<()> {
-	sqlx::query(sqlx::AssertSqlSafe(format!("UPDATE mail_drafts SET state = 'proposed' WHERE case_id IN ({WITH_IT}) AND state = 'held'")))
-		.bind(case)
-		.execute(&mut *conn)
-		.await
-		.wrap_err("holding a case's draft back")?;
+	sqlx::query(sqlx::AssertSqlSafe(format!(
+		"UPDATE mail_drafts SET state = 'proposed' WHERE case_id IN ({WITH_IT}) AND state = 'held'"
+	)))
+	.bind(case)
+	.execute(&mut *conn)
+	.await
+	.wrap_err("holding a case's draft back")?;
 	Ok(())
 }
 
@@ -308,7 +320,7 @@ pub(crate) async fn handed(conn: &mut SqliteConnection, answers: i64) -> eyre::R
 /// The cases of the owner's gmails not removed, oldest first.
 pub(crate) async fn cases(conn: &mut SqliteConnection, owner: Uuid) -> eyre::Result<Vec<CaseRow>> {
 	sqlx::query_as(
-		"SELECT c.id, c.gmail_id, c.numbers, c.gmb_id, c.topic, c.done_mail, c.joined FROM mail_cases c JOIN gmails g ON g.id = c.gmail_id \
+		"SELECT c.id, c.gmail_id, c.numbers, c.gmb_id, c.topic, c.mark_mail, c.mark_open, c.joined FROM mail_cases c JOIN gmails g ON g.id = c.gmail_id \
 		 WHERE g.owner = $1 AND g.removed_at IS NULL ORDER BY c.id",
 	)
 	.bind(owner)
@@ -509,16 +521,27 @@ pub(crate) async fn join(conn: &mut SqliteConnection, case: i64, to: Option<i64>
 	Ok(())
 }
 
-/// Marked done at message `at` by `by`; `None`, no longer.
-pub(crate) async fn set_done(conn: &mut SqliteConnection, case: i64, at: Option<(i64, Uuid)>) -> eyre::Result<()> {
-	sqlx::query("UPDATE mail_cases SET done_mail = $2, done_by = $3 WHERE id = $1")
+/// Marked at a message by a person; `None`, no longer.
+pub(crate) async fn set_mark(conn: &mut SqliteConnection, case: i64, mark: Option<(Mark, i64, Uuid)>) -> eyre::Result<()> {
+	sqlx::query("UPDATE mail_cases SET mark_mail = $2, mark_by = $3, mark_open = $4 WHERE id = $1")
 		.bind(case)
-		.bind(at.map(|(m, _)| m))
-		.bind(at.map(|(_, by)| by))
+		.bind(mark.map(|(_, at, _)| at))
+		.bind(mark.map(|(.., by)| by))
+		.bind(mark.is_some_and(|(mark, ..)| mark == Mark::Open))
 		.execute(&mut *conn)
 		.await
-		.wrap_err("marking a case done")?;
+		.wrap_err("marking a case")?;
 	Ok(())
+}
+
+/// What the owner was charged under `keys`.
+pub(crate) async fn spent(conn: &mut SqliteConnection, owner: Uuid, keys: &[String]) -> eyre::Result<i64> {
+	sqlx::query_scalar("SELECT coalesce(-sum(delta), 0) FROM token_ledger WHERE user_id = $1 AND kind = 'charge' AND key IN (SELECT value FROM json_each($2))")
+		.bind(owner)
+		.bind(json(keys))
+		.fetch_one(&mut *conn)
+		.await
+		.wrap_err("summing what a case was charged")
 }
 
 /// A draft to keep.
@@ -578,7 +601,7 @@ pub(crate) async fn held_due(conn: &mut SqliteConnection, now: Timestamp) -> eyr
 	.wrap_err("listing the drafts due")
 }
 
-/// What becomes of a draft; each absent field stays, but `error`.
+/// What becomes of a draft; each absent field stays, but `error` and `login`.
 pub(crate) struct Decided<'a> {
 	pub state: DraftState,
 	pub body: Option<&'a Sealed>,
@@ -587,6 +610,7 @@ pub(crate) struct Decided<'a> {
 	pub sent_at: Option<Timestamp>,
 	pub message_id: Option<&'a str>,
 	pub error: Option<&'a str>,
+	pub login: bool,
 }
 impl Decided<'_> {
 	pub(crate) fn new(state: DraftState) -> Self {
@@ -598,6 +622,7 @@ impl Decided<'_> {
 			sent_at: None,
 			message_id: None,
 			error: None,
+			login: false,
 		}
 	}
 }
@@ -606,7 +631,7 @@ pub(crate) async fn decide(conn: &mut SqliteConnection, id: i64, d: &Decided<'_>
 	let state: &'static str = d.state.into();
 	sqlx::query(
 		"UPDATE mail_drafts SET state = $2, body_sealed = coalesce($3, body_sealed), data_key_fp = coalesce($4, data_key_fp), decided_by = coalesce($5, decided_by), \
-		 send_at = coalesce($6, send_at), sent_at = $7, message_id = coalesce($8, message_id), error = $9 WHERE id = $1",
+		 send_at = coalesce($6, send_at), sent_at = $7, message_id = coalesce($8, message_id), error = $9, login = $10 WHERE id = $1",
 	)
 	.bind(id)
 	.bind(state)
@@ -617,6 +642,7 @@ pub(crate) async fn decide(conn: &mut SqliteConnection, id: i64, d: &Decided<'_>
 	.bind(d.sent_at.map(to_db))
 	.bind(d.message_id)
 	.bind(d.error)
+	.bind(d.login)
 	.execute(&mut *conn)
 	.await
 	.wrap_err("deciding a draft")?;

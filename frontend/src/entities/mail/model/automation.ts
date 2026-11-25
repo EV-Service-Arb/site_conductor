@@ -20,6 +20,8 @@ function haltText(h: Exclude<MailHalt, { is: "off" }>, t: T, locale: Locale, now
       return t(mail.halt.elsewhere, "its GBP's latest conversation on this asks");
     case "settled":
       return t(mail.halt.settled, "what it asks for is given");
+    case "reopened":
+      return t(mail.halt.reopened, "it was reopened: what goes is yours to send");
     case "asked":
       return t(mail.halt.asked, "what Google asks is yours to give");
     case "limit":

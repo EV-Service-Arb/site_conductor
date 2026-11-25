@@ -5931,6 +5931,11 @@
             },
             "type": "array"
           },
+          "re_ask_hours": {
+            "description": "How long Google is silent before it is asked again, where it gave no other term.",
+            "format": "int64",
+            "type": "integer"
+          },
           "topics": {
             "description": "The topics that can be.",
             "items": {
@@ -5944,6 +5949,7 @@
           "topics",
           "by_itself",
           "hold_minutes",
+          "re_ask_hours",
           "limit"
         ],
         "type": "object"
@@ -6134,6 +6140,9 @@
           "case": {
             "$ref": "#/components/schemas/MailCase"
           },
+          "cost": {
+            "$ref": "#/components/schemas/MailCost"
+          },
           "files_max": {
             "description": "What a reply's files may be in all, bytes.",
             "format": "uint",
@@ -6172,7 +6181,8 @@
           "recipient",
           "files_max",
           "attempts",
-          "gone"
+          "gone",
+          "cost"
         ],
         "type": "object"
       },
@@ -6181,7 +6191,7 @@
         "description": "Absent fields stay.",
         "properties": {
           "done": {
-            "description": "Done until Google speaks again.",
+            "description": "Done, or open, until Google speaks again, whatever settled it or is written to Google meanwhile; open again, nothing\nin it is written or sent unasked. Where its mail says the same, it is its mail's.",
             "type": [
               "boolean",
               "null"
@@ -6232,6 +6242,34 @@
         },
         "required": [
           "cases"
+        ],
+        "type": "object"
+      },
+      "MailCost": {
+        "description": "What a case costs its caller, in tokens.",
+        "properties": {
+          "own": {
+            "description": "The caller's own models write, at no charge here.",
+            "type": "boolean"
+          },
+          "reply": {
+            "description": "What writing a reply now is charged, about; `null`: none can be written.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "spent": {
+            "description": "What its messages read and its replies written were charged.",
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "own",
+          "reply",
+          "spent"
         ],
         "type": "object"
       },
@@ -6524,6 +6562,19 @@
             "properties": {
               "is": {
                 "const": "settled",
+                "type": "string"
+              }
+            },
+            "required": [
+              "is"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "Its person reopened it.",
+            "properties": {
+              "is": {
+                "const": "reopened",
                 "type": "string"
               }
             },
@@ -6920,6 +6971,68 @@
         ],
         "type": "object"
       },
+      "MailQuietBecause": {
+        "description": "Why nothing is to do in a case.",
+        "oneOf": [
+          {
+            "description": "What was said asks for nothing.",
+            "properties": {
+              "is": {
+                "const": "nothing",
+                "type": "string"
+              }
+            },
+            "required": [
+              "is"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "Nothing was said in it for long.",
+            "properties": {
+              "is": {
+                "const": "old",
+                "type": "string"
+              }
+            },
+            "required": [
+              "is"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "Its GBP is in the trash.",
+            "properties": {
+              "is": {
+                "const": "removed",
+                "type": "string"
+              }
+            },
+            "required": [
+              "is"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "Its GBP's latest conversation on the topic, that case, carries it.",
+            "properties": {
+              "case_id": {
+                "format": "int64",
+                "type": "integer"
+              },
+              "is": {
+                "const": "carried",
+                "type": "string"
+              }
+            },
+            "required": [
+              "is",
+              "case_id"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "MailReader": {
         "description": "Who read a message.\n\n- `person`: A person corrected it.",
         "enum": [
@@ -7315,13 +7428,17 @@
           {
             "description": "Nothing to do.",
             "properties": {
+              "because": {
+                "$ref": "#/components/schemas/MailQuietBecause"
+              },
               "is": {
                 "const": "quiet",
                 "type": "string"
               }
             },
             "required": [
-              "is"
+              "is",
+              "because"
             ],
             "type": "object"
           }
@@ -7467,7 +7584,7 @@
             "type": "object"
           },
           {
-            "description": "Google is silent, and nothing here takes a reply, or its specialist was asked again already.",
+            "description": "Google is silent, and nothing asks it again by itself: nothing here takes a reply, its specialist was asked again\nalready, or its person reopened the case.",
             "properties": {
               "code": {
                 "const": "unanswered",
@@ -7481,6 +7598,19 @@
             "required": [
               "code",
               "since"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "Its person reopened it, and nothing was said to Google since.",
+            "properties": {
+              "code": {
+                "const": "reopened",
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
             ],
             "type": "object"
           },
@@ -7569,6 +7699,23 @@
             "properties": {
               "code": {
                 "const": "failed",
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "error"
+            ],
+            "type": "object"
+          },
+          {
+            "description": "The reply was not sent: Gmail refused its gmail's login.",
+            "properties": {
+              "code": {
+                "const": "login",
                 "type": "string"
               },
               "error": {
@@ -37515,7 +37662,7 @@
             "description": "`unavailable`, `browsers_not_connected`"
           }
         },
-        "summary": "Corrects a case's GBP or topic, makes it part of another, whose the answer then is, or marks it done; a draft going by itself waits for its person.",
+        "summary": "Corrects a case's GBP or topic, makes it part of another, whose the answer then is, or marks it done or open; a draft going by itself waits for its person.",
         "tags": [
           "mail"
         ],
