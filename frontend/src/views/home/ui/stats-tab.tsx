@@ -6,6 +6,7 @@ import { ExternalLink, TrendingDown, TrendingUp } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { type Listed, STATE_NAME, useGmbTags, windowKeys } from "@/entities/gmb";
+import { GOAL_NAME, daysOf, useStats } from "@/entities/mail";
 import { Refused, api, ok, reviewArchive, sites } from "@/shared/api";
 import type { LogDto } from "@/shared/api/schema";
 import type { GmbEvent } from "@/shared/api/services/review_archive";
@@ -68,7 +69,7 @@ export function StatsTab({ listed }: { listed: Listed }) {
   const board = `/grafana/a/evmain-tilers-app/d/ra-location?var-gmb=${gmb}`;
   const chip = (on: boolean) => cn("rounded-md px-2.5 py-0.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring", on ? "bg-hover text-ink" : "text-ink-soft hover:text-ink");
   return (
-    <div className="flex flex-col gap-4 p-5">
+    <div className="@container flex flex-col gap-4 p-5">
       <div className="flex items-center gap-3">
         <div role="group" className="flex rounded-lg border border-border p-0.5">
           {PERIODS.map((p) => (
@@ -84,7 +85,7 @@ export function StatsTab({ listed }: { listed: Listed }) {
           <ExternalLink aria-hidden className="size-3" />
         </a>
       </div>
-      <div className="grid grid-cols-[minmax(0,1fr)_18rem] items-start gap-4">
+      <div className="grid items-start gap-4 @3xl:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="flex min-w-0 flex-col gap-4">
           <Planned what={t(windowKeys.stats.rankingWhat, "Ranking: ARP, ATRP and SoLV over the period, with the profile edits and suspensions on it")}>
             <div className="grid grid-cols-3 gap-3">
@@ -128,10 +129,41 @@ export function StatsTab({ listed }: { listed: Listed }) {
             {series !== null && <Bars values={series} label={t(windowKeys.stats.leads, "Leads")} />}
             {live !== null && live.some((d) => d !== null) && <Bars values={live.map((d) => (d === null ? null : d.live))} label={t(windowKeys.stats.liveReviews, "Live reviews")} />}
           </section>
+          <Asked gmb={gmb} now={now} />
         </div>
         <Changes gmb={gmb} since={now - days * DAY} now={now} />
       </div>
     </div>
+  );
+}
+
+/** What was asked of Google about it, and what it took. */
+function Asked({ gmb, now }: { gmb: number; now: number }) {
+  const t = useT();
+  const read = useStats(gmb);
+  if (read.status === "loading") return <Skeleton className="h-20" />;
+  if (read.status === "error") return <ErrorState failure={read.failure} onRetry={read.reload} />;
+  if (read.data.pursuits.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded-panel border border-border p-3">
+      <header className="flex items-baseline justify-between gap-3">
+        <h3 className="text-sm font-semibold text-ink">{t(windowKeys.stats.asked, "Asked of Google")}</h3>
+        <ViewLink to={{ view: "email", params: { show: "stats" } }} className="text-xs text-ink-soft underline-offset-2 hover:text-ink hover:underline">
+          {t(windowKeys.stats.askedAll, "Every GBP, and the wording")}
+        </ViewLink>
+      </header>
+      <ul className="flex flex-col gap-1.5">
+        {read.data.pursuits.map((p) => (
+          <li key={p.asks[0]!.at} className="flex items-baseline gap-3 text-sm">
+            <span className="min-w-0 flex-1 text-ink">{GOAL_NAME[p.goal](t)}</span>
+            <span className="shrink-0 text-ink-soft tabular-nums">{t(windowKeys.stats.askedFor, "{n, plural, one {# ask} other {# asks}} · {days} d", { n: p.asks.length, days: daysOf(p, now) })}</span>
+            <span className={cn("w-28 shrink-0 text-right", p.given ? "text-positive" : p.over_at === null ? "text-accent-warn" : "text-ink-soft")}>
+              {p.given ? t(windowKeys.stats.askedGiven, "given") : p.over_at === null ? t(windowKeys.stats.askedOpen, "asking") : t(windowKeys.stats.askedWithout, "verified without")}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

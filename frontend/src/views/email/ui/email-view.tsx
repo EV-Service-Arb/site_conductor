@@ -16,6 +16,7 @@ import { ErrorState } from "@/shared/ui/error-state";
 
 import { CaseDetail } from "./case-detail";
 import { Inboxes } from "./inboxes";
+import { Stats } from "./stats";
 
 type Sought = Params<"email">;
 
@@ -25,22 +26,21 @@ export function EmailView() {
   if (at.view !== "email") throw new Error("the email view on another's");
   const t = useT();
   const { case: opened, show } = at.params;
-  const automatic = show === "automatic";
+  const tab = show === "automatic" || show === "stats" ? show : "threads";
   return (
     <div className="@container flex min-h-0 flex-1 flex-col">
       <header className={cn("flex items-center gap-3 border-b border-border px-4", opened !== undefined && "@max-3xl:hidden")}>
         <h1 className="text-base font-semibold text-ink">{t(nav.email, "Email")}</h1>
-        <Tabs value={automatic ? "automatic" : "threads"} onValueChange={(tab) => go({ view: "email", params: tab === "automatic" ? { show: "automatic" } : {} })}>
+        <Tabs value={tab} onValueChange={(to) => go({ view: "email", params: to === "automatic" || to === "stats" ? { show: to } : {} })}>
           <TabsList aria-label={t(nav.email, "Email")}>
             <TabsTrigger value="threads">{t(mail.tab.threads, "Threads")}</TabsTrigger>
             <TabsTrigger value="automatic">{t(mail.tab.automatic, "Automatic replies")}</TabsTrigger>
+            <TabsTrigger value="stats">{t(mail.tab.stats, "Stats")}</TabsTrigger>
           </TabsList>
         </Tabs>
       </header>
-      {automatic ? (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5">
-          <AutoReplies />
-        </div>
+      {show === "automatic" || show === "stats" ? (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-5">{show === "stats" ? <Stats /> : <AutoReplies />}</div>
       ) : (
         <Threads sought={at.params} show={show ?? "needs_you"} />
       )}

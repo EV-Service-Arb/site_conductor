@@ -922,6 +922,96 @@ pub enum Outcome {
 	Verified,
 }
 
+/// What Google is asked for by mail.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize, schemars::JsonSchema, strum::VariantArray)]
+#[serde(rename_all = "snake_case")]
+#[schemars(rename = "MailGoal")]
+pub enum Goal {
+	/// The live verification call.
+	Call,
+	/// The missing reviews.
+	Reviews,
+}
+impl Goal {
+	pub fn topic(self) -> Topic {
+		match self {
+			Self::Call => Topic::Verification,
+			Self::Reviews => Topic::Reviews,
+		}
+	}
+
+	/// Whether `kind` gives it.
+	pub fn given_by(self, kind: Kind) -> bool {
+		match self {
+			Self::Call => kind == Kind::CallOffered,
+			Self::Reviews => matches!(kind, Kind::ReinstatementDone | Kind::ReinstatementPartial),
+		}
+	}
+
+	/// Whether nothing is left to ask once `kind` is said.
+	fn over_by(self, kind: Kind) -> bool {
+		self.given_by(kind) || kind == Kind::Verified && self == Self::Call
+	}
+}
+
+/// Said of a GBP on a goal's topic.
+#[derive(Clone, Copy, Debug)]
+pub struct Spoken {
+	pub at: Timestamp,
+	/// Its message; `None`: the GBP's move.
+	pub message: Option<i64>,
+	pub case: Option<i64>,
+	/// `None`: ours, to support.
+	pub said: Option<Kind>,
+}
+
+/// A goal asked for, until it is over.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Pursuit {
+	pub goal: Goal,
+	/// Our messages, each with when it went and Google's last word before the next of ours.
+	pub asks: Vec<(i64, Timestamp, Option<Kind>)>,
+	/// By what, and when.
+	pub over: Option<(Timestamp, Kind)>,
+}
+
+/// What was asked of Google for one GBP and `goal`, `spoken` being all said of it, oldest first.
+pub fn pursuits(goal: Goal, spoken: &[Spoken]) -> Vec<Pursuit> {
+	let mut done: Vec<Pursuit> = Vec::new();
+	let mut open: Option<(Pursuit, Option<i64>)> = None;
+	for s in spoken {
+		match (s.said, s.message) {
+			(None, Some(message)) => {
+				let (p, case) = open.get_or_insert_with(|| {
+					let p = Pursuit {
+						goal,
+						asks: Vec::new(),
+						over: None,
+					};
+					(p, s.case)
+				});
+				p.asks.push((message, s.at, None));
+				*case = s.case;
+			}
+			(None, None) => {}
+			(Some(kind), _) => {
+				let Some((p, case)) = &mut open else { continue };
+				let over = goal.over_by(kind);
+				let answers = s.case == *case && !matches!(kind, Kind::Acknowledged | Kind::Noise | Kind::NotBusiness);
+				if goal.given_by(kind) || answers {
+					p.asks.last_mut().expect("opened by an ask").2 = Some(kind);
+				}
+				if over {
+					p.over = Some((s.at, kind));
+					done.extend(open.take().map(|(p, _)| p));
+				}
+			}
+		}
+	}
+	done.extend(open.map(|(p, _)| p));
+	done
+}
+
 /// What a reading says of a try to verify its GBP.
 pub fn attempt(kind: Kind) -> Option<(Method, Outcome)> {
 	Some(match kind {
@@ -1736,5 +1826,31 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[test]
+	fn a_goal_is_pursued_from_our_first_ask_until_google_gives_it() {
+		let ours = |at, id| Spoken { at: t(at), message: Some(id), case: Some(1), said: None };
+		let said = |at, case, kind| Spoken { at: t(at), message: Some(99), case: Some(case), said: Some(kind) };
+		let spoken = [
+			said("2026-10-01T00:00:00Z", 1, Kind::SelfServe),
+			ours("2026-10-01T09:00:00Z", 1),
+			said("2026-10-01T10:00:00Z", 1, Kind::Acknowledged),
+			said("2026-10-02T00:00:00Z", 2, Kind::VideoRejected),
+			ours("2026-10-03T09:00:00Z", 2),
+			said("2026-10-03T10:00:00Z", 1, Kind::SelfServe),
+			ours("2026-10-04T09:00:00Z", 3),
+			said("2026-10-05T09:00:00Z", 3, Kind::CallOffered),
+			said("2026-10-06T09:00:00Z", 2, Kind::CallFailed),
+			ours("2026-10-06T10:00:00Z", 4),
+		];
+		let [got, open] = pursuits(Goal::Call, &spoken).try_into().unwrap();
+		let answers: Vec<_> = got.asks.iter().map(|(id, _, a)| (*id, *a)).collect();
+		assert_eq!(answers, [(1, None), (2, Some(Kind::SelfServe)), (3, Some(Kind::CallOffered))]);
+		assert_eq!(got.over, Some((t("2026-10-05T09:00:00Z"), Kind::CallOffered)));
+		assert_eq!((open.asks.len(), open.over), (1, None), "asked again once the call failed");
+		let verified = [ours("2026-10-01T09:00:00Z", 1), Spoken { at: t("2026-10-02T00:00:00Z"), message: None, case: None, said: Some(Kind::Verified) }];
+		let [over] = pursuits(Goal::Call, &verified).try_into().unwrap();
+		assert_eq!((over.asks[0].2, over.over.unwrap().1), (None, Kind::Verified), "over, and not by what we wrote");
 	}
 }

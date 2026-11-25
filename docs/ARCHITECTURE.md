@@ -667,6 +667,7 @@ POST   /mail/drafts/{id}/send               fresh, slow
 PUT    /mail/drafts/{id}
 DELETE /mail/drafts/{id}
 POST   /mail/drafts/{id}/restore
+GET    /mail/stats
 GET    /mail/auto
 PUT    /mail/auto                           fresh
 GET    /gmbs/{id}/mail
@@ -1253,6 +1254,8 @@ reply_due ─ the model ─▶ proposed ─ its operator ─▶ sending ─▶ S
   conversations on one topic the latest asks, its other cases quiet meanwhile.
 - **What it wants** of its person (what the draft lacks, else what Google asks) is given or not, by a document of the GBP's
   (kept sealed, for the next ask and the appeal) or otherwise.
+- **What works** (`/mail/stats`): a goal (the live call, the missing reviews) is pursued from our first ask until Google
+  gives it, or the GBP is verified without; an ask's answer is Google's last word before the next of ours, in its case.
 - **A reply** goes as the gmail, to support's one address, to the last message of the case that takes one.
   `sending` is committed before SMTP; one left so is never tried again, nor is another sent to what it answers.
   One goes by itself only while its GBP's switch for the topic (`verification`, `reviews`; off unless its owner's, and

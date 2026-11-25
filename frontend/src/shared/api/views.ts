@@ -380,6 +380,7 @@ export const VIEWS = {
               "needs_you",
               "waiting",
               "automatic",
+              "stats",
               null
             ],
             "type": [

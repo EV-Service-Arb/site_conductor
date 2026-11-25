@@ -18,14 +18,14 @@ use sa_core::{
 	agent::Outward,
 	feeds::{GONE_MAX, GoneReview},
 	gbp::Country,
-	mail::{self as rules, DraftState, Kind, Method as Tried, Outcome, Reading, Standing, State as Standings, Topic},
+	mail::{self as rules, DraftState, Goal, Kind, Method as Tried, Outcome, Reading, Standing, State as Standings, Topic},
 	notify::{Locale, one_line},
 	prices::{ModelTokens, Spender, Spends},
 	usage::Bill,
 };
 use sa_panel::{
 	Panel, Refused,
-	mail::{Brief, ByHand, Case, CaseEdit, Draft, FILES_MAX, File, Kept, ReadBy, ReadingEdit, Sent, SentBy, Text, Unread, Wanted, Written},
+	mail::{Brief, ByHand, Case, CaseEdit, Draft, FILES_MAX, File, Kept, Pursued, ReadBy, ReadingEdit, Sent, SentBy, Text, Unread, Wanted, Written},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -360,6 +360,68 @@ pub struct AutosDto {
 	pub limit: usize,
 }
 
+/// A goal asked of Google for a GBP, until it is over.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MailPursuit")]
+pub struct PursuitDto {
+	pub gmail_id: i64,
+	/// `null`: not known.
+	pub gmb_id: Option<i64>,
+	pub goal: Goal,
+	/// Our messages, oldest first.
+	pub asks: Vec<AskDto>,
+	/// RFC 3339; `null`: still asked for.
+	pub over_at: Option<String>,
+	/// Google gave it; over and `false`: verified without it.
+	pub given: bool,
+}
+
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MailAsk")]
+pub struct AskDto {
+	/// RFC 3339.
+	pub at: String,
+	/// `null`: it does not open.
+	pub text: Option<String>,
+	/// Google's last word before the next of ours; `null`: none.
+	pub answer: Option<Kind>,
+	/// Google gave it, answering this one.
+	pub worked: bool,
+}
+
+/// `GET /mail/stats`: those last asked first.
+#[derive(Clone, Debug, JsonSchema, Serialize)]
+#[schemars(rename = "MailStats")]
+pub struct StatsDto {
+	pub pursuits: Vec<PursuitDto>,
+}
+
+impl From<Pursued> for PursuitDto {
+	fn from(a: Pursued) -> Self {
+		let goal = a.pursuit.goal;
+		let given = |k: Kind| goal.given_by(k);
+		Self {
+			gmail_id: a.gmail,
+			gmb_id: a.gmb,
+			goal,
+			asks: a
+				.pursuit
+				.asks
+				.iter()
+				.zip(&a.texts)
+				.map(|((_, at, answer), text)| AskDto {
+					at: at.to_string(),
+					text: text.as_ref().ok().map(|t| t.to_string()), // why not is told with the message
+					answer: *answer,
+					worked: answer.is_some_and(given),
+				})
+				.collect(),
+			over_at: a.pursuit.over.map(|(at, _)| at.to_string()),
+			given: a.pursuit.over.is_some_and(|(_, k)| given(k)),
+		}
+	}
+}
+
 impl From<&Draft> for DraftDto {
 	fn from(d: &Draft) -> Self {
 		Self {
@@ -576,6 +638,7 @@ pub(crate) fn routes() -> Vec<ApiRoute> {
 		ApiRoute::new(M::POST, "/gmbs/{id}/documents", SLOW, add_document).layer(|h| h.layer(DefaultBodyLimit::max(SEND_MAX))),
 		ApiRoute::new(M::GET, "/gmbs/{id}/documents/{document}", USER, document),
 		ApiRoute::new(M::DELETE, "/gmbs/{id}/documents/{document}", USER, remove_document),
+		ApiRoute::new(M::GET, "/mail/stats", USER, mail_stats),
 		ApiRoute::new(M::GET, "/mail/auto", USER, mail_auto),
 		ApiRoute::new(M::PUT, "/mail/auto", FRESH, set_mail_auto),
 		ApiRoute::new(M::GET, "/gmbs/{id}/mail", USER, gmb_mail),
@@ -969,6 +1032,21 @@ async fn set_mail_auto(_: Outward, State(panel): State<Panel>, Extension(caller)
 	panel.set_mail_auto(caller.user_id, &b.gmbs, b.topic, b.on).await??;
 	tracing::info!(user_id = %caller.user_id, gmbs = ?b.gmbs, topic = ?b.topic, on = b.on, "automatic replies switched");
 	mail_auto(State(panel), Extension(caller)).await
+}
+
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct StatsOf {
+	gmb: Option<i64>,
+}
+
+/// What was asked of Google for the caller's GBPs (the live call, the missing reviews): each ask, what it was answered
+/// and what worked.
+async fn mail_stats(State(panel): State<Panel>, Extension(caller): Extension<Caller>, Params(q): Params<StatsOf>) -> ApiResult<Json<StatsDto>> {
+	let asked = panel.mail_stats(caller.user_id, q.gmb, Timestamp::now()).await?;
+	Ok(Json(StatsDto {
+		pursuits: asked.into_iter().map(PursuitDto::from).collect(),
+	}))
 }
 
 /// A GBP's mail: every try to verify it, its cases, its every message.

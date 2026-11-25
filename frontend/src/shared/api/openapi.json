@@ -5592,6 +5592,43 @@
         ],
         "type": "object"
       },
+      "MailAsk": {
+        "properties": {
+          "answer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MailKind"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Google's last word before the next of ours; `null`: none."
+          },
+          "at": {
+            "description": "RFC 3339.",
+            "type": "string"
+          },
+          "text": {
+            "description": "`null`: it does not open.",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "worked": {
+            "description": "Google gave it, answering this one.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "at",
+          "text",
+          "answer",
+          "worked"
+        ],
+        "type": "object"
+      },
       "MailAuto": {
         "description": "A topic of a GBP's whose replies go by themselves.",
         "properties": {
@@ -6148,6 +6185,14 @@
         ],
         "type": "object"
       },
+      "MailGoal": {
+        "description": "What Google is asked for by mail.\n\n- `call`: The live verification call.\n- `reviews`: The missing reviews.",
+        "enum": [
+          "call",
+          "reviews"
+        ],
+        "type": "string"
+      },
       "MailGone": {
         "description": "The reviews of a GBP the review archive sees gone.",
         "oneOf": [
@@ -6630,6 +6675,53 @@
         ],
         "type": "object"
       },
+      "MailPursuit": {
+        "description": "A goal asked of Google for a GBP, until it is over.",
+        "properties": {
+          "asks": {
+            "description": "Our messages, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/MailAsk"
+            },
+            "type": "array"
+          },
+          "given": {
+            "description": "Google gave it; over and `false`: verified without it.",
+            "type": "boolean"
+          },
+          "gmail_id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "gmb_id": {
+            "description": "`null`: not known.",
+            "format": "int64",
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "goal": {
+            "$ref": "#/components/schemas/MailGoal"
+          },
+          "over_at": {
+            "description": "RFC 3339; `null`: still asked for.",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "gmail_id",
+          "gmb_id",
+          "goal",
+          "asks",
+          "over_at",
+          "given"
+        ],
+        "type": "object"
+      },
       "MailReader": {
         "description": "Who read a message.\n\n- `person`: A person corrected it.",
         "enum": [
@@ -7036,6 +7128,21 @@
             "type": "object"
           }
         ]
+      },
+      "MailStats": {
+        "description": "`GET /mail/stats`: those last asked first.",
+        "properties": {
+          "pursuits": {
+            "items": {
+              "$ref": "#/components/schemas/MailPursuit"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pursuits"
+        ],
+        "type": "object"
       },
       "MailTopic": {
         "enum": [
@@ -38491,6 +38598,179 @@
         "x-outward": true
       }
     },
+    "/mail/stats": {
+      "get": {
+        "operationId": "mail_stats",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "gmb",
+            "schema": {
+              "format": "int64",
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "style": "form"
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MailStats"
+                }
+              }
+            },
+            "description": "`GET /mail/stats`: those last asked first."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_request`"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unauthenticated`"
+          },
+          "402": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unaffordable`"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`csrf`, `forbidden`"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`not_found`"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`conflict`"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_large`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`another_country`, `unstudied`, `unreleased_category`"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`too_many`"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`internal`"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`bad_gateway`"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "`unavailable`, `browsers_not_connected`"
+          }
+        },
+        "summary": "What was asked of Google for the caller's GBPs (the live call, the missing reviews): each ask, what it was answered and what worked.",
+        "tags": [
+          "mail"
+        ],
+        "x-errors": {
+          "another_country": 422,
+          "bad_gateway": 502,
+          "bad_request": 400,
+          "browsers_not_connected": 503,
+          "conflict": 409,
+          "csrf": 403,
+          "forbidden": 403,
+          "internal": 500,
+          "not_found": 404,
+          "too_large": 413,
+          "too_many": 429,
+          "unaffordable": 402,
+          "unauthenticated": 401,
+          "unavailable": 503,
+          "unreleased_category": 422,
+          "unstudied": 422
+        }
+      }
+    },
     "/map": {
       "get": {
         "operationId": "map_key",
@@ -44661,6 +44941,7 @@
                 "needs_you",
                 "waiting",
                 "automatic",
+                "stats",
                 null
               ],
               "type": [

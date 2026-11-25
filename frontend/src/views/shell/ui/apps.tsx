@@ -1,7 +1,7 @@
 "use client";
 
 import { NavBadge, type NavIcon, type NavSection } from "@evinvest/uikit";
-import { Archive, Bot, Coins, Globe, Inbox, KeyRound, Mail, MapPin, Settings, ShieldCheck } from "lucide-react";
+import { Archive, Bot, ChartColumn, Coins, Globe, Inbox, KeyRound, Mail, MapPin, Settings, ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { href, mayOpen } from "@evinvest/views";
 
@@ -87,8 +87,9 @@ export function useApps(onNavigate?: () => void): App[] {
       section: {
         id: "email",
         items: [
-          { id: "threads", href: link({ view: "email", params: {} }), label: t(mail.tab.threads, "Threads"), icon: Inbox, badge, description: t(mail.tab.threads.description, "Each conversation and notice, and whose turn it is"), match: () => at.view === "email" && at.params.show !== "automatic" },
+          { id: "threads", href: link({ view: "email", params: {} }), label: t(mail.tab.threads, "Threads"), icon: Inbox, badge, description: t(mail.tab.threads.description, "Each conversation and notice, and whose turn it is"), match: () => at.view === "email" && at.params.show !== "automatic" && at.params.show !== "stats" },
           { id: "automatic", href: link({ view: "email", params: { show: "automatic" } }), label: t(mail.tab.automatic, "Automatic replies"), icon: Bot, description: t(mail.tab.automatic.description, "Which GBPs' mail is answered by itself"), match: () => at.view === "email" && at.params.show === "automatic" },
+          { id: "stats", href: link({ view: "email", params: { show: "stats" } }), label: t(mail.tab.stats, "Stats"), icon: ChartColumn, description: t(mail.tab.stats.description, "What it took to get what Google was asked for"), match: () => at.view === "email" && at.params.show === "stats" },
         ],
       },
     },

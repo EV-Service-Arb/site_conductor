@@ -1582,3 +1582,26 @@ async fn a_held_reply_is_stopped_from_its_alert() {
 	assert_eq!(w.only("2026-10-01T09:30:00Z").await.state, State::ReplyReady);
 	assert_eq!(w.p.send_held_mail(t("2026-10-01T09:30:00Z")).await.unwrap(), 0);
 }
+
+#[tokio::test]
+async fn what_was_asked_is_counted_to_what_google_gave() {
+	let w = World::new().await;
+	let request = "[1-1234000056789] Your Request to Google";
+	let wrote = async |at: &str, text: &str| w.arrives(ours(at, 1, &format!("Re: {request}"), SUPPORT, &[], text)).await;
+	w.arrives(support("2026-10-01T09:00:00Z", 1, request, "Plomberie Dupont - Lyon: follow the prompts.")).await;
+	w.reads("2026-10-01T09:01:00Z", Kind::SelfServe, |_| {}).await;
+	wrote("2026-10-01T10:00:00Z", "We need a live call.").await;
+	w.arrives(support("2026-10-02T09:00:00Z", 1, request, "Follow the prompts.")).await;
+	w.reads("2026-10-02T09:01:00Z", Kind::SelfServe, |_| {}).await;
+	wrote("2026-10-03T10:00:00Z", "The video fails each time.").await;
+	w.arrives(support("2026-10-04T09:00:00Z", 1, request, "The call is enabled.")).await;
+	w.reads("2026-10-04T09:01:00Z", Kind::CallOffered, |_| {}).await;
+	let now = t("2026-10-04T10:00:00Z");
+	let asked = w.p.mail_stats(w.owner, Some(w.lyon), now).await.unwrap();
+	let [one] = asked.as_slice() else { panic!("{} pursuits", asked.len()) };
+	let answers: Vec<_> = one.pursuit.asks.iter().zip(&one.texts).map(|((.., a), text)| (text.as_ref().unwrap().as_str(), *a)).collect();
+	assert_eq!(answers, [("We need a live call.", Some(Kind::SelfServe)), ("The video fails each time.", Some(Kind::CallOffered))]);
+	assert_eq!((one.gmail, one.gmb, one.pursuit.over), (w.gmail, Some(w.lyon), Some((t("2026-10-04T09:00:00Z"), Kind::CallOffered))));
+	assert!(w.p.mail_stats(w.owner, Some(w.est), now).await.unwrap().is_empty());
+	assert!(w.p.mail_stats(Uuid::now_v7(), None, now).await.unwrap().is_empty(), "another's");
+}

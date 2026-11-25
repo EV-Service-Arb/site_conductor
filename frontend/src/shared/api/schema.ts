@@ -2236,6 +2236,23 @@ export interface paths {
         patch: operations["correct_mail"];
         trace?: never;
     };
+    "/mail/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What was asked of Google for the caller's GBPs (the live call, the missing reviews): each ask, what it was answered and what worked. */
+        get: operations["mail_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/map": {
         parameters: {
             query?: never;
@@ -4601,6 +4618,16 @@ export interface components {
             /** @description Gmail's X-GM-THRID, hex: the thread's address in Gmail. */
             thread: string;
         });
+        MailAsk: {
+            /** @description Google's last word before the next of ours; `null`: none. */
+            answer: components["schemas"]["MailKind"] | null;
+            /** @description RFC 3339. */
+            at: string;
+            /** @description `null`: it does not open. */
+            text: string | null;
+            /** @description Google gave it, answering this one. */
+            worked: boolean;
+        };
         /** @description A topic of a GBP's whose replies go by themselves. */
         MailAuto: {
             /** Format: int64 */
@@ -4787,6 +4814,14 @@ export interface components {
             /** @description One of the case's `wanted`. */
             item: string;
         };
+        /**
+         * @description What Google is asked for by mail.
+         *
+         *     - `call`: The live verification call.
+         *     - `reviews`: The missing reviews.
+         * @enum {string}
+         */
+        MailGoal: "call" | "reviews";
         /** @description The reviews of a GBP the review archive sees gone. */
         MailGone: {
             /** @description More may be gone: `reviews` is a page, not their count. */
@@ -4944,6 +4979,23 @@ export interface components {
             text_error: string | null;
             to: string[];
         };
+        /** @description A goal asked of Google for a GBP, until it is over. */
+        MailPursuit: {
+            /** @description Our messages, oldest first. */
+            asks: components["schemas"]["MailAsk"][];
+            /** @description Google gave it; over and `false`: verified without it. */
+            given: boolean;
+            /** Format: int64 */
+            gmail_id: number;
+            /**
+             * Format: int64
+             * @description `null`: not known.
+             */
+            gmb_id: number | null;
+            goal: components["schemas"]["MailGoal"];
+            /** @description RFC 3339; `null`: still asked for. */
+            over_at: string | null;
+        };
         /**
          * @description Who read a message.
          *
@@ -5079,6 +5131,10 @@ export interface components {
         } | {
             /** @constant */
             is: "quiet";
+        };
+        /** @description `GET /mail/stats`: those last asked first. */
+        MailStats: {
+            pursuits: components["schemas"]["MailPursuit"][];
         };
         /** @enum {string} */
         MailTopic: "verification" | "suspension" | "reviews" | "activity" | "access" | "profile" | "other";
@@ -6813,6 +6869,7 @@ export type ListingVersion = components['schemas']['ListingVersion'];
 export type Locality = components['schemas']['Locality'];
 export type LogDto = components['schemas']['LogDto'];
 export type LoggedDto = components['schemas']['LoggedDto'];
+export type MailAsk = components['schemas']['MailAsk'];
 export type MailAuto = components['schemas']['MailAuto'];
 export type MailAutoSwitch = components['schemas']['MailAutoSwitch'];
 export type MailAutomation = components['schemas']['MailAutomation'];
@@ -6828,11 +6885,13 @@ export type MailDraftEdit = components['schemas']['MailDraftEdit'];
 export type MailDraftState = components['schemas']['MailDraftState'];
 export type MailFile = components['schemas']['MailFile'];
 export type MailGive = components['schemas']['MailGive'];
+export type MailGoal = components['schemas']['MailGoal'];
 export type MailGone = components['schemas']['MailGone'];
 export type MailHalt = components['schemas']['MailHalt'];
 export type MailKind = components['schemas']['MailKind'];
 export type MailLine = components['schemas']['MailLine'];
 export type MailMessage = components['schemas']['MailMessage'];
+export type MailPursuit = components['schemas']['MailPursuit'];
 export type MailReader = components['schemas']['MailReader'];
 export type MailReading = components['schemas']['MailReading'];
 export type MailReadingEdit = components['schemas']['MailReadingEdit'];
@@ -6842,6 +6901,7 @@ export type MailSentBy = components['schemas']['MailSentBy'];
 export type MailSettled = components['schemas']['MailSettled'];
 export type MailStanding = components['schemas']['MailStanding'];
 export type MailState = components['schemas']['MailState'];
+export type MailStats = components['schemas']['MailStats'];
 export type MailTopic = components['schemas']['MailTopic'];
 export type MailWanted = components['schemas']['MailWanted'];
 export type MailWho = components['schemas']['MailWho'];
@@ -27216,6 +27276,136 @@ export interface operations {
             };
         };
     };
+    mail_stats: {
+        parameters: {
+            query?: {
+                gmb?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description `GET /mail/stats`: those last asked first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MailStats"];
+                };
+            };
+            /** @description `bad_request` */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unauthenticated` */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unaffordable` */
+            402: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `csrf`, `forbidden` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `not_found` */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `conflict` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_large` */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `another_country`, `unstudied`, `unreleased_category` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `too_many` */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `internal` */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `bad_gateway` */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unavailable`, `browsers_not_connected` */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
     map_key: {
         parameters: {
             query?: never;
@@ -31786,6 +31976,7 @@ export const kitHappeningValues: ReadonlyArray<FlattenedDeepRequired<components>
 export const kitTargetValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["KitTarget"]> = ["google", "drafts", "one_tap"];
 export const ledgerKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["LedgerKind"]> = ["add", "set", "charge", "accrual", "kickback"];
 export const mailDraftStateValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailDraftState"]> = ["sent", "dismissed", "proposed", "held", "sending", "superseded", "failed"];
+export const mailGoalValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailGoal"]> = ["call", "reviews"];
 export const mailKindValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailKind"]> = ["video_rejected", "video_in_review", "code_failed", "verified", "reverification_required", "self_serve", "call_offered", "call_failed", "options_exhausted", "suspended", "account_restricted", "appeal_received", "appeal_approved", "appeal_denied", "appeal_verification", "reviews_paused", "reviews_restricted", "restriction_lifted", "review_removed", "reinstatement_refused", "reinstatement_done", "reinstatement_partial", "reviews_live_already", "reviews_no_data", "still_active", "invited", "access_granted", "access_lost", "others_access", "ownership_requested", "management_requested", "edit_suggested", "edit_rejected", "changed_by_google", "content_removed", "policy_warning", "duplicate", "acknowledged", "routed", "asks", "closed", "duplicate_ticket", "unclear", "noise", "not_business", "impersonation"];
 export const mailReaderValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailReader"]> = ["rule", "model", "person"];
 export const mailStandingValues: ReadonlyArray<FlattenedDeepRequired<components>["schemas"]["MailStanding"]> = ["needs_you", "done", "reply_ready", "sending", "reply_due", "waiting", "quiet"];

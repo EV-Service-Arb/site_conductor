@@ -108,20 +108,14 @@ export function AutoOf({ gmb, gmail, auto }: { gmb: Gmb; gmail: Gmail; auto: Ret
 /** What stops its whole inbox, and where that is mended. */
 function Inbox({ g }: { g: Gmail }) {
   const t = useT();
-  const cases = useMailCases();
-  const shared = cases.status === "ok" && cases.data.cases.some((c) => c.gmail_id === g.id && c.auto.halt?.is === "account");
+  if (g.imap !== null && g.imap.error === null) return null;
   return (
-    <>
-      {shared && <span className="text-xs font-normal text-accent-warn">{t(mail.auto.shared, "shared by two accounts, or written to another")}</span>}
-      {(g.imap === null || g.imap.error !== null) && (
-        <ViewLink
-          to={pageOf({ kind: "account", gmail: g.id, tab: "connections" })}
-          className={cn("shrink-0 rounded-sm text-xs font-normal underline outline-none focus-visible:ring-2 focus-visible:ring-ring", g.imap === null ? "text-ink-soft" : "text-accent-error")}
-        >
-          {g.imap === null ? t(mail.inbox.set, "Set its IMAP") : t(mail.inbox.reconnect, "Reconnect")}
-        </ViewLink>
-      )}
-    </>
+    <ViewLink
+      to={pageOf({ kind: "account", gmail: g.id, tab: "connections" })}
+      className={cn("shrink-0 rounded-sm text-xs font-normal underline outline-none focus-visible:ring-2 focus-visible:ring-ring", g.imap === null ? "text-ink-soft" : "text-accent-error")}
+    >
+      {g.imap === null ? t(mail.inbox.set, "Set its IMAP") : t(mail.inbox.reconnect, "Reconnect")}
+    </ViewLink>
   );
 }
 

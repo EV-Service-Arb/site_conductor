@@ -9,7 +9,7 @@
 //! ```
 
 use std::{
-	collections::{BTreeSet, HashMap},
+	collections::{BTreeMap, BTreeSet, HashMap},
 	pin::Pin,
 };
 
@@ -18,10 +18,11 @@ use jiff::{SignedDuration, Timestamp};
 use sa_alerts::{Button, Call, Rule, Tier};
 use sa_core::{
 	gbp::State as Stands,
-	mail::{self as rules, About, Draft as Reply, DraftState, HOLD, Halt, Holds, Joining, Kind, MAX_READS, Message, READ_BACK, Reading, Ruled, Said, Sender, Settled, State, Topic, Why},
+	mail::{self as rules, About, Draft as Reply, DraftState, Goal, HOLD, Halt, Holds, Joining, Kind, MAX_READS, Message, Pursuit, READ_BACK, Reading, Ruled, Said, Sender, Settled, Spoken, State, Topic, Why},
 	notify::{Locale, Note, Rendered, one_line},
 };
 use sqlx::SqliteConnection;
+use strum::VariantArray;
 use uuid::Uuid;
 use zeroize::Zeroizing;
 
@@ -212,6 +213,16 @@ pub struct Kept {
 	pub spam: bool,
 	/// Ours: who sent it.
 	pub sent_by: Option<SentBy>,
+}
+
+/// A goal asked of Google for a GBP.
+pub struct Pursued {
+	pub gmail: i64,
+	/// `None`: not known.
+	pub gmb: Option<i64>,
+	pub pursuit: Pursuit,
+	/// Each ask's.
+	pub texts: Vec<Text>,
 }
 
 /// What a case wants of its person.
@@ -430,6 +441,56 @@ impl Panel {
 		let mut cases = self.gathered(&mut conn, owner, now).await?;
 		cases.sort_by_key(|c| std::cmp::Reverse((c.last().said.at, c.id)));
 		Ok(cases)
+	}
+
+	/// What the person asked of Google, by GBP, newest first; of `gmb` alone, if one.
+	pub async fn mail_stats(&self, owner: Uuid, gmb: Option<i64>, now: Timestamp) -> eyre::Result<Vec<Pursued>> {
+		let mut conn = self.store.pool().acquire().await.wrap_err("a connection for a person's asks")?;
+		let cases = self.gathered(&mut conn, owner, now).await?;
+		let moves = db::moves(&mut conn, owner).await?;
+		// a case of no known GBP is its own
+		let of = |c: &Case| c.gmb.map_or(Err(c.id), Ok);
+		let mut asked = Vec::new();
+		for &goal in Goal::VARIANTS {
+			let mut spoken: BTreeMap<(i64, Result<i64, i64>), Vec<Spoken>> = BTreeMap::new();
+			for c in cases.iter().filter(|c| c.topic == goal.topic() && gmb.is_none_or(|g| c.gmb == Some(g))) {
+				let said = c.messages.iter().filter(|m| m.said.heard()).filter_map(|m| {
+					let said = m.said.reading.as_ref().map(|r| r.kind);
+					(m.said.sent || said.is_some()).then_some(Spoken {
+						at: m.said.at,
+						message: Some(m.said.id),
+						case: Some(c.id),
+						said,
+					})
+				});
+				spoken.entry((c.gmail, of(c))).or_default().extend(said);
+			}
+			for ((gmail, of), mut spoken) in spoken {
+				let verified = moves.iter().filter(|(g, .., to)| of == Ok(*g) && *to == Stands::Verified);
+				spoken.extend(verified.map(|(_, at, ..)| Spoken {
+					at: *at,
+					message: None,
+					case: None,
+					said: Some(Kind::Verified),
+				}));
+				spoken.sort_by_key(|s| (s.at, s.message));
+				for pursuit in rules::pursuits(goal, &spoken) {
+					let mut texts = Vec::new();
+					for (id, ..) in &pursuit.asks {
+						let message = cases.iter().flat_map(|c| &c.messages).find(|m| m.said.id == *id).expect("one of theirs");
+						texts.push(self.mail_text(&mut conn, gmail, &message.message, *id).await?);
+					}
+					asked.push(Pursued {
+						gmail,
+						gmb: of.ok(),
+						pursuit,
+						texts,
+					});
+				}
+			}
+		}
+		asked.sort_by_key(|a| std::cmp::Reverse(a.pursuit.asks.last().map(|(_, at, _)| *at)));
+		Ok(asked)
 	}
 
 	/// The person's case `id`, with what its writer works from.
